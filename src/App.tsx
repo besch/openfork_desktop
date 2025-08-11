@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import { create } from 'zustand';
 import { Home } from 'lucide-react';
-import * as Effect from '@effect/core/Effect'; // Import Effect
+// Removed: import { Effect } from '@effect/core/io/Effect';
 
 // Zustand Store
 interface CounterState {
@@ -18,9 +17,6 @@ const useCounterStore = create<CounterState>((set) => ({
 
 function App() {
   const { count, increment, decrement } = useCounterStore();
-
-  // Simple Effect example (not executed, just to show import)
-  const myEffect = Effect.succeed("Hello from Effect!");
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -52,7 +48,7 @@ function App() {
       </div>
 
       <p className="mt-8 text-sm text-gray-400">
-        Check console for Effect example (not actively used in UI).
+        Effect library is installed and available if you choose to use it.
       </p>
     </div>
   );

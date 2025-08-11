@@ -17,6 +17,7 @@
     "@effect/core": "^0.0.16",
     "@effect/data": "^0.18.7",
     "@effect/platform": "^0.90.2",
+    "@tailwindcss/postcss": "^4.1.11",
     "autoprefixer": "^10.4.21",
     "electron": "^37.2.6",
     "lucide-react": "^0.539.0",
