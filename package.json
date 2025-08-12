@@ -3,13 +3,13 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "main": "electron.js",
+  "main": "electron.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "electron .",
+    "start": "electron electron.cjs",
     "electron-dev": "npm run build && electron .",
     "electron-build": "npm run build && electron-builder"
   },
