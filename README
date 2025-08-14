@@ -1,0 +1,9 @@
+#dev
+
+npm run dev
+npm run start
+
+
+#prod
+
+npm run electron-build

@@ -1,14 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   base: './', // Ensure assets are loaded correctly in Electron
   build: {
     outDir: 'dist', // Output directory for production build
   },
   server: {
-    port: 3000, // Specify a port for the development server
+    port: 5173, // Must match the port in electron.cjs
   },
 })
