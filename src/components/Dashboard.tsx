@@ -103,7 +103,7 @@ export const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/dgn/stats`);
+        const response = await fetch(`/api/dgn/stats`);
         if (!response.ok) {
           throw new Error(`Failed to fetch stats: ${response.statusText}`);
         }
