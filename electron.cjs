@@ -71,12 +71,15 @@ function startPythonBackend() {
 
 function stopPythonBackend() {
   if (pythonProcess) {
-    console.log('Killing Python process...');
-    pythonProcess.kill('SIGTERM');
-    pythonProcess = null;
-    if (mainWindow) {
-        mainWindow.webContents.send('dgn-client:status', 'stopped');
+    console.log('Stopping Python process...');
+    if (process.platform === 'win32') {
+      const pid = pythonProcess.pid;
+      spawn('taskkill', ['/pid', pid, '/f', '/t'], { shell: true });
+    } else {
+      pythonProcess.kill('SIGKILL');
     }
+    // The 'close' event will handle setting pythonProcess to null
+    // and sending the 'stopped' status.
   }
 }
 
