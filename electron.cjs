@@ -71,12 +71,14 @@ function startPythonBackend() {
 
 function stopPythonBackend() {
   if (pythonProcess) {
-    console.log('Stopping Python process...');
+    console.log('Stopping Python process gracefully...');
     if (process.platform === 'win32') {
       const pid = pythonProcess.pid;
-      spawn('taskkill', ['/pid', pid, '/f', '/t'], { shell: true });
+      // Remove /f to allow graceful shutdown. /t is still good to clean up children if the parent hangs.
+      spawn('taskkill', ['/pid', pid, '/t'], { shell: true });
     } else {
-      pythonProcess.kill('SIGKILL');
+      // Use SIGTERM (default) instead of SIGKILL to allow graceful shutdown.
+      pythonProcess.kill();
     }
     // The 'close' event will handle setting pythonProcess to null
     // and sending the 'stopped' status.
