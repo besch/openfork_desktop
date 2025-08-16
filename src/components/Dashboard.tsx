@@ -27,7 +27,7 @@ const StatCard = ({
   title,
   value,
   icon,
-  className
+  className,
 }: {
   title: string;
   value: number;
@@ -40,9 +40,7 @@ const StatCard = ({
       {icon}
     </CardHeader>
     <CardContent>
-      <div className={`text-2xl font-bold ${className}`}>
-        {value}
-      </div>
+      <div className={`text-2xl font-bold ${className}`}>{value}</div>
     </CardContent>
   </Card>
 );
@@ -54,22 +52,22 @@ export const StatusIndicator = () => {
     running: {
       text: "Client is Running",
       className: "text-green-500 dark:text-green-300",
-      icon: <Power size={20} />, 
+      icon: <Power size={20} />,
     },
     stopped: {
       text: "Client is Stopped",
       className: "text-gray-500 dark:text-gray-400",
-      icon: <Power size={20} />, 
+      icon: <Power size={20} />,
     },
     starting: {
       text: "Starting...",
       className: "text-yellow-500 dark:text-yellow-300",
-      icon: <Loader size={20} className="animate-spin" />, 
+      icon: <Loader size={20} className="animate-spin" />,
     },
     error: {
       text: "Error State",
       className: "text-red-500 dark:text-red-300",
-      icon: <AlertCircle size={20} />, 
+      icon: <AlertCircle size={20} />,
     },
   };
 
@@ -77,7 +75,8 @@ export const StatusIndicator = () => {
 
   return (
     <div
-      className={`flex items-center space-x-2 p-3 rounded-lg bg-white/50 dark:bg-gray-900/50 ${className}`}>
+      className={`flex items-center space-x-2 p-3 rounded-lg bg-white/50 dark:bg-gray-900/50 ${className}`}
+    >
       {icon}
       <span className="font-semibold">{text}</span>
     </div>
@@ -93,6 +92,7 @@ export const Dashboard = () => {
       setStatus("starting");
       window.electronAPI.startClient();
     } else {
+      setStatus("stopped");
       window.electronAPI.stopClient();
     }
   };
@@ -119,10 +119,26 @@ export const Dashboard = () => {
   }, [setStats]);
 
   const chartData = [
-    { name: "Completed", value: stats.completed, color: theme === 'dark' ? '#22c55e' : '#22c55e' }, // green-500
-    { name: "Failed", value: stats.failed, color: theme === 'dark' ? '#b91c1c' : '#ef4444' }, // red-700 vs red-600
-    { name: "In Progress", value: stats.processing, color: theme === 'dark' ? '#3b82f6' : '#3b82f6' }, // blue-500
-    { name: "In Queue", value: stats.pending, color: theme === 'dark' ? '#facc15' : '#eab308' }, // yellow-400 vs yellow-500
+    {
+      name: "Completed",
+      value: stats.completed,
+      color: theme === "dark" ? "#22c55e" : "#22c55e",
+    }, // green-500
+    {
+      name: "Failed",
+      value: stats.failed,
+      color: theme === "dark" ? "#b91c1c" : "#ef4444",
+    }, // red-700 vs red-600
+    {
+      name: "In Progress",
+      value: stats.processing,
+      color: theme === "dark" ? "#3b82f6" : "#3b82f6",
+    }, // blue-500
+    {
+      name: "In Queue",
+      value: stats.pending,
+      color: theme === "dark" ? "#facc15" : "#eab308",
+    }, // yellow-400 vs yellow-500
   ];
 
   return (
@@ -143,25 +159,39 @@ export const Dashboard = () => {
         <StatCard
           title="Jobs in Queue"
           value={stats.pending}
-          icon={<Server size={24} className="text-gray-500 dark:text-gray-400" />}
+          icon={
+            <Server size={24} className="text-gray-500 dark:text-gray-400" />
+          }
           className="text-yellow-500 dark:text-yellow-300"
         />
         <StatCard
           title="Jobs In Progress"
           value={stats.processing}
-          icon={<Loader size={24} className="text-gray-500 dark:text-gray-400 animate-spin" />}
+          icon={
+            <Loader
+              size={24}
+              className="text-gray-500 dark:text-gray-400 animate-spin"
+            />
+          }
           className="text-blue-500 dark:text-blue-300"
         />
         <StatCard
           title="Jobs Completed"
           value={stats.completed}
-          icon={<CheckCircle size={24} className="text-gray-500 dark:text-gray-400" />}
+          icon={
+            <CheckCircle
+              size={24}
+              className="text-gray-500 dark:text-gray-400"
+            />
+          }
           className="text-green-500 dark:text-green-300"
         />
         <StatCard
           title="Jobs Failed"
           value={stats.failed}
-          icon={<XCircle size={24} className="text-gray-500 dark:text-gray-400" />}
+          icon={
+            <XCircle size={24} className="text-gray-500 dark:text-gray-400" />
+          }
           className="text-red-500 dark:text-red-300"
         />
       </div>
@@ -172,19 +202,35 @@ export const Dashboard = () => {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#e5e7eb'} />
-              <XAxis dataKey="name" stroke={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
-              <YAxis allowDecimals={false} stroke={theme === 'dark' ? '#9ca3af' : '#6b7280'} />
+            <BarChart
+              data={chartData}
+              margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={theme === "dark" ? "#374151" : "#e5e7eb"}
+              />
+              <XAxis
+                dataKey="name"
+                stroke={theme === "dark" ? "#9ca3af" : "#6b7280"}
+              />
+              <YAxis
+                allowDecimals={false}
+                stroke={theme === "dark" ? "#9ca3af" : "#6b7280"}
+              />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: theme === 'dark' ? '#111827' : '#ffffff',
-                  borderColor: theme === 'dark' ? '#374151' : '#e5e7eb',
-                  color: theme === 'dark' ? '#f9fafb' : '#1f2937'
+                  backgroundColor: theme === "dark" ? "#111827" : "#ffffff",
+                  borderColor: theme === "dark" ? "#374151" : "#e5e7eb",
+                  color: theme === "dark" ? "#f9fafb" : "#1f2937",
                 }}
-                labelStyle={{ color: theme === 'dark' ? '#f9fafb' : '#1f2937' }}
+                labelStyle={{ color: theme === "dark" ? "#f9fafb" : "#1f2937" }}
               />
-              <Legend wrapperStyle={{ color: theme === 'dark' ? '#f9fafb' : '#1f2937' }}/>
+              <Legend
+                wrapperStyle={{
+                  color: theme === "dark" ? "#f9fafb" : "#1f2937",
+                }}
+              />
               <Bar dataKey="value" name="Jobs">
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
@@ -197,7 +243,3 @@ export const Dashboard = () => {
     </div>
   );
 };
-
-
-
-

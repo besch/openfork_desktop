@@ -72,16 +72,55 @@ function startPythonBackend() {
 function stopPythonBackend() {
   if (pythonProcess) {
     console.log('Stopping Python process gracefully...');
-    if (process.platform === 'win32') {
-      const pid = pythonProcess.pid;
-      // Remove /f to allow graceful shutdown. /t is still good to clean up children if the parent hangs.
-      spawn('taskkill', ['/pid', pid, '/t'], { shell: true });
-    } else {
-      // Use SIGTERM (default) instead of SIGKILL to allow graceful shutdown.
-      pythonProcess.kill();
-    }
-    // The 'close' event will handle setting pythonProcess to null
-    // and sending the 'stopped' status.
+    const pythonPid = pythonProcess.pid; // Get PID before potential nulling
+
+    // Promise that resolves when the Python process closes
+    const pythonProcessClosed = new Promise(resolve => {
+      pythonProcess.on('close', (code) => {
+        console.log(`Python process closed with code ${code}`);
+        resolve(code);
+      });
+      pythonProcess.on('error', (err) => { // Catch errors that prevent 'close'
+        console.error(`Python process error: ${err}`);
+        resolve(1); // Indicate an error
+      });
+    });
+
+    // Send HTTP shutdown signal
+    const shutdownSignalSent = fetch('http://localhost:8000/shutdown')
+      .then(response => {
+        if (response.ok) {
+          console.log('Shutdown signal sent to Python backend successfully.');
+        } else {
+          console.error('Failed to send shutdown signal to Python backend:', response.statusText);
+        }
+      })
+      .catch(error => {
+        console.error('Error sending shutdown signal to Python backend:', error);
+      });
+
+    // Wait for either the Python process to close or a timeout
+    Promise.race([
+      pythonProcessClosed,
+      new Promise(resolve => setTimeout(() => resolve('timeout'), 30000)) // Increased to 30 seconds
+    ])
+    .then(result => {
+      if (result === 'timeout') {
+        console.warn('Python process did not shut down gracefully within 10 seconds. Forcefully terminating...');
+        if (process.platform === 'win32') {
+          spawn('taskkill', ['/pid', pythonPid, '/t', '/f'], { shell: true });
+        } else {
+          pythonProcess.kill('SIGKILL'); // Use SIGKILL for forceful termination
+        }
+      } else {
+        console.log('Python process shut down gracefully.');
+      }
+    })
+    .finally(() => {
+      // Ensure pythonProcess is nulled out after handling
+      pythonProcess = null;
+      mainWindow.webContents.send('dgn-client:status', 'stopped');
+    });
   }
 }
 
