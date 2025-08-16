@@ -3,11 +3,18 @@ import { useClientStore } from './store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { Dashboard } from '@/components/Dashboard';
 import { LogViewer } from '@/components/LogViewer';
-import { LayoutDashboard, Terminal } from 'lucide-react';
+import { LayoutDashboard, Terminal, Moon, Sun } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
 function App() {
-  const { setStatus, addLog } = useClientStore();
+  const { setStatus, addLog, theme, setTheme } = useClientStore();
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove("light", "dark");
+    root.classList.add(theme);
+  }, [theme]);
 
   useEffect(() => {
     // Set up IPC listeners
@@ -27,10 +34,15 @@ function App() {
   }, [setStatus, addLog]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 md:p-8">
+    <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-white p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <header className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">DGN Client Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">DGN Client Dashboard</h1>
+          <Button variant="outline" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
         </header>
 
         <Tabs>
