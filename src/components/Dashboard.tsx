@@ -146,6 +146,8 @@ export const Dashboard = () => {
     }, // yellow-400 vs yellow-500
   ];
 
+  const isProcessingAndRunning = status === "running" && stats.processing > 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between p-4 rounded-lg bg-gray-100 dark:bg-gray-800">
@@ -175,7 +177,7 @@ export const Dashboard = () => {
           icon={
             <Loader
               size={24}
-              className="text-gray-500 dark:text-gray-400 animate-spin"
+              className={`text-gray-500 dark:text-gray-400 ${isProcessingAndRunning ? "animate-spin" : ""}`}
             />
           }
           className="text-blue-500 dark:text-blue-300"
