@@ -64,6 +64,11 @@ export const StatusIndicator = () => {
       className: "text-yellow-500 dark:text-yellow-300",
       icon: <Loader size={20} className="animate-spin" />,
     },
+    stopping: {
+      text: "Stopping...",
+      className: "text-orange-500 dark:text-orange-300",
+      icon: <Loader size={20} className="animate-spin" />,
+    },
     error: {
       text: "Error State",
       className: "text-red-500 dark:text-red-300",
@@ -92,7 +97,7 @@ export const Dashboard = () => {
       setStatus("starting");
       window.electronAPI.startClient();
     } else {
-      setStatus("stopped");
+      setStatus("stopping"); // Set status to stopping
       window.electronAPI.stopClient();
     }
   };

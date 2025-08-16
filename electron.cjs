@@ -51,6 +51,7 @@ function startPythonBackend() {
 
     pythonProcess.on('close', (code) => {
       console.log(`Python process exited with code ${code}`);
+      // This 'stopped' status is sent when the process *actually* closes
       mainWindow.webContents.send('dgn-client:status', 'stopped');
       pythonProcess = null;
     });
@@ -72,6 +73,9 @@ function startPythonBackend() {
 function stopPythonBackend() {
   if (pythonProcess) {
     console.log('Stopping Python process gracefully...');
+    // Immediately send 'stopping' status to renderer
+    mainWindow.webContents.send('dgn-client:status', 'stopping');
+
     const pythonPid = pythonProcess.pid; // Get PID before potential nulling
 
     // Promise that resolves when the Python process closes
@@ -119,6 +123,7 @@ function stopPythonBackend() {
     .finally(() => {
       // Ensure pythonProcess is nulled out after handling
       pythonProcess = null;
+      // This 'stopped' status is sent as a final state after graceful or forceful termination
       mainWindow.webContents.send('dgn-client:status', 'stopped');
     });
   }

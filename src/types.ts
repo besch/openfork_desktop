@@ -1,4 +1,4 @@
-export type DGNClientStatus = 'running' | 'stopped' | 'error' | 'starting';
+export type DGNClientStatus = 'running' | 'stopped' | 'error' | 'starting' | 'stopping';
 
 export interface LogEntry {
   type: 'stdout' | 'stderr';
