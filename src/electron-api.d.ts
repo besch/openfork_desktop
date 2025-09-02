@@ -12,6 +12,7 @@ declare global {
       logout: () => void;
       onSession: (callback: (session: Session | null) => void) => void;
       onAuthCallback: (callback: (url: string) => void) => void;
+      updateSessionInMain: (session: Session | null) => void;
       removeAllListeners: (
         channel: "dgn-client:log" | "dgn-client:status" | "auth:session" | "auth:callback"
       ) => void;

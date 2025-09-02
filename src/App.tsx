@@ -31,6 +31,9 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    window.electronAPI.onStatusChange(setStatus);
+    window.electronAPI.onLog(addLog);
+
     // Listener for initial session refresh or logout
     window.electronAPI.onSession(setSession);
 

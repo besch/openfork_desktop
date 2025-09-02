@@ -145,10 +145,14 @@ function startPythonBackend() {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    mainWindow.webContents.send("dgn-client:status", "running");
+    mainWindow.webContents.send("dgn-client:status", "starting");
 
     pythonProcess.stdout.on("data", (data) => {
       const log = data.toString();
+      if (log.includes("DGN_CLIENT_RUNNING")) {
+        mainWindow.webContents.send("dgn-client:status", "running");
+        return;
+      }
       console.log(`Python stdout: ${log}`);
       mainWindow.webContents.send("dgn-client:log", {
         type: "stdout",
