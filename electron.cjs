@@ -18,9 +18,10 @@ if (process.defaultApp) {
 }
 
 const store = new Store();
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = require("./config.json");
 const supabase = createClient(
-  "https://vmuylzvwqravkmdmcpgv.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtdXlsenZ3cXJhdmttZG1jcGd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIxNDM3MjAsImV4cCI6MjA2NzcxOTcyMH0.f2USQOkuKhPksSLSXhTlyl5zTstyCyYvzdiHV9HQUKw",
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
   {
     auth: {
       storage: {
