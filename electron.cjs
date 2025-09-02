@@ -40,6 +40,10 @@ let pythonProcess;
 let mainWindow;
 let session = null;
 
+ipcMain.on("auth:session-update", (event, newSession) => {
+  session = newSession;
+});
+
 // --- AUTHENTICATION ---
 
 async function googleLogin() {

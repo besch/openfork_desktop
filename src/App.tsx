@@ -56,6 +56,7 @@ function App() {
               return;
             }
             setSession(data.session);
+            window.electronAPI.updateSessionInMain(data.session);
           });
       }
     });
