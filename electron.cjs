@@ -170,13 +170,13 @@ function startPythonBackend() {
     });
 
     pythonProcess.on("close", (code) => {
-      console.log(`Python process exited with code ${code}`);
+      console.log(`Electron: Python process exited with code ${code}`);
       mainWindow.webContents.send("dgn-client:status", "stopped");
       pythonProcess = null;
     });
 
     pythonProcess.on("error", (err) => {
-      console.error(`Failed to start Python process: ${err}`);
+      console.error(`Electron: Failed to start Python process: ${err}`);
       mainWindow.webContents.send("dgn-client:status", "error");
       pythonProcess = null;
     });
@@ -188,10 +188,48 @@ function startPythonBackend() {
 
 function stopPythonBackend() {
   if (pythonProcess) {
-    console.log("Stopping Python process...");
+    console.log("Electron: Attempting to stop Python process...");
     mainWindow.webContents.send("dgn-client:status", "stopping");
-    pythonProcess.kill();
-    pythonProcess = null;
+    // Send a signal to the Python process to initiate graceful shutdown
+    // On Windows, 'SIGINT' is not directly supported, 'kill()' sends SIGTERM.
+    // For graceful shutdown, we'll rely on the HTTP shutdown server in Python.
+    // If that fails, a direct kill() will terminate it.
+    
+    // Attempt to send HTTP shutdown request to Python backend
+    fetch(`http://localhost:8000/shutdown`)
+      .then(response => {
+        console.log(`Electron: HTTP shutdown request sent. Response status: ${response.status}`);
+        if (response.ok) {
+          console.log("Electron: Python backend acknowledged HTTP shutdown request.");
+        } else {
+          console.error("Electron: Python backend failed to acknowledge HTTP shutdown request gracefully.");
+          // Fallback to direct kill if HTTP shutdown fails or is not acknowledged
+          if (pythonProcess) {
+            console.log("Electron: Falling back to direct kill of Python process.");
+            pythonProcess.kill();
+          }
+        }
+      })
+      .catch(error => {
+        console.error(`Electron: Error sending HTTP shutdown request: ${error}`);
+        // Fallback to direct kill if network error
+        if (pythonProcess) {
+          console.log("Electron: Falling back to direct kill of Python process due to network error.");
+          pythonProcess.kill();
+        }
+      });
+
+    // Set a timeout to forcefully kill the process if it doesn't exit gracefully
+    setTimeout(() => {
+      if (pythonProcess) {
+        console.warn("Electron: Python process did not exit gracefully, forcing kill.");
+        pythonProcess.kill(); // Force kill if still running
+        pythonProcess = null;
+        mainWindow.webContents.send("dgn-client:status", "stopped"); // Ensure status is updated
+      }
+    }, 5000); // 5 seconds timeout for graceful shutdown
+  } else {
+    console.log("Electron: No Python process running to stop.");
   }
 }
 
@@ -247,6 +285,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  console.log("Electron: All windows closed. Initiating Python backend stop.");
   stopPythonBackend();
   if (process.platform !== "darwin") {
     app.quit();

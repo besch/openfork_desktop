@@ -31,11 +31,21 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    window.electronAPI.onStatusChange(setStatus);
-    window.electronAPI.onLog(addLog);
+    console.log("App.tsx: Setting up Electron API listeners.");
+    window.electronAPI.onStatusChange((status) => {
+      console.log(`App.tsx: Received status change: ${status}`);
+      setStatus(status);
+    });
+    window.electronAPI.onLog((log) => {
+      console.log(`App.tsx: Received log: ${JSON.stringify(log)}`);
+      addLog(log);
+    });
 
     // Listener for initial session refresh or logout
-    window.electronAPI.onSession(setSession);
+    window.electronAPI.onSession((session) => {
+      console.log(`App.tsx: Received session update: ${session ? 'authenticated' : 'null'}`);
+      setSession(session);
+    });
 
     // Listener for the OAuth redirect callback
     window.electronAPI.onAuthCallback((url) => {
@@ -74,6 +84,7 @@ function App() {
   }, [setStatus, addLog, setSession]);
 
   const handleLogout = () => {
+    console.log("App.tsx: Initiating logout.");
     window.electronAPI.logout();
   };
 
