@@ -1,171 +1,257 @@
-const { app, BrowserWindow, ipcMain, nativeTheme } = require('electron');
-const path = require('path');
-const { spawn } = require('child_process');
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const path = require("path");
+const { spawn } = require("child_process");
+const Store = require("electron-store").default;
+const { createClient } = require("@supabase/supabase-js");
+
+// --- PROTOCOL & INITIALIZATION ---
+
+// Register the custom protocol
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient("dgn-client", process.execPath, [
+      path.resolve(process.argv[1]),
+    ]);
+  }
+} else {
+  app.setAsDefaultProtocolClient("dgn-client");
+}
+
+const store = new Store();
+const supabase = createClient(
+  "https://vmuylzvwqravkmdmcpgv.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtdXlsenZ3cXJhdmttZG1jcGd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIxNDM3MjAsImV4cCI6MjA2NzcxOTcyMH0.f2USQOkuKhPksSLSXhTlyl5zTstyCyYvzdiHV9HQUKw",
+  {
+    auth: {
+      storage: {
+        getItem: (key) => store.get(key),
+        setItem: (key, value) => store.set(key, value),
+        removeItem: (key) => store.delete(key),
+      },
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  }
+);
 
 let pythonProcess;
 let mainWindow;
+let session = null;
+
+// --- AUTHENTICATION ---
+
+async function googleLogin() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: "dgn-client://auth/callback",
+    },
+  });
+
+  if (error) {
+    console.error("Error logging in:", error.message);
+    mainWindow.webContents.send("auth:error", error.message);
+    return;
+  }
+
+  if (data.url) {
+    shell.openExternal(data.url);
+  }
+}
+
+async function logout() {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error("Error logging out:", error.message);
+  }
+  session = null;
+  store.delete("refresh_token");
+  mainWindow.webContents.send("auth:session", null);
+}
+
+async function refreshSession() {
+  const refreshToken = store.get("refresh_token");
+  if (refreshToken) {
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: refreshToken,
+    });
+    if (error) {
+      console.error("Failed to refresh session:", error.message);
+      store.delete("refresh_token"); // Clear invalid token
+      session = null;
+    } else {
+      session = data.session;
+      store.set("refresh_token", session.refresh_token);
+    }
+  } else {
+    session = null;
+  }
+
+  // Send session to renderer once it's loaded
+  if (mainWindow) {
+    mainWindow.webContents.on("did-finish-load", () => {
+      mainWindow.webContents.send("auth:session", session);
+    });
+  }
+}
+
+function handleAuthCallback(url) {
+  // The URL will be like: dgn-client://auth/callback#access_token=...&refresh_token=...
+  // Send the full URL to the renderer process to handle
+  if (mainWindow) {
+    mainWindow.webContents.send("auth:callback", url);
+  }
+}
+
+// --- PYTHON BACKEND ---
 
 function getPythonExecutablePath() {
-  const isDev = process.env.NODE_ENV !== 'production';
-  // In development, we might run from the project root, but the .exe is in the built app's 'bin' folder.
-  // The path needs to be relative to where electron.cjs is.
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'bin', 'dgn_client_backend.exe');
+    return path.join(process.resourcesPath, "bin", "dgn_client_backend.exe");
   } else {
-    // This path assumes you have the .exe in a 'bin' folder at the root of your desktop app project during development.
-    return path.join(__dirname, 'bin', 'dgn_client_backend.exe');
+    return path.join(__dirname, "bin", "dgn_client_backend.exe");
   }
 }
 
 function startPythonBackend() {
   if (pythonProcess) {
-    console.log('Python process is already running.');
+    console.log("Python process is already running.");
+    return;
+  }
+  if (!session) {
+    console.error("Cannot start DGN client: User not authenticated.");
+    mainWindow.webContents.send("dgn-client:log", {
+      type: "stderr",
+      message: "Authentication required.",
+    });
     return;
   }
 
   const pythonExecutablePath = getPythonExecutablePath();
   const pythonCwd = path.dirname(pythonExecutablePath);
+  const args = ["--access-token", session.access_token];
 
-  console.log(`Attempting to start Python backend from: ${pythonExecutablePath}`);
-  console.log(`Python process CWD: ${pythonCwd}`);
+  console.log(`Starting Python backend with token...`);
 
   try {
-    pythonProcess = spawn(pythonExecutablePath, [], {
+    pythonProcess = spawn(pythonExecutablePath, args, {
       cwd: pythonCwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
-    mainWindow.webContents.send('dgn-client:status', 'running');
+    mainWindow.webContents.send("dgn-client:status", "running");
 
-    pythonProcess.stdout.on('data', (data) => {
+    pythonProcess.stdout.on("data", (data) => {
       const log = data.toString();
       console.log(`Python stdout: ${log}`);
-      mainWindow.webContents.send('dgn-client:log', { type: 'stdout', message: log });
+      mainWindow.webContents.send("dgn-client:log", {
+        type: "stdout",
+        message: log,
+      });
     });
 
-    pythonProcess.stderr.on('data', (data) => {
+    pythonProcess.stderr.on("data", (data) => {
       const log = data.toString();
       console.error(`Python stderr: ${log}`);
-      mainWindow.webContents.send('dgn-client:log', { type: 'stderr', message: log });
+      mainWindow.webContents.send("dgn-client:log", {
+        type: "stderr",
+        message: log,
+      });
     });
 
-    pythonProcess.on('close', (code) => {
+    pythonProcess.on("close", (code) => {
       console.log(`Python process exited with code ${code}`);
-      // This 'stopped' status is sent when the process *actually* closes
-      mainWindow.webContents.send('dgn-client:status', 'stopped');
+      mainWindow.webContents.send("dgn-client:status", "stopped");
       pythonProcess = null;
     });
 
-    pythonProcess.on('error', (err) => {
+    pythonProcess.on("error", (err) => {
       console.error(`Failed to start Python process: ${err}`);
-      mainWindow.webContents.send('dgn-client:status', 'error');
-      mainWindow.webContents.send('dgn-client:log', { type: 'stderr', message: `Failed to start process: ${err.message}` });
+      mainWindow.webContents.send("dgn-client:status", "error");
       pythonProcess = null;
     });
   } catch (err) {
-      console.error(`Error spawning Python process: ${err}`);
-      mainWindow.webContents.send('dgn-client:status', 'error');
-      mainWindow.webContents.send('dgn-client:log', { type: 'stderr', message: `Error spawning process: ${err.message}` });
-      pythonProcess = null;
+    console.error(`Error spawning Python process: ${err}`);
+    mainWindow.webContents.send("dgn-client:status", "error");
   }
 }
 
 function stopPythonBackend() {
   if (pythonProcess) {
-    console.log('Stopping Python process gracefully...');
-    // Immediately send 'stopping' status to renderer
-    mainWindow.webContents.send('dgn-client:status', 'stopping');
-
-    const pythonPid = pythonProcess.pid; // Get PID before potential nulling
-
-    // Promise that resolves when the Python process closes
-    const pythonProcessClosed = new Promise(resolve => {
-      pythonProcess.on('close', (code) => {
-        console.log(`Python process closed with code ${code}`);
-        resolve(code);
-      });
-      pythonProcess.on('error', (err) => { // Catch errors that prevent 'close'
-        console.error(`Python process error: ${err}`);
-        resolve(1); // Indicate an error
-      });
-    });
-
-    // Send HTTP shutdown signal
-    const shutdownSignalSent = fetch('http://localhost:8000/shutdown')
-      .then(response => {
-        if (response.ok) {
-          console.log('Shutdown signal sent to Python backend successfully.');
-        } else {
-          console.error('Failed to send shutdown signal to Python backend:', response.statusText);
-        }
-      })
-      .catch(error => {
-        console.error('Error sending shutdown signal to Python backend:', error);
-      });
-
-    // Wait for either the Python process to close or a timeout
-    Promise.race([
-      pythonProcessClosed,
-      new Promise(resolve => setTimeout(() => resolve('timeout'), 30000)) // Increased to 30 seconds
-    ])
-    .then(result => {
-      if (result === 'timeout') {
-        console.warn('Python process did not shut down gracefully within 10 seconds. Forcefully terminating...');
-        if (process.platform === 'win32') {
-          spawn('taskkill', ['/pid', pythonPid, '/t', '/f'], { shell: true });
-        } else {
-          pythonProcess.kill('SIGKILL'); // Use SIGKILL for forceful termination
-        }
-      } else {
-        console.log('Python process shut down gracefully.');
-      }
-    })
-    .finally(() => {
-      // Ensure pythonProcess is nulled out after handling
-      pythonProcess = null;
-      // This 'stopped' status is sent as a final state after graceful or forceful termination
-      mainWindow.webContents.send('dgn-client:status', 'stopped');
-    });
+    console.log("Stopping Python process...");
+    mainWindow.webContents.send("dgn-client:status", "stopping");
+    pythonProcess.kill();
+    pythonProcess = null;
   }
 }
 
+// --- APP LIFECYCLE ---
+
+// Ensure only one instance of the app can run
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (event, commandLine, workingDirectory) => {
+    // Someone tried to run a second instance, we should focus our window.
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    // Handle the URL from the command line on Windows/Linux
+    const url = commandLine.pop();
+    if (url.startsWith("dgn-client://")) {
+      handleAuthCallback(url);
+    }
+  });
+}
+
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
-  mainWindow = win;
-
   if (app.isPackaged) {
-    win.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    mainWindow.loadFile(path.join(__dirname, "dist", "index.html"));
   } else {
-    win.loadURL('http://localhost:5173'); // Vite dev server URL
+    mainWindow.loadURL("http://localhost:5173"); // Vite dev server URL
   }
 }
 
 app.whenReady().then(() => {
   createWindow();
+  refreshSession();
 
-  app.on('activate', () => {
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
 });
 
-app.on('window-all-closed', () => {
+app.on("window-all-closed", () => {
   stopPythonBackend();
-  if (process.platform !== 'darwin') {
+  if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
-// IPC Handlers
-ipcMain.on('dgn-client:start', startPythonBackend);
-ipcMain.on('dgn-client:stop', stopPythonBackend);
+// Handle the custom protocol URL on macOS
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleAuthCallback(url);
+});
+
+// --- IPC HANDLERS ---
+ipcMain.handle("auth:google-login", googleLogin);
+ipcMain.handle("auth:logout", logout);
+ipcMain.on("dgn-client:start", startPythonBackend);
+ipcMain.on("dgn-client:stop", stopPythonBackend);
