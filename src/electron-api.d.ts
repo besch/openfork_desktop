@@ -1,5 +1,5 @@
 import type { LogEntry, DGNClientStatus } from "./types";
-import type { Session } from '@supabase/supabase-js';
+import type { Session, AuthError } from '@supabase/supabase-js';
 
 declare global {
   interface Window {
@@ -12,7 +12,7 @@ declare global {
       logout: () => void;
       onSession: (callback: (session: Session | null) => void) => void;
       onAuthCallback: (callback: (url: string) => void) => void;
-      updateSessionInMain: (session: Session | null) => void;
+      setSessionFromTokens: (accessToken: string, refreshToken: string) => Promise<{ session: Session | null; error: AuthError | null; }>;
       removeAllListeners: (
         channel: "dgn-client:log" | "dgn-client:status" | "auth:session" | "auth:callback"
       ) => void;

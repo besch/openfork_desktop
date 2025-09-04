@@ -40,10 +40,6 @@ let mainWindow;
 let session = null;
 let isQuitting = false; // Flag to indicate if the app is in the process of quitting
 
-ipcMain.on("auth:session-update", (event, newSession) => {
-  session = newSession;
-});
-
 // --- AUTHENTICATION ---
 
 async function googleLogin() {
@@ -71,31 +67,18 @@ async function logout() {
     console.error("Error logging out:", error.message);
   }
   session = null;
-  store.delete("refresh_token");
   mainWindow.webContents.send("auth:session", null);
 }
 
-async function refreshSession() {
-  const refreshToken = store.get("refresh_token");
-  if (refreshToken) {
-    const { data, error } = await supabase.auth.refreshSession({
-      refresh_token: refreshToken,
-    });
-    if (error) {
-      console.error("Failed to refresh session:", error.message);
-      store.delete("refresh_token"); // Clear invalid token
-      session = null;
-    } else {
-      session = data.session;
-      store.set("refresh_token", session.refresh_token);
-    }
-  } else {
-    session = null;
-  }
+async function initializeSession() {
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
 
   if (mainWindow) {
     mainWindow.webContents.on("did-finish-load", () => {
-      mainWindow.webContents.send("auth:session", session);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("auth:session", session);
+      }
     });
   }
 }
@@ -278,7 +261,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-  refreshSession();
+  initializeSession();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -316,5 +299,19 @@ app.on("open-url", (event, url) => {
 // --- IPC HANDLERS ---
 ipcMain.handle("auth:google-login", googleLogin);
 ipcMain.handle("auth:logout", logout);
+ipcMain.handle("auth:set-session-from-tokens", async (event, accessToken, refreshToken) => {
+  const { data, error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+
+  if (error) {
+    console.error("Failed to set session in main:", error.message);
+    return { session: null, error };
+  }
+
+  session = data.session; // Keep main process session variable in sync
+  return { session: data.session, error: null };
+});
 ipcMain.on("dgn-client:start", startPythonBackend);
 ipcMain.on("dgn-client:stop", stopPythonBackend);

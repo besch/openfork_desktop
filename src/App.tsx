@@ -98,29 +98,37 @@ function App() {
     });
 
     // Listener for the OAuth redirect callback
-    window.electronAPI.onAuthCallback((url) => {
+    window.electronAPI.onAuthCallback(async (url) => {
       const hash = new URL(url).hash.substring(1);
       const params = new URLSearchParams(hash);
       const accessToken = params.get("access_token");
       const refreshToken = params.get("refresh_token");
 
       if (accessToken && refreshToken) {
-        supabase.auth
-          .setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          })
-          .then(({ data, error }) => {
-            if (error) {
-              console.error(
-                "Error setting session from callback:",
-                error.message
-              );
-              return;
-            }
-            setSession(data.session);
-            window.electronAPI.updateSessionInMain(data.session);
+        // Persist session in main process (electron-store)
+        const { session: newSession, error } =
+          await window.electronAPI.setSessionFromTokens(
+            accessToken,
+            refreshToken
+          );
+
+        if (error) {
+          console.error(
+            "Error persisting session in main process:",
+            error.message
+          );
+          return;
+        }
+
+        if (newSession) {
+          // Update renderer state
+          setSession(newSession);
+          // Update renderer's supabase client instance for this lifecycle
+          supabase.auth.setSession({
+            access_token: newSession.access_token,
+            refresh_token: newSession.refresh_token,
           });
+        }
       }
     });
 
