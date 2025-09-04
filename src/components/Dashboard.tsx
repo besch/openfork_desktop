@@ -89,15 +89,16 @@ export const StatusIndicator = () => {
 };
 
 export const Dashboard = () => {
-  const { status, stats, setStatus, theme } = useClientStore();
+  const { status, stats, theme } = useClientStore();
   const isRunning = status === "running" || status === "starting";
+  const isDisabled = status === "starting" || status === "stopping";
 
   const handleToggle = (checked: boolean) => {
+    if (isDisabled) return; // Prevent action if disabled
+
     if (checked) {
-      setStatus("starting");
       window.electronAPI.startClient();
     } else {
-      setStatus("stopping"); // Set status to stopping
       window.electronAPI.stopClient();
     }
   };
@@ -136,6 +137,7 @@ export const Dashboard = () => {
             id="client-toggle"
             checked={isRunning}
             onCheckedChange={handleToggle}
+            disabled={isDisabled}
           />
         </div>
         <StatusIndicator />

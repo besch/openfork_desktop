@@ -6,6 +6,7 @@ import { LogViewer } from "@/components/LogViewer";
 import { Auth } from "@/components/Auth";
 import { Profile } from "@/components/Profile";
 import { Chart } from "@/components/Chart";
+import { ShutdownOverlay } from "@/components/ShutdownOverlay";
 import {
   LayoutDashboard,
   Terminal,
@@ -24,7 +25,7 @@ import type { JobStats } from "./types";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function App() {
-  const { setStatus, addLog, theme, setTheme, session, setSession, setStats } =
+  const { status, setStatus, addLog, theme, setTheme, session, setSession, setStats } =
     useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
@@ -150,7 +151,9 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-white p-4 md:p-8">
+    <>
+      {status === "stopping" && <ShutdownOverlay />}
+      <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-white p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <header className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -227,6 +230,7 @@ function App() {
         </Tabs>
       </div>
     </div>
+    </>
   );
 }
 

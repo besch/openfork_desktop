@@ -6,7 +6,6 @@ const { createClient } = require("@supabase/supabase-js");
 
 // --- PROTOCOL & INITIALIZATION ---
 
-// Register the custom protocol
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient("dgn-client", process.execPath, [
@@ -39,6 +38,7 @@ const supabase = createClient(
 let pythonProcess;
 let mainWindow;
 let session = null;
+let isQuitting = false; // Flag to indicate if the app is in the process of quitting
 
 ipcMain.on("auth:session-update", (event, newSession) => {
   session = newSession;
@@ -93,7 +93,6 @@ async function refreshSession() {
     session = null;
   }
 
-  // Send session to renderer once it's loaded
   if (mainWindow) {
     mainWindow.webContents.on("did-finish-load", () => {
       mainWindow.webContents.send("auth:session", session);
@@ -102,8 +101,6 @@ async function refreshSession() {
 }
 
 function handleAuthCallback(url) {
-  // The URL will be like: dgn-client://auth/callback#access_token=...&refresh_token=...
-  // Send the full URL to the renderer process to handle
   if (mainWindow) {
     mainWindow.webContents.send("auth:callback", url);
   }
@@ -171,85 +168,75 @@ function startPythonBackend() {
 
     pythonProcess.on("close", (code) => {
       console.log(`Electron: Python process exited with code ${code}`);
-      mainWindow.webContents.send("dgn-client:status", "stopped");
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("dgn-client:status", "stopped");
+      }
       pythonProcess = null;
     });
 
     pythonProcess.on("error", (err) => {
       console.error(`Electron: Failed to start Python process: ${err}`);
-      mainWindow.webContents.send("dgn-client:status", "error");
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("dgn-client:status", "error");
+      }
       pythonProcess = null;
     });
   } catch (err) {
     console.error(`Error spawning Python process: ${err}`);
-    mainWindow.webContents.send("dgn-client:status", "error");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("dgn-client:status", "error");
+    }
   }
 }
 
 function stopPythonBackend() {
-  if (pythonProcess) {
-    console.log("Electron: Attempting to stop Python process...");
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.send("dgn-client:status", "stopping");
+  return new Promise((resolve) => {
+    if (!pythonProcess) {
+      console.log("Electron: No Python process running to stop.");
+      return resolve();
     }
-    // Send a signal to the Python process to initiate graceful shutdown
-    // On Windows, 'SIGINT' is not directly supported, 'kill()' sends SIGTERM.
-    // For graceful shutdown, we'll rely on the HTTP shutdown server in Python.
-    // If that fails, a direct kill() will terminate it.
-    
-    // Attempt to send HTTP shutdown request to Python backend
+
+    console.log("Electron: Attempting to stop Python process...");
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("dgn-client:status", "stopping");
+    }
+
+    // Listen for the close event on the process
+    pythonProcess.once('close', () => {
+      console.log("Electron: Python process confirmed closed.");
+      pythonProcess = null;
+      resolve();
+    });
+
+    // Send HTTP shutdown request
     fetch(`http://localhost:8000/shutdown`)
-      .then(response => {
-        console.log(`Electron: HTTP shutdown request sent. Response status: ${response.status}`);
-        if (response.ok) {
-          console.log("Electron: Python backend acknowledged HTTP shutdown request.");
-        } else {
-          console.error("Electron: Python backend failed to acknowledge HTTP shutdown request gracefully.");
-          // Fallback to direct kill if HTTP shutdown fails or is not acknowledged
-          if (pythonProcess) {
-            console.log("Electron: Falling back to direct kill of Python process.");
-            pythonProcess.kill();
-          }
-        }
-      })
       .catch(error => {
-        console.error(`Electron: Error sending HTTP shutdown request: ${error}`);
-        // Fallback to direct kill if network error
-        if (pythonProcess) {
-          console.log("Electron: Falling back to direct kill of Python process due to network error.");
-          pythonProcess.kill();
-        }
+        console.error(`Electron: Error sending HTTP shutdown request: ${error}. Falling back to kill.`);
+        if (pythonProcess) pythonProcess.kill();
       });
 
-    // Set a timeout to forcefully kill the process if it doesn't exit gracefully
+    // Failsafe timeout
     setTimeout(() => {
       if (pythonProcess) {
         console.warn("Electron: Python process did not exit gracefully, forcing kill.");
-        pythonProcess.kill(); // Force kill if still running
-        pythonProcess = null;
-        mainWindow.webContents.send("dgn-client:status", "stopped"); // Ensure status is updated
+        pythonProcess.kill();
       }
-    }, 5000); // 5 seconds timeout for graceful shutdown
-  } else {
-    console.log("Electron: No Python process running to stop.");
-  }
+    }, 8000); // 8 seconds timeout
+  });
 }
 
 // --- APP LIFECYCLE ---
 
-// Ensure only one instance of the app can run
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on("second-instance", (event, commandLine, workingDirectory) => {
-    // Someone tried to run a second instance, we should focus our window.
+  app.on("second-instance", (event, commandLine) => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
-    // Handle the URL from the command line on Windows/Linux
     const url = commandLine.pop();
     if (url.startsWith("dgn-client://")) {
       handleAuthCallback(url);
@@ -268,15 +255,24 @@ function createWindow() {
     },
   });
 
+  // Intercept the close event
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault(); // Prevent the window from closing
+      app.quit(); // Trigger the before-quit event
+    }
+  });
+
   mainWindow.webContents.on("crashed", (event, killed) => {
     console.error(`Electron: Renderer process crashed. Killed: ${killed}`);
-    stopPythonBackend();
+    // If the renderer crashes, we should probably shut down the backend too
+    if (pythonProcess) stopPythonBackend();
   });
 
   if (app.isPackaged) {
     mainWindow.loadFile(path.join(__dirname, "dist", "index.html"));
   } else {
-    mainWindow.loadURL("http://localhost:5173"); // Vite dev server URL
+    mainWindow.loadURL("http://localhost:5173");
   }
 }
 
@@ -292,19 +288,26 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  console.log("Electron: All windows closed. Initiating Python backend stop.");
-  stopPythonBackend();
+  // This event is now less important as before-quit handles the main logic.
+  // On macOS, the app often stays open even if all windows are closed.
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
-app.on("before-quit", (event) => {
+app.on("before-quit", async (event) => {
+  if (isQuitting) return;
+
   console.log("Electron: before-quit event triggered.");
-  stopPythonBackend();
+  event.preventDefault(); // Prevent the app from quitting immediately
+  isQuitting = true;
+
+  await stopPythonBackend();
+
+  console.log("Electron: Backend stopped. Now quitting.");
+  app.quit(); // Now quit the app for real
 });
 
-// Handle the custom protocol URL on macOS
 app.on("open-url", (event, url) => {
   event.preventDefault();
   handleAuthCallback(url);
