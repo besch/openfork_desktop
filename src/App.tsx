@@ -12,6 +12,7 @@ import {
   Sun,
   LogOut,
   User,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@supabase/supabase-js";
@@ -23,6 +24,7 @@ function App() {
   const { setStatus, addLog, theme, setTheme, session, setSession } =
     useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -45,6 +47,7 @@ function App() {
     window.electronAPI.onSession((session) => {
       console.log(`App.tsx: Received session update: ${session ? 'authenticated' : 'null'}`);
       setSession(session);
+      setIsLoading(false);
     });
 
     // Listener for the OAuth redirect callback
@@ -87,6 +90,14 @@ function App() {
     console.log("App.tsx: Initiating logout.");
     window.electronAPI.logout();
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   if (!session) {
     return <Auth />;
