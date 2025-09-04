@@ -17,12 +17,20 @@ import {
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/config";
+import type { JobStats } from "./types";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function App() {
-  const { setStatus, addLog, theme, setTheme, session, setSession } =
-    useClientStore();
+  const {
+    setStatus,
+    addLog,
+    theme,
+    setTheme,
+    session,
+    setSession,
+    setStats,
+  } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,6 +39,45 @@ function App() {
     root.classList.remove("light", "dark");
     root.classList.add(theme);
   }, [theme]);
+
+  useEffect(() => {
+    // This effect runs when the session changes.
+    if (!session) return;
+
+    const fetchStats = async () => {
+      try {
+        // This RPC call should be created in Supabase to aggregate counts.
+        const { data, error } = await supabase.rpc("get_dgn_job_stats");
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setStats(data[0] as JobStats);
+        } else {
+          // Set default stats if no data is returned
+          setStats({ pending: 0, processing: 0, completed: 0, failed: 0 });
+        }
+      } catch (error) {
+        console.error("Error fetching initial job stats:", error);
+      }
+    };
+
+    fetchStats(); // Fetch initial stats
+
+    const channel = supabase
+      .channel("dgn_jobs_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dgn_jobs" },
+        (payload) => {
+          console.log("Change received!", payload);
+          fetchStats(); // Refetch stats on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session, setStats]);
 
   useEffect(() => {
     console.log("App.tsx: Setting up Electron API listeners.");
@@ -45,7 +92,9 @@ function App() {
 
     // Listener for initial session refresh or logout
     window.electronAPI.onSession((session) => {
-      console.log(`App.tsx: Received session update: ${session ? 'authenticated' : 'null'}`);
+      console.log(
+        `App.tsx: Received session update: ${session ? "authenticated" : "null"}`
+      );
       setSession(session);
       setIsLoading(false);
     });

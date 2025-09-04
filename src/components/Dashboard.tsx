@@ -89,7 +89,7 @@ export const StatusIndicator = () => {
 };
 
 export const Dashboard = () => {
-  const { status, stats, setStats, setStatus, theme } = useClientStore();
+  const { status, stats, setStatus, theme } = useClientStore();
   const isRunning = status === "running" || status === "starting";
 
   const handleToggle = (checked: boolean) => {
@@ -101,27 +101,6 @@ export const Dashboard = () => {
       window.electronAPI.stopClient();
     }
   };
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await fetch(`/api/dgn/stats`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch stats: ${response.statusText}`);
-        }
-        const data: JobStats = await response.json();
-        setStats(data);
-      } catch (error) {
-        console.error(error);
-        // Optionally, update state to show an error message in the UI
-      }
-    };
-
-    fetchStats(); // Initial fetch
-    const interval = setInterval(fetchStats, 5000); // Poll every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [setStats]);
 
   const chartData = [
     {
