@@ -17,7 +17,7 @@ export const LogViewer = () => {
     <div className="h-[600px] flex flex-col bg-secondary rounded-lg p-4">
       <div className="flex justify-between items-center mb-2">
         <h2 className="text-xl font-bold">Client Logs</h2>
-        <Button variant="destructive" size="sm" onClick={clearLogs}>
+        <Button variant="destructive" size="sm" onClick={clearLogs} className="text-white dark:text-white">
           Clear Logs
         </Button>
       </div>

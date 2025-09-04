@@ -5,6 +5,7 @@ import { Dashboard } from "@/components/Dashboard";
 import { LogViewer } from "@/components/LogViewer";
 import { Auth } from "@/components/Auth";
 import { Profile } from "@/components/Profile";
+import { Chart } from "@/components/Chart";
 import {
   LayoutDashboard,
   Terminal,
@@ -13,6 +14,7 @@ import {
   LogOut,
   User,
   Loader2,
+  BarChart as BarChartIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@supabase/supabase-js";
@@ -22,15 +24,8 @@ import type { JobStats } from "./types";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function App() {
-  const {
-    setStatus,
-    addLog,
-    theme,
-    setTheme,
-    session,
-    setSession,
-    setStats,
-  } = useClientStore();
+  const { setStatus, addLog, theme, setTheme, session, setSession, setStats } =
+    useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -93,7 +88,9 @@ function App() {
     // Listener for initial session refresh or logout
     window.electronAPI.onSession((session) => {
       console.log(
-        `App.tsx: Received session update: ${session ? "authenticated" : "null"}`
+        `App.tsx: Received session update: ${
+          session ? "authenticated" : "null"
+        }`
       );
       setSession(session);
       setIsLoading(false);
@@ -163,7 +160,7 @@ function App() {
             <span className="text-sm text-gray-600 dark:text-gray-300">
               {session.user.email}
             </span>
-            <Button
+            {/* <Button
               variant="outline"
               size="icon"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -171,7 +168,7 @@ function App() {
               <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               <span className="sr-only">Toggle theme</span>
-            </Button>
+            </Button> */}
             <Button variant="outline" size="icon" onClick={handleLogout}>
               <LogOut className="h-[1.2rem] w-[1.2rem]" />
               <span className="sr-only">Logout</span>
@@ -188,6 +185,14 @@ function App() {
             >
               <LayoutDashboard className="mr-2" size={16} />
               Dashboard
+            </TabsTrigger>
+            <TabsTrigger
+              value="chart"
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+            >
+              <BarChartIcon className="mr-2" size={16} />
+              Chart
             </TabsTrigger>
             <TabsTrigger
               value="logs"
@@ -209,6 +214,9 @@ function App() {
 
           <TabsContent value="dashboard" activeTab={activeTab}>
             <Dashboard />
+          </TabsContent>
+          <TabsContent value="chart" activeTab={activeTab}>
+            <Chart />
           </TabsContent>
           <TabsContent value="logs" activeTab={activeTab}>
             <LogViewer />

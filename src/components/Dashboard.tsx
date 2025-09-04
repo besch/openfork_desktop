@@ -182,50 +182,7 @@ export const Dashboard = () => {
         />
       </div>
 
-      <Card className="bg-gray-100 dark:bg-gray-800">
-        <CardHeader>
-          <CardTitle>Job Status Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={chartData}
-              margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke={theme === "dark" ? "#374151" : "#e5e7eb"}
-              />
-              <XAxis
-                dataKey="name"
-                stroke={theme === "dark" ? "#9ca3af" : "#6b7280"}
-              />
-              <YAxis
-                allowDecimals={false}
-                stroke={theme === "dark" ? "#9ca3af" : "#6b7280"}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: theme === "dark" ? "#111827" : "#ffffff",
-                  borderColor: theme === "dark" ? "#374151" : "#e5e7eb",
-                  color: theme === "dark" ? "#f9fafb" : "#1f2937",
-                }}
-                labelStyle={{ color: theme === "dark" ? "#f9fafb" : "#1f2937" }}
-              />
-              <Legend
-                wrapperStyle={{
-                  color: theme === "dark" ? "#f9fafb" : "#1f2937",
-                }}
-              />
-              <Bar dataKey="value" name="Jobs">
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      
     </div>
   );
 };

@@ -266,6 +266,11 @@ function createWindow() {
     },
   });
 
+  mainWindow.webContents.on("crashed", (event, killed) => {
+    console.error(`Electron: Renderer process crashed. Killed: ${killed}`);
+    stopPythonBackend();
+  });
+
   if (app.isPackaged) {
     mainWindow.loadFile(path.join(__dirname, "dist", "index.html"));
   } else {
@@ -290,6 +295,11 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", (event) => {
+  console.log("Electron: before-quit event triggered.");
+  stopPythonBackend();
 });
 
 // Handle the custom protocol URL on macOS
