@@ -28,7 +28,7 @@ export const LogViewer = () => {
       </div>
       <div
         ref={logContainerRef}
-        className="flex-grow overflow-y-auto bg-gray-900 rounded p-2 font-mono text-sm"
+        className="flex-grow overflow-y-auto bg-gray-900 rounded p-2 font-mono text-sm h-[calc(100vh-300px)]"
       >
         {logs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">

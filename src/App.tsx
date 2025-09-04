@@ -25,8 +25,16 @@ import type { JobStats } from "./types";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function App() {
-  const { status, setStatus, addLog, theme, setTheme, session, setSession, setStats } =
-    useClientStore();
+  const {
+    status,
+    setStatus,
+    addLog,
+    theme,
+    setTheme,
+    session,
+    setSession,
+    setStats,
+  } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -161,17 +169,17 @@ function App() {
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
-      <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-white p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            DGN Client Dashboard
-          </h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              {session.user.email}
-            </span>
-            {/* <Button
+      <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <header className="flex items-center justify-between mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              DGN Client Dashboard
+            </h1>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {session.user.email}
+              </span>
+              {/* <Button
               variant="outline"
               size="icon"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -180,64 +188,64 @@ function App() {
               <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               <span className="sr-only">Toggle theme</span>
             </Button> */}
-            <Button variant="outline" size="icon" onClick={handleLogout}>
-              <LogOut className="h-[1.2rem] w-[1.2rem]" />
-              <span className="sr-only">Logout</span>
-            </Button>
-          </div>
-        </header>
+              <Button variant="outline" size="icon" onClick={handleLogout}>
+                <LogOut className="h-[1.2rem] w-[1.2rem]" />
+                <span className="sr-only">Logout</span>
+              </Button>
+            </div>
+          </header>
 
-        <Tabs>
-          <TabsList className="mb-4">
-            <TabsTrigger
-              value="dashboard"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            >
-              <LayoutDashboard className="mr-2" size={16} />
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger
-              value="chart"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            >
-              <BarChartIcon className="mr-2" size={16} />
-              Chart
-            </TabsTrigger>
-            <TabsTrigger
-              value="logs"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            >
-              <Terminal className="mr-2" size={16} />
-              Logs
-            </TabsTrigger>
-            <TabsTrigger
-              value="profile"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            >
-              <User className="mr-2" size={16} />
-              Profile
-            </TabsTrigger>
-          </TabsList>
+          <Tabs>
+            <TabsList className="mb-4">
+              <TabsTrigger
+                value="dashboard"
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+              >
+                <LayoutDashboard className="mr-2" size={16} />
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger
+                value="chart"
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+              >
+                <BarChartIcon className="mr-2" size={16} />
+                Chart
+              </TabsTrigger>
+              <TabsTrigger
+                value="logs"
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+              >
+                <Terminal className="mr-2" size={16} />
+                Logs
+              </TabsTrigger>
+              <TabsTrigger
+                value="profile"
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+              >
+                <User className="mr-2" size={16} />
+                Profile
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="dashboard" activeTab={activeTab}>
-            <Dashboard />
-          </TabsContent>
-          <TabsContent value="chart" activeTab={activeTab}>
-            <Chart />
-          </TabsContent>
-          <TabsContent value="logs" activeTab={activeTab}>
-            <LogViewer />
-          </TabsContent>
-          <TabsContent value="profile" activeTab={activeTab}>
-            <Profile />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="dashboard" activeTab={activeTab}>
+              <Dashboard />
+            </TabsContent>
+            <TabsContent value="chart" activeTab={activeTab}>
+              <Chart />
+            </TabsContent>
+            <TabsContent value="logs" activeTab={activeTab}>
+              <LogViewer />
+            </TabsContent>
+            <TabsContent value="profile" activeTab={activeTab}>
+              <Profile />
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
-    </div>
     </>
   );
 }
