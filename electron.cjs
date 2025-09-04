@@ -189,7 +189,9 @@ function startPythonBackend() {
 function stopPythonBackend() {
   if (pythonProcess) {
     console.log("Electron: Attempting to stop Python process...");
-    mainWindow.webContents.send("dgn-client:status", "stopping");
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send("dgn-client:status", "stopping");
+    }
     // Send a signal to the Python process to initiate graceful shutdown
     // On Windows, 'SIGINT' is not directly supported, 'kill()' sends SIGTERM.
     // For graceful shutdown, we'll rely on the HTTP shutdown server in Python.
