@@ -315,3 +315,8 @@ ipcMain.handle("auth:set-session-from-tokens", async (event, accessToken, refres
 });
 ipcMain.on("dgn-client:start", startPythonBackend);
 ipcMain.on("dgn-client:stop", stopPythonBackend);
+ipcMain.on("window:set-closable", (event, closable) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setClosable(closable);
+  }
+});

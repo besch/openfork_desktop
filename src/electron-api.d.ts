@@ -13,6 +13,7 @@ declare global {
       onSession: (callback: (session: Session | null) => void) => void;
       onAuthCallback: (callback: (url: string) => void) => void;
       setSessionFromTokens: (accessToken: string, refreshToken: string) => Promise<{ session: Session | null; error: AuthError | null; }>;
+      setWindowClosable: (closable: boolean) => void;
       removeAllListeners: (
         channel: "dgn-client:log" | "dgn-client:status" | "auth:session" | "auth:callback"
       ) => void;

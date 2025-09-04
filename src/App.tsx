@@ -88,6 +88,9 @@ function App() {
     window.electronAPI.onStatusChange((status) => {
       console.log(`App.tsx: Received status change: ${status}`);
       setStatus(status);
+      if (status === "stopping") {
+        window.electronAPI.setWindowClosable(false);
+      }
     });
     window.electronAPI.onLog((log) => {
       console.log(`App.tsx: Received log: ${JSON.stringify(log)}`);

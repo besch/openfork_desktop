@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAuthCallback: (callback) => ipcRenderer.on('auth:callback', (_event, value) => callback(value)),
   setSessionFromTokens: (accessToken, refreshToken) => ipcRenderer.invoke('auth:set-session-from-tokens', accessToken, refreshToken),
 
+  setWindowClosable: (closable) => ipcRenderer.send('window:set-closable', closable),
+
   // General
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 });
