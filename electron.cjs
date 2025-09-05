@@ -176,6 +176,9 @@ function stopPythonBackend() {
   return new Promise((resolve) => {
     if (!pythonProcess) {
       console.log("Electron: No Python process running to stop.");
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("dgn-client:status", "stopped");
+      }
       return resolve();
     }
 
@@ -187,7 +190,6 @@ function stopPythonBackend() {
     // Listen for the close event on the process
     pythonProcess.once('close', () => {
       console.log("Electron: Python process confirmed closed.");
-      pythonProcess = null;
       resolve();
     });
 

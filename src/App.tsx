@@ -90,6 +90,8 @@ function App() {
       setStatus(status);
       if (status === "stopping") {
         window.electronAPI.setWindowClosable(false);
+      } else {
+        window.electronAPI.setWindowClosable(true);
       }
     });
     window.electronAPI.onLog((log) => {
