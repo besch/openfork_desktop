@@ -2,9 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // DGN Client controls
-  startClient: () => {
-    console.log('Preload: Sending dgn-client:start IPC message.');
-    ipcRenderer.send('dgn-client:start');
+  startClient: (service) => {
+    console.log(`Preload: Sending dgn-client:start IPC message for service: ${service}.`);
+    ipcRenderer.send('dgn-client:start', service);
   },
   stopClient: () => {
     console.log('Preload: Sending dgn-client:stop IPC message.');

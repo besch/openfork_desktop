@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useClientStore } from "@/store";
 import type { JobStats } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -90,6 +90,7 @@ export const StatusIndicator = () => {
 
 export const Dashboard = () => {
   const { status, stats, theme } = useClientStore();
+  const [service, setService] = useState('default');
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
 
@@ -97,7 +98,7 @@ export const Dashboard = () => {
     if (isDisabled) return; // Prevent action if disabled
 
     if (checked) {
-      window.electronAPI.startClient();
+      window.electronAPI.startClient(service);
     } else {
       window.electronAPI.stopClient();
     }
@@ -139,6 +140,15 @@ export const Dashboard = () => {
             onCheckedChange={handleToggle}
             disabled={isDisabled}
           />
+          <select 
+            value={service} 
+            onChange={(e) => setService(e.target.value)}
+            disabled={isRunning || isDisabled}
+            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          >
+            <option value="default">Default (Video)</option>
+            <option value="foley">Foley (Audio)</option>
+          </select>
         </div>
         <StatusIndicator />
       </div>

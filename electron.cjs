@@ -99,7 +99,7 @@ function getPythonExecutablePath() {
   }
 }
 
-function startPythonBackend() {
+function startPythonBackend(event, service = 'default') {
   if (pythonProcess) {
     console.log("Python process is already running.");
     return;
@@ -115,9 +115,9 @@ function startPythonBackend() {
 
   const pythonExecutablePath = getPythonExecutablePath();
   const pythonCwd = path.dirname(pythonExecutablePath);
-  const args = ["--access-token", session.access_token];
+  const args = ["--access-token", session.access_token, "--service", service];
 
-  console.log(`Starting Python backend with token...`);
+  console.log(`Starting Python backend for '${service}' service with token...`);
 
   try {
     pythonProcess = spawn(pythonExecutablePath, args, {
