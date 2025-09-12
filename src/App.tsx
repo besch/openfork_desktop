@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/config";
-import type { JobStats } from "./types";
+import type { JobStats } from "@/types";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -29,16 +29,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 function App() {
-  const {
-    status,
-    setStatus,
-    addLog,
-    theme,
-    setTheme,
-    session,
-    setSession,
-    setStats,
-  } = useClientStore();
+  const { status, setStatus, addLog, theme, session, setSession, setStats } =
+    useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -49,18 +41,15 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    // This effect runs when the session changes.
     if (!session) return;
 
     const fetchStats = async () => {
       try {
-        // This RPC call should be created in Supabase to aggregate counts.
         const { data, error } = await supabase.rpc("get_dgn_job_stats");
         if (error) throw error;
         if (data && data.length > 0) {
           setStats(data[0] as JobStats);
         } else {
-          // Set default stats if no data is returned
           setStats({ pending: 0, processing: 0, completed: 0, failed: 0 });
         }
       } catch (error) {
@@ -68,7 +57,7 @@ function App() {
       }
     };
 
-    fetchStats(); // Fetch initial stats
+    fetchStats();
 
     const channel = supabase
       .channel("dgn_jobs_changes")
@@ -77,7 +66,7 @@ function App() {
         { event: "*", schema: "public", table: "dgn_jobs" },
         (payload) => {
           console.log("Change received!", payload);
-          fetchStats(); // Refetch stats on any change
+          fetchStats();
         }
       )
       .subscribe();
@@ -138,9 +127,7 @@ function App() {
         }
 
         if (newSession) {
-          // Update renderer state
           setSession(newSession);
-          // Update renderer's supabase client instance for this lifecycle
           supabase.auth.setSession({
             access_token: newSession.access_token,
             refresh_token: newSession.refresh_token,
@@ -149,7 +136,6 @@ function App() {
       }
     });
 
-    // Clean up listeners on component unmount
     return () => {
       window.electronAPI.removeAllListeners("dgn-client:status");
       window.electronAPI.removeAllListeners("dgn-client:log");
