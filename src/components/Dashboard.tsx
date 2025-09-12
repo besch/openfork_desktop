@@ -148,7 +148,7 @@ export const Dashboard = () => {
           >
             <option value="default">Default (Video)</option>
             <option value="foley">Foley (Audio)</option>
-            <option value="text_to_image">Image (FLUX)</option>
+                        <option value="text_to_image">Image (Qwen)</option>
           </select>
         </div>
         <StatusIndicator />
