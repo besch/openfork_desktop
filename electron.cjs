@@ -123,6 +123,7 @@ function startPythonBackend(event, service = 'default') {
     pythonProcess = spawn(pythonExecutablePath, args, {
       cwd: pythonCwd,
       stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, PYTHONUNBUFFERED: "1" },
     });
 
     mainWindow.webContents.send("dgn-client:status", "starting");
