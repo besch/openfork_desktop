@@ -150,6 +150,8 @@ export const Dashboard = () => {
             <option value="default">Default (Video)</option>
             <option value="foley">Foley (Audio)</option>
             <option value="text_to_image">Image (Qwen)</option>
+            <option value="vibevoice">TTS (VibeVoice)</option>
+            <option value="vibevoice_multi_clone">TTS (Multi-Speaker Clone)</option>
           </select>
         </div>
         <StatusIndicator />
