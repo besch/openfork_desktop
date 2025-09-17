@@ -1,19 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useClientStore } from "@/store";
-import type { JobStats } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Switch } from "@/components/ui/Switch";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
 import {
   CheckCircle,
   XCircle,
@@ -89,30 +77,10 @@ export const StatusIndicator = () => {
 };
 
 export const Dashboard = () => {
-  const { status, stats, theme, session, fetchStats } = useClientStore();
-  const [service, setService] = useState("auto");
+  const { status, stats } = useClientStore();
+  const [service, setService] = useState('auto');
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
-
-  useEffect(() => {
-    if (session) {
-      fetchStats();
-    }
-  }, [session, fetchStats]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (status === "running" && session) {
-      interval = setInterval(() => {
-        fetchStats();
-      }, 15000); // Poll every 15 seconds
-    }
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [status, session, fetchStats]);
 
   const handleToggle = (checked: boolean) => {
     if (isDisabled) return; // Prevent action if disabled

@@ -1,3 +1,4 @@
+import { supabase } from "@/supabase";
 import { useEffect, useState } from "react";
 import { useClientStore } from "./store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
@@ -18,15 +19,7 @@ import {
   BarChart as BarChartIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/config";
-import type { JobStats } from "@/types";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: false,
-  },
-});
 
 function App() {
   const { status, setStatus, addLog, theme, session, setSession, setStats } =
@@ -40,41 +33,7 @@ function App() {
     root.classList.add(theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (!session) return;
-
-    const fetchStats = async () => {
-      try {
-        const { data, error } = await supabase.rpc("get_dgn_job_stats");
-        if (error) throw error;
-        if (data && data.length > 0) {
-          setStats(data[0] as JobStats);
-        } else {
-          setStats({ pending: 0, processing: 0, completed: 0, failed: 0 });
-        }
-      } catch (error) {
-        console.error("Error fetching initial job stats:", error);
-      }
-    };
-
-    fetchStats();
-
-    const channel = supabase
-      .channel("dgn_jobs_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "dgn_jobs" },
-        (payload) => {
-          console.log("Change received!", payload);
-          fetchStats();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session, setStats]);
+  
 
   useEffect(() => {
     console.log("App.tsx: Setting up Electron API listeners.");
