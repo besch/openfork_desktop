@@ -89,10 +89,30 @@ export const StatusIndicator = () => {
 };
 
 export const Dashboard = () => {
-  const { status, stats, theme } = useClientStore();
-  const [service, setService] = useState('auto');
+  const { status, stats, theme, session, fetchStats } = useClientStore();
+  const [service, setService] = useState("auto");
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
+
+  useEffect(() => {
+    if (session) {
+      fetchStats();
+    }
+  }, [session, fetchStats]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (status === "running" && session) {
+      interval = setInterval(() => {
+        fetchStats();
+      }, 15000); // Poll every 15 seconds
+    }
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [status, session, fetchStats]);
 
   const handleToggle = (checked: boolean) => {
     if (isDisabled) return; // Prevent action if disabled
@@ -103,29 +123,6 @@ export const Dashboard = () => {
       window.electronAPI.stopClient();
     }
   };
-
-  const chartData = [
-    {
-      name: "Completed",
-      value: stats.completed,
-      color: theme === "dark" ? "#22c55e" : "#22c55e",
-    }, // green-500
-    {
-      name: "Failed",
-      value: stats.failed,
-      color: theme === "dark" ? "#b91c1c" : "#ef4444",
-    }, // red-700 vs red-600
-    {
-      name: "In Progress",
-      value: stats.processing,
-      color: theme === "dark" ? "#3b82f6" : "#3b82f6",
-    }, // blue-500
-    {
-      name: "In Queue",
-      value: stats.pending,
-      color: theme === "dark" ? "#facc15" : "#eab308",
-    }, // yellow-400 vs yellow-500
-  ];
 
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
 
@@ -140,8 +137,8 @@ export const Dashboard = () => {
             onCheckedChange={handleToggle}
             disabled={isDisabled}
           />
-          <select 
-            value={service} 
+          <select
+            value={service}
             onChange={(e) => setService(e.target.value)}
             disabled={isRunning || isDisabled}
             className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -151,7 +148,9 @@ export const Dashboard = () => {
             <option value="foley">Foley (Audio)</option>
             <option value="text_to_image">Image (Qwen)</option>
             <option value="vibevoice">TTS (VibeVoice)</option>
-            <option value="vibevoice_multi_clone">TTS (Multi-Speaker Clone)</option>
+            <option value="vibevoice_multi_clone">
+              TTS (Multi-Speaker Clone)
+            </option>
           </select>
         </div>
         <StatusIndicator />
@@ -172,7 +171,9 @@ export const Dashboard = () => {
           icon={
             <Loader
               size={24}
-              className={`text-gray-500 dark:text-gray-400 ${isProcessingAndRunning ? "animate-spin" : ""}`}
+              className={`text-gray-500 dark:text-gray-400 ${
+                isProcessingAndRunning ? "animate-spin" : ""
+              }`}
             />
           }
           className="text-blue-500 dark:text-blue-300"
@@ -197,8 +198,6 @@ export const Dashboard = () => {
           className="text-red-500 dark:text-red-300"
         />
       </div>
-
-      
     </div>
   );
 };

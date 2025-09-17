@@ -20,6 +20,7 @@ interface DGNClientState {
   clearLogs: () => void;
   setTheme: (theme: Theme) => void;
   setSession: (session: Session | null) => void;
+  fetchStats: () => Promise<void>;
 }
 
 export const useClientStore = create<DGNClientState>((set, get) => ({
@@ -44,4 +45,31 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   clearLogs: () => set({ logs: [] }),
   setTheme: (theme) => set({ theme }),
   setSession: (session) => set({ session }),
+  fetchStats: async () => {
+    const { session } = get();
+    if (!session) {
+      set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
+      return;
+    }
+
+    try {
+      // In a real app, this URL should be configurable based on dev/prod environments.
+      const orchestratorUrl = 'http://localhost:3000';
+      const response = await fetch(`${orchestratorUrl}/api/dgn/stats`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stats: ${response.statusText}`);
+      }
+
+      const stats: JobStats = await response.json();
+      set({ stats });
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
+    }
+  },
 }));
