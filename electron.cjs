@@ -99,12 +99,26 @@ function getPythonExecutablePath() {
   }
 }
 
-function startPythonBackend(event, service = 'default') {
+async function startPythonBackend(event, service = 'default') {
   if (pythonProcess) {
     console.log("Python process is already running.");
     return;
   }
-  if (!session) {
+
+  // Refresh the session to get a new access token
+  const { data, error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError) {
+    console.error("Could not refresh session:", refreshError.message);
+    mainWindow.webContents.send("dgn-client:log", {
+      type: "stderr",
+      message: "Authentication error: Could not refresh session.",
+    });
+    return;
+  }
+
+  const refreshedSession = data.session;
+
+  if (!refreshedSession) {
     console.error("Cannot start DGN client: User not authenticated.");
     mainWindow.webContents.send("dgn-client:log", {
       type: "stderr",
@@ -115,7 +129,7 @@ function startPythonBackend(event, service = 'default') {
 
   const pythonExecutablePath = getPythonExecutablePath();
   const pythonCwd = path.dirname(pythonExecutablePath);
-  const args = ["--access-token", session.access_token, "--service", service];
+  const args = ["--access-token", refreshedSession.access_token, "--refresh-token", refreshedSession.refresh_token, "--service", service];
 
   console.log(`Starting Python backend for '${service}' service with token...`);
 
