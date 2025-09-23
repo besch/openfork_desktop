@@ -35,6 +35,17 @@ const supabase = createClient(
   }
 );
 
+// Listen for auth events to keep the session fresh
+supabase.auth.onAuthStateChange((event, newSession) => {
+  console.log(`Supabase auth event: ${event}`);
+  session = newSession; // Keep main process session variable in sync
+
+  // Notify the renderer process of the session change
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:session", session);
+  }
+});
+
 let pythonProcess;
 let mainWindow;
 let session = null;
@@ -105,31 +116,31 @@ async function startPythonBackend(event, service = 'default') {
     return;
   }
 
-  // Refresh the session to get a new access token
-  const { data, error: refreshError } = await supabase.auth.refreshSession();
-  if (refreshError) {
-    console.error("Could not refresh session:", refreshError.message);
+  // Get the current session. The Supabase client will handle refreshing if needed.
+  const { data, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    console.error("Could not get session:", sessionError.message);
     mainWindow.webContents.send("dgn-client:log", {
       type: "stderr",
-      message: "Authentication error: Could not refresh session.",
+      message: `Authentication error: Could not get session. ${sessionError.message}`,
     });
     return;
   }
 
-  const refreshedSession = data.session;
+  const currentSession = data.session;
 
-  if (!refreshedSession) {
+  if (!currentSession) {
     console.error("Cannot start DGN client: User not authenticated.");
     mainWindow.webContents.send("dgn-client:log", {
       type: "stderr",
-      message: "Authentication required.",
+      message: "Authentication required. Please log in.",
     });
     return;
   }
 
   const pythonExecutablePath = getPythonExecutablePath();
   const pythonCwd = path.dirname(pythonExecutablePath);
-  const args = ["--access-token", refreshedSession.access_token, "--refresh-token", refreshedSession.refresh_token, "--service", service];
+  const args = ["--access-token", currentSession.access_token, "--refresh-token", currentSession.refresh_token, "--service", service];
 
   console.log(`Starting Python backend for '${service}' service with token...`);
 
