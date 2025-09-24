@@ -120,10 +120,20 @@ async function startPythonBackend(event, service = 'default') {
   const { data, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) {
     console.error("Could not get session:", sessionError.message);
-    mainWindow.webContents.send("dgn-client:log", {
-      type: "stderr",
-      message: `Authentication error: Could not get session. ${sessionError.message}`,
-    });
+
+    // If the session is invalid, sign out to clear it and prompt for login.
+    if (sessionError.message.includes("Auth session missing") || sessionError.message.includes("invalid refresh token")) {
+      await supabase.auth.signOut();
+      mainWindow.webContents.send("dgn-client:log", {
+        type: "stderr",
+        message: "Your session has expired. Please log in again to start the client.",
+      });
+    } else {
+      mainWindow.webContents.send("dgn-client:log", {
+        type: "stderr",
+        message: `Authentication error: Could not get session. ${sessionError.message}`,
+      });
+    }
     return;
   }
 
