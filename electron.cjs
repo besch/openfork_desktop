@@ -1,8 +1,8 @@
 const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
-const { spawn } = require("child_process");
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
+const { PythonProcessManager } = require("./src/python-process-manager.cjs");
 
 // --- PROTOCOL & INITIALIZATION ---
 
@@ -35,6 +35,10 @@ const supabase = createClient(
   }
 );
 
+let mainWindow;
+let session = null;
+let pythonManager;
+
 // Listen for auth events to keep the session fresh
 supabase.auth.onAuthStateChange((event, newSession) => {
   console.log(`Supabase auth event: ${event}`);
@@ -46,10 +50,6 @@ supabase.auth.onAuthStateChange((event, newSession) => {
   }
 });
 
-let pythonProcess;
-let mainWindow;
-let session = null;
-let isQuitting = false; // Flag to indicate if the app is in the process of quitting
 
 // --- AUTHENTICATION ---
 
@@ -73,12 +73,18 @@ async function googleLogin() {
 }
 
 async function logout() {
+  // First, ensure the python client is stopped before signing out
+  if (pythonManager) {
+    await pythonManager.stop();
+  }
   const { error } = await supabase.auth.signOut();
   if (error) {
     console.error("Error logging out:", error.message);
   }
   session = null;
-  mainWindow.webContents.send("auth:session", null);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:session", null);
+  }
 }
 
 async function initializeSession() {
@@ -98,152 +104,6 @@ function handleAuthCallback(url) {
   if (mainWindow) {
     mainWindow.webContents.send("auth:callback", url);
   }
-}
-
-// --- PYTHON BACKEND ---
-
-function getPythonExecutablePath() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, "bin", "dgn_client_backend.exe");
-  } else {
-    return path.join(__dirname, "bin", "dgn_client_backend.exe");
-  }
-}
-
-async function startPythonBackend(event, service = 'default') {
-  if (pythonProcess) {
-    console.log("Python process is already running.");
-    return;
-  }
-
-  // Get the current session. The Supabase client will handle refreshing if needed.
-  const { data, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) {
-    console.error("Could not get session:", sessionError.message);
-
-    // If the session is invalid, sign out to clear it and prompt for login.
-    if (sessionError.message.includes("Auth session missing") || sessionError.message.includes("invalid refresh token")) {
-      await supabase.auth.signOut();
-      mainWindow.webContents.send("dgn-client:log", {
-        type: "stderr",
-        message: "Your session has expired. Please log in again to start the client.",
-      });
-    } else {
-      mainWindow.webContents.send("dgn-client:log", {
-        type: "stderr",
-        message: `Authentication error: Could not get session. ${sessionError.message}`,
-      });
-    }
-    return;
-  }
-
-  const currentSession = data.session;
-
-  if (!currentSession) {
-    console.error("Cannot start DGN client: User not authenticated.");
-    mainWindow.webContents.send("dgn-client:log", {
-      type: "stderr",
-      message: "Authentication required. Please log in.",
-    });
-    return;
-  }
-
-  const pythonExecutablePath = getPythonExecutablePath();
-  const pythonCwd = path.dirname(pythonExecutablePath);
-  const args = ["--access-token", currentSession.access_token, "--refresh-token", currentSession.refresh_token, "--service", service];
-
-  console.log(`Starting Python backend for '${service}' service with token...`);
-
-  try {
-    pythonProcess = spawn(pythonExecutablePath, args, {
-      cwd: pythonCwd,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, PYTHONUNBUFFERED: "1" },
-    });
-
-    mainWindow.webContents.send("dgn-client:status", "starting");
-
-    pythonProcess.stdout.on("data", (data) => {
-      const log = data.toString();
-      if (log.includes("DGN_CLIENT_RUNNING")) {
-        mainWindow.webContents.send("dgn-client:status", "running");
-        return;
-      }
-      console.log(`Python stdout: ${log}`);
-      mainWindow.webContents.send("dgn-client:log", {
-        type: "stdout",
-        message: log,
-      });
-    });
-
-    pythonProcess.stderr.on("data", (data) => {
-      const log = data.toString();
-      console.error(`Python stderr: ${log}`);
-      mainWindow.webContents.send("dgn-client:log", {
-        type: "stderr",
-        message: log,
-      });
-    });
-
-    pythonProcess.on("close", (code) => {
-      console.log(`Electron: Python process exited with code ${code}`);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("dgn-client:status", "stopped");
-      }
-      pythonProcess = null;
-    });
-
-    pythonProcess.on("error", (err) => {
-      console.error(`Electron: Failed to start Python process: ${err}`);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("dgn-client:status", "error");
-      }
-      pythonProcess = null;
-    });
-  } catch (err) {
-    console.error(`Error spawning Python process: ${err}`);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("dgn-client:status", "error");
-    }
-  }
-}
-
-function stopPythonBackend() {
-  return new Promise((resolve) => {
-    if (!pythonProcess) {
-      console.log("Electron: No Python process running to stop.");
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("dgn-client:status", "stopped");
-      }
-      return resolve();
-    }
-
-    console.log("Electron: Attempting to stop Python process...");
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("dgn-client:status", "stopping");
-    }
-
-    // Listen for the close event on the process
-    pythonProcess.once('close', () => {
-      console.log("Electron: Python process confirmed closed.");
-      resolve();
-    });
-
-    // Send HTTP shutdown request
-    fetch(`http://localhost:8000/shutdown`)
-      .catch(error => {
-        console.error(`Electron: Error sending HTTP shutdown request: ${error}. Falling back to kill.`);
-        if (pythonProcess) pythonProcess.kill();
-      });
-
-    // Failsafe timeout
-    setTimeout(() => {
-      if (pythonProcess) {
-        console.warn("Electron: Python process did not exit gracefully, forcing kill.");
-        pythonProcess.kill();
-      }
-    }, 8000); // 8 seconds timeout
-  });
 }
 
 // --- APP LIFECYCLE ---
@@ -276,22 +136,26 @@ function createWindow() {
     },
   });
 
+  // Instantiate the manager after the window is created
+  pythonManager = new PythonProcessManager({ supabase, mainWindow });
+
   // Intercept the close event
   mainWindow.on('close', (event) => {
-    if (!isQuitting) {
+    if (pythonManager && !pythonManager.isQuitting) {
       event.preventDefault(); // Prevent the window from closing
       app.quit(); // Trigger the before-quit event
     }
   });
 
-  mainWindow.webContents.on("crashed", (event, killed) => {
+  mainWindow.webContents.on("crashed", async (event, killed) => {
     console.error(`Electron: Renderer process crashed. Killed: ${killed}`);
-    // If the renderer crashes, we should probably shut down the backend too
-    if (pythonProcess) stopPythonBackend();
+    if (pythonManager) {
+      await pythonManager.stop();
+    }
   });
 
   if (app.isPackaged) {
-    mainWindow.loadFile(path.join(__dirname, "dist", "index.html"));
+    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   } else {
     mainWindow.loadURL("http://localhost:5173");
   }
@@ -309,21 +173,19 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  // This event is now less important as before-quit handles the main logic.
-  // On macOS, the app often stays open even if all windows are closed.
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
 app.on("before-quit", async (event) => {
-  if (isQuitting) return;
+  if (!pythonManager || pythonManager.isQuitting) return;
 
   console.log("Electron: before-quit event triggered.");
   event.preventDefault(); // Prevent the app from quitting immediately
-  isQuitting = true;
+  pythonManager.isQuitting = true;
 
-  await stopPythonBackend();
+  await pythonManager.stop();
 
   console.log("Electron: Backend stopped. Now quitting.");
   app.quit(); // Now quit the app for real
@@ -351,8 +213,14 @@ ipcMain.handle("auth:set-session-from-tokens", async (event, accessToken, refres
   session = data.session; // Keep main process session variable in sync
   return { session: data.session, error: null };
 });
-ipcMain.on("dgn-client:start", startPythonBackend);
-ipcMain.on("dgn-client:stop", stopPythonBackend);
+
+ipcMain.on("dgn-client:start", (event, service) => {
+    if (pythonManager) pythonManager.start(service);
+});
+ipcMain.on("dgn-client:stop", () => {
+    if (pythonManager) pythonManager.stop();
+});
+
 ipcMain.on("window:set-closable", (event, closable) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setClosable(closable);

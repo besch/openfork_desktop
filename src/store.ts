@@ -21,10 +21,10 @@ interface DGNClientState {
   setProviderId: (id: string | null) => void;
   clearLogs: () => void;
   setTheme: (theme: Theme) => void;
-  setSession: (session: Session | null) => void;
+  setSession: (session: Session | null) => Promise<void>;
   fetchStats: () => Promise<void>;
   subscribeToJobChanges: () => void;
-  unsubscribeFromJobChanges: () => void;
+  unsubscribeFromJobChanges: () => Promise<void>;
 }
 
 export const useClientStore = create<DGNClientState>((set, get) => ({
@@ -49,13 +49,25 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setProviderId: (id) => set({ providerId: id }),
   clearLogs: () => set({ logs: [] }),
   setTheme: (theme) => set({ theme }),
-  setSession: (session) => {
-    // When session changes, automatically manage the real-time subscription
+  setSession: async (session) => {
+    // Update the auth state of the renderer's Supabase client instance.
+    if (session) {
+      await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+    } else {
+      // Clear the client-side session.
+      await supabase.auth.signOut();
+    }
+
     const { subscribeToJobChanges, unsubscribeFromJobChanges } = get();
-    // Unsubscribe from any existing channel before setting the new session
-    unsubscribeFromJobChanges();
+
+    // Await the unsubscribe call to prevent race conditions.
+    await unsubscribeFromJobChanges();
+
     set({ session });
-    // If there's a new session, subscribe to its changes
+
     if (session) {
       subscribeToJobChanges();
     }
@@ -85,7 +97,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     const { session, fetchStats, jobSubscription } = get();
     if (!session || !session.user || jobSubscription) return;
 
-    const subscription = supabase
+    const channel = supabase
       .channel("dgn-jobs-user-changes")
       .on(
         "postgres_changes",
@@ -107,12 +119,12 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         }
         if (err) console.error("Error subscribing to job changes:", err);
       });
-    set({ jobSubscription: subscription });
+    set({ jobSubscription: channel });
   },
-  unsubscribeFromJobChanges: () => {
+  unsubscribeFromJobChanges: async () => {
     const { jobSubscription } = get();
     if (jobSubscription) {
-      jobSubscription.unsubscribe();
+      await jobSubscription.unsubscribe();
       set({ jobSubscription: null });
       console.log("Unsubscribed from DGN job changes.");
     }
