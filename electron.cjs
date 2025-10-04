@@ -87,19 +87,6 @@ async function logout() {
   }
 }
 
-async function initializeSession() {
-  const { data } = await supabase.auth.getSession();
-  session = data.session;
-
-  if (mainWindow) {
-    mainWindow.webContents.on("did-finish-load", () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("auth:session", session);
-      }
-    });
-  }
-}
-
 function handleAuthCallback(url) {
   if (mainWindow) {
     mainWindow.webContents.send("auth:callback", url);
@@ -129,11 +116,25 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
+    show: false,
+    backgroundColor: "#111827", // dark:bg-gray-900 from tailwind
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.show();
+  });
+
+  mainWindow.webContents.on("did-finish-load", async () => {
+    const { data } = await supabase.auth.getSession();
+    session = data.session;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("auth:session", session);
+    }
   });
 
   // Instantiate the manager after the window is created
@@ -163,7 +164,6 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-  initializeSession();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
