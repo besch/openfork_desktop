@@ -63,7 +63,15 @@ class PythonProcessManager {
     });
   }
 
-  async start(service = 'default') {
+  async start(service) {
+    if (!service) {
+      console.error("Service type must be provided to start the DGN client.");
+      this.mainWindow.webContents.send("dgn-client:log", {
+        type: "stderr",
+        message: "ERROR: Service type must be selected before starting the client.",
+      });
+      return;
+    }
     if (this.pythonProcess) {
       console.log("Python process is already running.");
       return;
