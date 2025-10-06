@@ -101,7 +101,11 @@ class PythonProcessManager {
     const currentSession = data.session;
 
     const pythonExecutablePath = this.getPythonExecutablePath();
-    const pythonCwd = path.dirname(pythonExecutablePath);
+
+    const dgnClientRootDir = app.isPackaged
+      ? path.join(process.resourcesPath, "dgn-client")
+      : path.join(__dirname, "..", "..", "dgn-client");
+
     const args = [
       "--access-token",
       currentSession.access_token,
@@ -109,13 +113,16 @@ class PythonProcessManager {
       currentSession.refresh_token,
       "--service",
       service,
+      "--root-dir",
+      dgnClientRootDir,
     ];
 
     console.log(`Starting Python backend for '${service}' service...`);
+    console.log(`Using CWD: ${dgnClientRootDir}`);
 
     try {
       this.pythonProcess = spawn(pythonExecutablePath, args, {
-        cwd: pythonCwd,
+        cwd: dgnClientRootDir,
         stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
       });
