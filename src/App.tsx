@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-
 function App() {
   const { status, setStatus, addLog, theme, session, setSession, setStats } =
     useClientStore();
@@ -32,8 +31,6 @@ function App() {
     root.classList.remove("light", "dark");
     root.classList.add(theme);
   }, [theme]);
-
-  
 
   useEffect(() => {
     console.log("App.tsx: Setting up Electron API listeners.");
@@ -133,7 +130,7 @@ function App() {
         <div className="max-w-7xl mx-auto">
           <header className="flex items-center justify-between mb-6">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              DGN Client Dashboard
+              Openfork Client
             </h1>
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-600 dark:text-gray-300">
