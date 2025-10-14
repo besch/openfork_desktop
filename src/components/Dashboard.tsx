@@ -77,7 +77,7 @@ export const StatusIndicator = () => {
 };
 
 export const Dashboard = () => {
-  const { status, stats } = useClientStore();
+  const { status, stats, services } = useClientStore();
   const [service, setService] = useState('auto');
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
@@ -111,12 +111,11 @@ export const Dashboard = () => {
             disabled={isRunning || isDisabled}
             className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
           >
-            <option value="auto">Auto</option>
-            <option value="wan22">WAN 2.2 (Video)</option>
-            <option value="foley">Foley (Audio)</option>
-            <option value="text_to_image">Image (Qwen)</option>
-            <option value="vibevoice">TTS (VibeVoice)</option>
-            <option value="diffrhythm">DiffRhythm (Music)</option>
+            {services.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
           </select>
         </div>
         <StatusIndicator />

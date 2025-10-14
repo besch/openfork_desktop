@@ -15,6 +15,7 @@ interface DGNClientState {
   theme: Theme;
   session: Session | null;
   jobSubscription: RealtimeChannel | null;
+  services: Array<{ value: string; label: string; }>;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
   setStats: (stats: JobStats) => void;
@@ -23,6 +24,7 @@ interface DGNClientState {
   setTheme: (theme: Theme) => void;
   setSession: (session: Session | null) => Promise<void>;
   fetchStats: () => Promise<void>;
+  fetchServices: () => Promise<void>;
   subscribeToJobChanges: () => void;
   unsubscribeFromJobChanges: () => Promise<void>;
 }
@@ -35,6 +37,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   theme: "dark",
   session: null,
   jobSubscription: null,
+  services: [{ value: "auto", label: "Auto-Select" }], // Start with a default
   setStatus: (status) => set({ status }),
   addLog: (log) => {
     const newLog: LogEntry = {
@@ -61,7 +64,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       await supabase.auth.signOut();
     }
 
-    const { subscribeToJobChanges, unsubscribeFromJobChanges } = get();
+    const { subscribeToJobChanges, unsubscribeFromJobChanges, fetchServices } = get();
 
     // Await the unsubscribe call to prevent race conditions.
     await unsubscribeFromJobChanges();
@@ -70,6 +73,23 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
     if (session) {
       subscribeToJobChanges();
+      fetchServices(); // Fetch services when user is logged in
+    }
+  },
+  fetchServices: async () => {
+    try {
+      // The vite.config.ts proxy will forward this to the Next.js backend.
+      const response = await fetch("/api/dgn/config");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch DGN config: ${response.statusText}`);
+      }
+      const config = await response.json();
+      if (config?.ui_services) {
+        set({ services: config.ui_services });
+      }
+    } catch (error) {
+      console.error("Error fetching DGN services:", error);
+      // Keep the default service list on error
     }
   },
   fetchStats: async () => {
