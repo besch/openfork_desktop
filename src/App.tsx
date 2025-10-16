@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/Button";
 
 function App() {
-  const { status, setStatus, addLog, theme, session, setSession, setStats } =
+  const { status, setStatus, addLog, theme, session, setSession } =
     useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
