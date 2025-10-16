@@ -145,7 +145,7 @@ function createWindow() {
   });
 
   if (app.isPackaged) {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+    mainWindow.loadFile(path.join(__dirname, "dist", "index.html"));
   } else {
     mainWindow.loadURL("http://localhost:5173");
   }
@@ -218,3 +218,5 @@ ipcMain.on("window:set-closable", (event, closable) => {
     mainWindow.setClosable(closable);
   }
 });
+
+ipcMain.handle('get-orchestrator-api-url', () => ORCHESTRATOR_API_URL);

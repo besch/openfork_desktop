@@ -89,6 +89,10 @@
         "from": "../dgn-client/supabase_auth.py",
         "to": "dgn-client/supabase_auth.py"
       }
-    ]
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

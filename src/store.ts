@@ -78,8 +78,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   },
   fetchServices: async () => {
     try {
-      // The vite.config.ts proxy will forward this to the Next.js backend.
-      const response = await fetch("/api/dgn/config");
+      const apiUrl = await window.electronAPI.getOrchestratorApiUrl();
+      const response = await fetch(`${apiUrl}/api/dgn/config`);
       if (!response.ok) {
         throw new Error(`Failed to fetch DGN config: ${response.statusText}`);
       }
