@@ -57,29 +57,37 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setTheme: (theme) => set({ theme }),
   setIsLoading: (loading) => set({ isLoading: loading }),
   setSession: async (session) => {
+    // Always clean up the old subscription on any session change.
+    await get().unsubscribeFromJobChanges();
+
+    // Update the Supabase client and the store's state.
     if (session) {
       await supabase.auth.setSession({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
       });
+      supabase.realtime.setAuth(session.access_token);
     } else {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
+      supabase.realtime.setAuth(null);
     }
-
-    const { subscribeToJobChanges, unsubscribeFromJobChanges, fetchServices } =
-      get();
-    await unsubscribeFromJobChanges();
     set({ session });
 
+    // If it's a new login, set up the new subscription.
     if (session) {
-      subscribeToJobChanges();
-      fetchServices();
+      get().subscribeToJobChanges();
+      get().fetchServices();
     }
   },
   fetchServices: async () => {
     try {
       const apiUrl = await window.electronAPI.getOrchestratorApiUrl();
-      const response = await fetch(`${apiUrl}/api/dgn/config`);
+
+      const fetchUrl = import.meta.env.DEV
+        ? "/api/dgn/config"
+        : `${apiUrl}/api/dgn/config`;
+
+      const response = await fetch(fetchUrl);
       if (!response.ok) {
         throw new Error(`Failed to fetch DGN config: ${response.statusText}`);
       }
@@ -101,19 +109,25 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       const { data, error } = await supabase
         .rpc("fetch_dgn_job_stats", { p_user_id: session.user.id })
         .single();
+
       if (error) throw error;
+
       if (data) {
         set({ stats: data as JobStats });
       }
     } catch (error) {
-      console.error("Error fetching stats:", error);
+      console.error("store.ts: Error fetching stats:", error);
     }
   },
   subscribeToJobChanges: () => {
     const { session, fetchStats, jobSubscription } = get();
-    if (!session || !session.user || jobSubscription) return;
+    if (!session || !session.user || jobSubscription) {
+      return;
+    }
+
+    const channelName = `dgn-jobs-user-changes:${session.user.id}`;
     const channel = supabase
-      .channel("dgn-jobs-user-changes")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -122,37 +136,33 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
           table: "dgn_jobs",
           filter: `user_id=eq.${session.user.id}`,
         },
-        (payload) => {
-          console.log("DGN job change received, refetching stats.", payload);
+        () => {
           fetchStats();
         }
       )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
-          console.log("Subscribed to DGN job changes.");
           fetchStats();
         }
-        if (err) console.error("Error subscribing to job changes:", err);
+        if (err) {
+          console.error(`store.ts: Subscription error on ${channelName}:`, err);
+        }
       });
     set({ jobSubscription: channel });
   },
   unsubscribeFromJobChanges: async () => {
     const { jobSubscription } = get();
     if (jobSubscription) {
-      await jobSubscription.unsubscribe();
+      await supabase.removeChannel(jobSubscription);
       set({ jobSubscription: null });
-      console.log("Unsubscribed from DGN job changes.");
     }
   },
 }));
 
-// --- Centralized IPC Listener Setup ---
 function initializeIpcListeners() {
-  console.log("store.ts: Setting up Electron API listeners.");
   const { setStatus, addLog, setSession, setIsLoading } =
     useClientStore.getState();
 
-  // These listeners are now set up once and for all.
   window.electronAPI.onStatusChange((status) => {
     setStatus(status);
     if (status === "stopping") {
@@ -166,7 +176,7 @@ function initializeIpcListeners() {
 
   window.electronAPI.onSession(async (session) => {
     await setSession(session);
-    setIsLoading(false); // Signal that initial session check is done
+    setIsLoading(false);
   });
 
   window.electronAPI.onAuthCallback(async (url) => {
