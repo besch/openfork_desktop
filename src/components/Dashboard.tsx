@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, memo } from "react";
 import { useClientStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Switch } from "@/components/ui/Switch";
@@ -11,29 +11,31 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-const StatCard = ({
-  title,
-  value,
-  icon,
-  className,
-}: {
-  title: string;
-  value: number;
-  icon: React.ReactNode;
-  className?: string;
-}) => (
-  <Card className="bg-gray-100 dark:bg-gray-800">
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      {icon}
-    </CardHeader>
-    <CardContent>
-      <div className={`text-2xl font-bold ${className}`}>{value}</div>
-    </CardContent>
-  </Card>
+const StatCard = memo(
+  ({
+    title,
+    value,
+    icon,
+    className,
+  }: {
+    title: string;
+    value: number;
+    icon: React.ReactNode;
+    className?: string;
+  }) => (
+    <Card className="bg-gray-100 dark:bg-gray-800">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold ${className}`}>{value}</div>
+      </CardContent>
+    </Card>
+  )
 );
 
-export const StatusIndicator = () => {
+export const StatusIndicator = memo(() => {
   const status = useClientStore((state) => state.status);
 
   const statusConfig = {
@@ -68,29 +70,31 @@ export const StatusIndicator = () => {
 
   return (
     <div
-      className={`flex items-center space-x-2 p-3 rounded-lg bg-white/50 dark:bg-gray-900/50 ${className}`}
-    >
+      className={`flex items-center space-x-2 p-3 rounded-lg bg-white/50 dark:bg-gray-900/50 ${className}`}>
       {icon}
       <span className="font-semibold">{text}</span>
     </div>
   );
-};
+});
 
-export const Dashboard = () => {
+export const Dashboard = memo(() => {
   const { status, stats, services } = useClientStore();
-  const [service, setService] = useState('auto');
+  const [service, setService] = useState("auto");
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
 
-  const handleToggle = (checked: boolean) => {
-    if (isDisabled) return; // Prevent action if disabled
+  const handleToggle = useCallback(
+    (checked: boolean) => {
+      if (isDisabled) return;
 
-    if (checked) {
-      window.electronAPI.startClient(service);
-    } else {
-      window.electronAPI.stopClient();
-    }
-  };
+      if (checked) {
+        window.electronAPI.startClient(service);
+      } else {
+        window.electronAPI.stopClient();
+      }
+    },
+    [isDisabled, service]
+  );
 
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
 
@@ -165,4 +169,4 @@ export const Dashboard = () => {
       </div>
     </div>
   );
-};
+});

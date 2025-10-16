@@ -1,4 +1,3 @@
-import { supabase } from "@/supabase";
 import { useEffect, useState } from "react";
 import { useClientStore } from "./store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
@@ -19,10 +18,8 @@ import {
 import { Button } from "@/components/ui/Button";
 
 function App() {
-  const { status, setStatus, addLog, theme, session, setSession } =
-    useClientStore();
+  const { status, theme, session, isLoading } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -30,87 +27,7 @@ function App() {
     root.classList.add(theme);
   }, [theme]);
 
-  useEffect(() => {
-    console.log("App.tsx: Setting up Electron API listeners.");
-    window.electronAPI.onStatusChange((status) => {
-      console.log(`App.tsx: Received status change: ${status}`);
-      setStatus(status);
-      if (status === "stopping") {
-        window.electronAPI.setWindowClosable(false);
-      } else {
-        window.electronAPI.setWindowClosable(true);
-      }
-    });
-    window.electronAPI.onLog((log) => {
-      console.log(`App.tsx: Received log: ${JSON.stringify(log)}`);
-      addLog(log);
-    });
-
-    // Listener for initial session refresh or logout
-    window.electronAPI.onSession((session) => {
-      console.log(
-        `App.tsx: Received session update: ${
-          session ? "authenticated" : "null"
-        }`
-      );
-      if (session) {
-        supabase.auth.setSession({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-        });
-      }
-      setSession(session);
-      setIsLoading(false);
-    });
-
-    // Listener for the OAuth redirect callback
-    window.electronAPI.onAuthCallback(async (url) => {
-      const hashPart = url.split("#")[1];
-      if (!hashPart) {
-        console.log("App.tsx: Auth callback URL has no hash part.");
-        return;
-      }
-
-      const params = new URLSearchParams(hashPart);
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-
-      if (accessToken && refreshToken) {
-        // Persist session in main process (electron-store)
-        const { session: newSession, error } =
-          await window.electronAPI.setSessionFromTokens(
-            accessToken,
-            refreshToken
-          );
-
-        if (error) {
-          console.error(
-            "Error persisting session in main process:",
-            error.message
-          );
-          return;
-        }
-
-        if (newSession) {
-          setSession(newSession);
-          supabase.auth.setSession({
-            access_token: newSession.access_token,
-            refresh_token: newSession.refresh_token,
-          });
-        }
-      }
-    });
-
-    return () => {
-      window.electronAPI.removeAllListeners("dgn-client:status");
-      window.electronAPI.removeAllListeners("dgn-client:log");
-      window.electronAPI.removeAllListeners("auth:session");
-      window.electronAPI.removeAllListeners("auth:callback");
-    };
-  }, [setStatus, addLog, setSession]);
-
   const handleLogout = () => {
-    console.log("App.tsx: Initiating logout.");
     window.electronAPI.logout();
   };
 
@@ -202,3 +119,4 @@ function App() {
 }
 
 export default App;
+
