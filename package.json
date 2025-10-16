@@ -66,14 +66,28 @@
         "to": "bin/openfork_client.exe"
       },
       {
-        "from": "../dgn-client",
-        "to": "dgn-client",
-        "filter": [
-          "**/*.py",
-          "services/**",
-          "utils/**",
-          "comfyui-storage/storage/ComfyUI/input/"
-        ]
+        "from": "../dgn-client/services",
+        "to": "dgn-client/services"
+      },
+      {
+        "from": "../dgn-client/utils",
+        "to": "dgn-client/utils"
+      },
+      {
+        "from": "../dgn-client/cli.py",
+        "to": "dgn-client/cli.py"
+      },
+      {
+        "from": "../dgn-client/config.py",
+        "to": "dgn-client/config.py"
+      },
+      {
+        "from": "../dgn-client/dgn_client.py",
+        "to": "dgn-client/dgn_client.py"
+      },
+      {
+        "from": "../dgn-client/supabase_auth.py",
+        "to": "dgn-client/supabase_auth.py"
       }
     ]
   }
