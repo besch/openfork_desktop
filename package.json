@@ -69,10 +69,10 @@
         "from": "../dgn-client",
         "to": "dgn-client",
         "filter": [
-          "**/*",
-          "!**/__pycache__",
-          "!**/.git",
-          "!**/venv"
+          "**/*.py",
+          "services/**",
+          "utils/**",
+          "comfyui-storage/storage/ComfyUI/input/"
         ]
       }
     ]
