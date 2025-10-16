@@ -53,7 +53,7 @@
   },
   "build": {
     "appId": "com.openfork.dgn-client",
-    "productName": "Openfork DGN Client",
+    "productName": "Openfork Client",
     "files": [
       "dist/**/*",
       "electron.cjs",
@@ -87,7 +87,6 @@
         "from": "../dgn-client/dgn_client.py",
         "to": "dgn-client/dgn_client.py"
       }
-
     ],
     "nsis": {
       "oneClick": false,
