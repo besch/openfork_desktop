@@ -35,17 +35,20 @@ export const LogViewer = () => {
             <p>No logs yet. Start the client to see output.</p>
           </div>
         ) : (
-          logs.map((log, index) => (
-            <div
-              key={index}
-              className={`whitespace-pre-wrap ${
-                log.type === "stderr" ? "text-red-400" : "text-gray-300"
-              }`}
-            >
-              <span className="text-gray-500 mr-4">[{log.timestamp}]</span>
-              {log.message}
-            </div>
-          ))
+          logs
+            .slice()
+            .reverse()
+            .map((log, index) => (
+              <div
+                key={index}
+                className={`whitespace-pre-wrap ${
+                  log.type === "stderr" ? "text-red-400" : "text-gray-300"
+                }`}
+              >
+                <span className="text-gray-500 mr-4">[{log.timestamp}]</span>
+                {log.message}
+              </div>
+            ))
         )}
       </div>
     </div>

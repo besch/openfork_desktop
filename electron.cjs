@@ -127,7 +127,8 @@ function createWindow() {
   });
 
   // Instantiate the manager after the window is created
-  pythonManager = new PythonProcessManager({ supabase, mainWindow });
+  const userDataPath = app.getPath('userData');
+  pythonManager = new PythonProcessManager({ supabase, mainWindow, userDataPath });
 
   // Intercept the close event
   mainWindow.on("close", (event) => {

@@ -4,12 +4,13 @@ const http = require("http");
 const { app } = require("electron");
 
 class PythonProcessManager {
-  constructor({ supabase, mainWindow }) {
+  constructor({ supabase, mainWindow, userDataPath }) {
     this.pythonProcess = null;
     this.tokenServerPort = 8001; // Default port, will be updated on client startup
     this.supabase = supabase;
     this.mainWindow = mainWindow;
     this.isQuitting = false;
+    this.userDataPath = userDataPath;
   }
 
   getPythonExecutablePath() {
@@ -115,6 +116,8 @@ class PythonProcessManager {
       service,
       "--root-dir",
       dgnClientRootDir,
+      "--data-dir",
+      this.userDataPath,
     ];
 
     console.log(`Starting Python backend for '${service}' service...`);
