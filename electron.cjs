@@ -17,23 +17,23 @@ if (process.defaultApp) {
 }
 
 const store = new Store();
-const { SUPABASE_URL, SUPABASE_ANON_KEY } = require("./config.json");
-const supabase = createClient(
+const {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
-  {
-    auth: {
-      storage: {
-        getItem: (key) => store.get(key),
-        setItem: (key, value) => store.set(key, value),
-        removeItem: (key) => store.delete(key),
-      },
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
+  ORCHESTRATOR_API_URL,
+} = require("./config.json");
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    storage: {
+      getItem: (key) => store.get(key),
+      setItem: (key, value) => store.set(key, value),
+      removeItem: (key) => store.delete(key),
     },
-  }
-);
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
 
 let mainWindow;
 let session = null;
@@ -50,26 +50,15 @@ supabase.auth.onAuthStateChange((event, newSession) => {
   }
 });
 
-
 // --- AUTHENTICATION ---
 
 async function googleLogin() {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: "dgn-client://auth/callback",
-    },
-  });
-
-  if (error) {
-    console.error("Error logging in:", error.message);
-    mainWindow.webContents.send("auth:error", error.message);
-    return;
-  }
-
-  if (data.url) {
-    shell.openExternal(data.url);
-  }
+  // Instead of starting an OAuth flow from Electron,
+  // we open a page on the website which will handle auth
+  // and then redirect back to Electron with the session.
+  const syncUrl = `${ORCHESTRATOR_API_URL}/auth/electron-login`;
+  console.log(`Opening auth URL: ${syncUrl}`);
+  shell.openExternal(syncUrl);
 }
 
 async function logout() {
@@ -141,7 +130,7 @@ function createWindow() {
   pythonManager = new PythonProcessManager({ supabase, mainWindow });
 
   // Intercept the close event
-  mainWindow.on('close', (event) => {
+  mainWindow.on("close", (event) => {
     if (pythonManager && !pythonManager.isQuitting) {
       event.preventDefault(); // Prevent the window from closing
       app.quit(); // Trigger the before-quit event
@@ -199,26 +188,29 @@ app.on("open-url", (event, url) => {
 // --- IPC HANDLERS ---
 ipcMain.handle("auth:google-login", googleLogin);
 ipcMain.handle("auth:logout", logout);
-ipcMain.handle("auth:set-session-from-tokens", async (event, accessToken, refreshToken) => {
-  const { data, error } = await supabase.auth.setSession({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-  });
+ipcMain.handle(
+  "auth:set-session-from-tokens",
+  async (event, accessToken, refreshToken) => {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
 
-  if (error) {
-    console.error("Failed to set session in main:", error.message);
-    return { session: null, error };
+    if (error) {
+      console.error("Failed to set session in main:", error.message);
+      return { session: null, error };
+    }
+
+    session = data.session; // Keep main process session variable in sync
+    return { session: data.session, error: null };
   }
-
-  session = data.session; // Keep main process session variable in sync
-  return { session: data.session, error: null };
-});
+);
 
 ipcMain.on("dgn-client:start", (event, service) => {
-    if (pythonManager) pythonManager.start(service);
+  if (pythonManager) pythonManager.start(service);
 });
 ipcMain.on("dgn-client:stop", () => {
-    if (pythonManager) pythonManager.stop();
+  if (pythonManager) pythonManager.stop();
 });
 
 ipcMain.on("window:set-closable", (event, closable) => {
