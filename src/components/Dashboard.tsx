@@ -1,5 +1,12 @@
 import React, { useState, useCallback, memo } from "react";
 import { useClientStore } from "@/store";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import {
   CheckCircle,
@@ -194,18 +201,22 @@ export const Dashboard = memo(() => {
             <h2 className="text-2xl font-bold text-center sm:text-left">
               Workflows
             </h2>
-            <select
+            <Select
               value={service}
-              onChange={(e) => setService(e.target.value)}
+              onValueChange={setService}
               disabled={isRunning || isDisabled}
-              className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {services.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Select workflow" />
+              </SelectTrigger>
+              <SelectContent>
+                {services.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="w-full lg:w-auto flex justify-center">
