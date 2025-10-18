@@ -1,0 +1,70 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            arch: x64
+          - os: ubuntu-latest
+            arch: x64
+          - os: windows-latest
+            arch: x64
+
+    steps:
+      - name: Check out Electron app repository
+        uses: actions/checkout@v4
+        # This action checks out the repository where the workflow is located.
+
+      - name: Checkout Openfork Client repository
+        uses: actions/checkout@v4
+        with:
+          repository: besch/openfork_client
+          path: openfork_client
+          token: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install Python dependencies
+        working-directory: openfork_client
+        run: pip install -r requirements.txt
+
+      - name: Build openfork_client with PyInstaller
+        working-directory: openfork_client
+        run: pyinstaller --noconfirm openfork_client.spec
+
+      - name: Create bin directory for Electron app
+        run: mkdir -p bin
+
+      - name: Move openfork_client executable
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            mv openfork_client/dist/openfork_client.exe bin/
+          else
+            mv openfork_client/dist/openfork_client bin/
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Electron app dependencies
+        run: npm install
+
+      - name: Build and release Electron app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release

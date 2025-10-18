@@ -14,11 +14,12 @@ class PythonProcessManager {
   }
 
   getPythonExecutablePath() {
+    const exeName = process.platform === "win32" ? "openfork_client.exe" : "openfork_client";
     if (app.isPackaged) {
-      return path.join(process.resourcesPath, "bin", "openfork_client.exe");
+      return path.join(process.resourcesPath, "bin", exeName);
     } else {
-      // In dev, this assumes the executable is in a 'bin' directory adjacent to 'electron.cjs'
-      return path.join(__dirname, "..", "bin", "openfork_client.exe");
+      // In dev, assumes the executable is in a 'bin' directory adjacent to 'electron.cjs'
+      return path.join(__dirname, "..", "bin", exeName);
     }
   }
 
@@ -72,7 +73,7 @@ class PythonProcessManager {
     });
   }
 
-  async start(service) {
+  async start(service, policy, allowedIds) {
     if (!service) {
       console.error("Service type must be provided to start the DGN client.");
       this.mainWindow.webContents.send("dgn-client:log", {
@@ -102,9 +103,10 @@ class PythonProcessManager {
     const currentSession = data.session;
 
     const pythonExecutablePath = this.getPythonExecutablePath();
+    const pythonExecutableDir = path.dirname(pythonExecutablePath);
 
     const dgnClientRootDir = app.isPackaged
-      ? path.join(process.resourcesPath, "dgn-client")
+      ? pythonExecutableDir
       : path.join(__dirname, "..", "..", "dgn-client");
 
     const args = [
@@ -118,14 +120,21 @@ class PythonProcessManager {
       dgnClientRootDir,
       "--data-dir",
       this.userDataPath,
+      "--accept-policy",
+      policy,
     ];
 
+    if (allowedIds) {
+      args.push("--allowed-ids", allowedIds);
+    }
+
     console.log(`Starting Python backend for '${service}' service...`);
-    console.log(`Using CWD: ${dgnClientRootDir}`);
+    const cwd = app.isPackaged ? pythonExecutableDir : dgnClientRootDir;
+    console.log(`Using CWD: ${cwd}`);
 
     try {
       this.pythonProcess = spawn(pythonExecutablePath, args, {
-        cwd: dgnClientRootDir,
+        cwd: cwd,
         stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
       });

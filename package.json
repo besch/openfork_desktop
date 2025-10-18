@@ -11,9 +11,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "electron electron.cjs",
-    "electron-dev": "npm run build && electron .",
-    "electron-build": "npm run build && electron-builder"
+    "start": "electron .",
+    "pack": "electron-builder",
+    "release": "electron-builder --publish=always"
   },
   "dependencies": {
     "@effect/core": "^0.0.16",
@@ -58,6 +58,7 @@
   "build": {
     "appId": "com.openfork.dgn-client",
     "productName": "Openfork Client",
+    "artifactName": "${productName}-${os}-${arch}.${ext}",
     "files": [
       "dist/**/*",
       "electron.cjs",
@@ -68,30 +69,22 @@
     ],
     "extraResources": [
       {
-        "from": "bin/openfork_client.exe",
-        "to": "bin/openfork_client.exe"
-      },
-      {
-        "from": "../dgn-client/services",
-        "to": "dgn-client/services"
-      },
-      {
-        "from": "../dgn-client/utils",
-        "to": "dgn-client/utils"
-      },
-      {
-        "from": "../dgn-client/cli.py",
-        "to": "dgn-client/cli.py"
-      },
-      {
-        "from": "../dgn-client/config.py",
-        "to": "dgn-client/config.py"
-      },
-      {
-        "from": "../dgn-client/dgn_client.py",
-        "to": "dgn-client/dgn_client.py"
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
