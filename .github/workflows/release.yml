@@ -37,7 +37,9 @@ jobs:
 
       - name: Install Python dependencies
         working-directory: openfork_client
-        run: pip install -r requirements.txt
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
 
       - name: Build openfork_client with PyInstaller
         working-directory: openfork_client
