@@ -4,7 +4,7 @@ import type { Session, AuthError } from '@supabase/supabase-js';
 declare global {
   interface Window {
     electronAPI: {
-      startClient: (service: string) => void;
+      startClient: (service: string, policy: string, allowedIds: string) => void;
       stopClient: () => void;
       onLog: (callback: (log: LogEntry) => void) => void;
       onStatusChange: (callback: (status: DGNClientStatus) => void) => void;
