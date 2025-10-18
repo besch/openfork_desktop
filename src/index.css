@@ -1,10 +1,8 @@
-
-
-@import "tailwindcss";
 @import url("https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-sans/variable/geist-sans.css");
+@import "tailwindcss";
 
 @theme {
-  --background: oklch(0.98 0.003 240); /* Almost white */
+  --background: oklch(0.95 0.01 240); /* Light Grey */
   --foreground: oklch(0.15 0.02 240); /* Dark gray */
   --card: oklch(0.99 0.002 240); /* Slightly off-white */
   --card-foreground: oklch(0.15 0.02 240);
@@ -43,18 +41,26 @@
   --animation-border-spin: border-spin 7s linear infinite;
 
   @keyframes shine-pulse {
-    0% { background-position: 0% 0% }
-    50% { background-position: 100% 100% }
-    100% { background-position: 0% 0% }
+    0% {
+      background-position: 0% 0%;
+    }
+    50% {
+      background-position: 100% 100%;
+    }
+    100% {
+      background-position: 0% 0%;
+    }
   }
 
   @keyframes border-spin {
-    100% { transform: rotate(360deg) }
+    100% {
+      transform: rotate(360deg);
+    }
   }
 }
 
 .dark {
-  --background: oklch(0.1 0.02 240); /* Very dark blue-gray */
+  --background: oklch(0.15 0.02 240); /* Lighter dark blue-gray */
   --foreground: oklch(0.95 0.01 240); /* Light gray */
   --card: oklch(0.12 0.02 240 / 0.7);
   --card-foreground: oklch(0.95 0.01 240);

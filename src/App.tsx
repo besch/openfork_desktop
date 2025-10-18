@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useClientStore } from "./store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { Dashboard } from "@/components/Dashboard";
@@ -18,14 +18,8 @@ import {
 import { Button } from "@/components/ui/Button";
 
 function App() {
-  const { status, theme, session, isLoading } = useClientStore();
+  const { status, session, isLoading } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove("light", "dark");
-    root.classList.add(theme);
-  }, [theme]);
 
   const handleLogout = () => {
     window.electronAPI.logout();
@@ -46,12 +40,10 @@ function App() {
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
-      <div className="min-h-screen p-4 md:p-8">
+      <div className="min-h-screen bg-gray-900 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <header className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold">
-              Openfork Client
-            </h1>
+            <h1 className="text-3xl font-bold">Openfork Client</h1>
             <div className="flex items-center gap-4">
               <span className="text-sm text-muted-foreground">
                 {session.user.email}
@@ -119,4 +111,3 @@ function App() {
 }
 
 export default App;
-

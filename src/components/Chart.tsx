@@ -1,4 +1,3 @@
-
 import { useClientStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import {
@@ -40,7 +39,7 @@ export const Chart = () => {
   ];
 
   return (
-    <Card className="bg-gray-100 dark:bg-gray-800">
+    <Card className="bg-gray-100 bg-gray-800">
       <CardHeader>
         <CardTitle>Job Status Overview</CardTitle>
       </CardHeader>

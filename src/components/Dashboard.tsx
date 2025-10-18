@@ -33,7 +33,7 @@ const StatCard = memo(
     icon: React.ReactNode;
     className?: string;
   }) => (
-    <Card className="bg-card/80 backdrop-blur-sm border border-border/50 transition-all duration-300 hover:border-primary/50 hover:bg-card">
+    <Card className="bg-card/80 backdrop-blur-sm transition-all duration-300 hover:border-primary/50 hover:bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
@@ -174,8 +174,8 @@ export const Dashboard = memo(() => {
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
 
   return (
-    <div className="space-y-6 p-4 md:p-8 min-h-screen">
-      <header className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg p-4 space-y-4">
+    <div className="space-y-6">
+      <header className="bg-card/80 backdrop-blur-sm border border-gray-700 rounded-lg p-4 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <PowerButton
@@ -199,7 +199,7 @@ export const Dashboard = memo(() => {
                 onValueChange={setService}
                 disabled={isRunning || isDisabled}
               >
-                <SelectTrigger className="w-48 bg-background/50 border-border">
+                <SelectTrigger className="w-48 bg-background/50">
                   <SelectValue placeholder="Workflows" />
                 </SelectTrigger>
                 <SelectContent>
@@ -218,7 +218,7 @@ export const Dashboard = memo(() => {
                 onValueChange={setPolicy}
                 disabled={isRunning || isDisabled}
               >
-                <SelectTrigger className="w-48 bg-background/50 border-border">
+                <SelectTrigger className="w-48 bg-background/50">
                   <SelectValue placeholder="Select a policy" />
                 </SelectTrigger>
                 <SelectContent>

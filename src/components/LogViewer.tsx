@@ -21,7 +21,7 @@ export const LogViewer = () => {
           variant="destructive"
           size="sm"
           onClick={clearLogs}
-          className="text-white dark:text-white"
+          className="text-white text-white"
         >
           Clear Logs
         </Button>

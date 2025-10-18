@@ -6,7 +6,7 @@ import config from "./config.json";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [tailwindcss(), react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

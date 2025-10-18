@@ -106,7 +106,7 @@ function createWindow() {
     width: 1024,
     height: 768,
     show: false,
-    backgroundColor: "#111827", // dark:bg-gray-900 from tailwind
+    backgroundColor: "#111827", // bg-gray-900 from tailwind
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
@@ -127,8 +127,12 @@ function createWindow() {
   });
 
   // Instantiate the manager after the window is created
-  const userDataPath = app.getPath('userData');
-  pythonManager = new PythonProcessManager({ supabase, mainWindow, userDataPath });
+  const userDataPath = app.getPath("userData");
+  pythonManager = new PythonProcessManager({
+    supabase,
+    mainWindow,
+    userDataPath,
+  });
 
   // Intercept the close event
   mainWindow.on("close", (event) => {
@@ -222,4 +226,4 @@ ipcMain.on("window:set-closable", (event, closable) => {
   }
 });
 
-ipcMain.handle('get-orchestrator-api-url', () => ORCHESTRATOR_API_URL);
+ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
