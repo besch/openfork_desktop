@@ -12,6 +12,7 @@ import {
   Pause,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { JobPolicySettings } from "./JobPolicySettings";
 
 const StatCard = memo(
   ({
@@ -160,6 +161,8 @@ const PowerButton = memo(
 export const Dashboard = memo(() => {
   const { status, stats, services } = useClientStore();
   const [service, setService] = useState("auto");
+  const [policy, setPolicy] = useState("public");
+  const [allowedIds, setAllowedIds] = useState("");
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
 
@@ -168,12 +171,12 @@ export const Dashboard = memo(() => {
       if (isDisabled) return;
 
       if (checked) {
-        window.electronAPI.startClient(service);
+        window.electronAPI.startClient(service, policy, allowedIds);
       } else {
         window.electronAPI.stopClient();
       }
     },
-    [isDisabled, service]
+    [isDisabled, service, policy, allowedIds]
   );
 
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
@@ -209,6 +212,14 @@ export const Dashboard = memo(() => {
           <StatusIndicator />
         </div>
       </div>
+
+      <JobPolicySettings
+        policy={policy}
+        setPolicy={setPolicy}
+        allowedIds={allowedIds}
+        setAllowedIds={setAllowedIds}
+        isDisabled={isRunning || isDisabled}
+      />
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

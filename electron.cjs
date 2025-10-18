@@ -207,8 +207,10 @@ ipcMain.handle(
   }
 );
 
-ipcMain.on("dgn-client:start", (event, service) => {
-  if (pythonManager) pythonManager.start(service);
+ipcMain.on("dgn-client:start", (event, service, policy, allowedIds) => {
+  // TODO: The PythonProcessManager must be updated to accept `policy` and `allowedIds`
+  // and pass them as command-line arguments to the dgn_client.py script.
+  if (pythonManager) pythonManager.start(service, policy, allowedIds);
 });
 ipcMain.on("dgn-client:stop", () => {
   if (pythonManager) pythonManager.stop();
