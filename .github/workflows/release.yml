@@ -64,7 +64,7 @@ jobs:
           cache: "npm"
 
       - name: Install Electron app dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build and release Electron app
         env:
