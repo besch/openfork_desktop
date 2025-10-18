@@ -59,6 +59,28 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      keyframes: {
+        "shine-pulse": {
+          "0%": {
+            "background-position": "0% 0%",
+          },
+          "50%": {
+            "background-position": "100% 100%",
+          },
+          "100%": {
+            "background-position": "0% 0%",
+          },
+        },
+        "border-spin": {
+          "100%": {
+            transform: "rotate(360deg)",
+          },
+        },
+      },
+      animation: {
+        "shine-pulse": "shine-pulse 6s infinite ease-in-out",
+        "border-spin": "border-spin 7s linear infinite",
+      },
     },
   },
   plugins: [tailwindcssAnimate],

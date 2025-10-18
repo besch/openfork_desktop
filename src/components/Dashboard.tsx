@@ -33,15 +33,15 @@ const StatCard = memo(
     icon: React.ReactNode;
     className?: string;
   }) => (
-    <Card className="bg-gray-100 dark:bg-gray-800/50 backdrop-blur-sm">
+    <Card className="bg-card/80 backdrop-blur-sm border border-border/50 transition-all duration-300 hover:border-primary/50 hover:bg-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
         {icon}
       </CardHeader>
       <CardContent>
-        <div className={`text-2xl font-bold ${className}`}>{value}</div>
+        <div className={`text-3xl font-bold ${className}`}>{value}</div>
       </CardContent>
     </Card>
   )
@@ -52,29 +52,29 @@ export const StatusIndicator = memo(() => {
 
   const statusConfig = {
     running: {
-      text: "Client is Running",
-      className: "text-green-500 dark:text-green-400",
-      icon: <Power size={20} />,
+      text: "Running",
+      className: "text-green-400",
+      icon: <Power size={16} />,
     },
     stopped: {
-      text: "Client is Stopped",
-      className: "text-gray-500 dark:text-gray-400",
-      icon: <Power size={20} />,
+      text: "Stopped",
+      className: "text-muted-foreground",
+      icon: <Power size={16} />,
     },
     starting: {
       text: "Starting...",
-      className: "text-yellow-500 dark:text-yellow-400",
-      icon: <Loader size={20} className="animate-spin" />,
+      className: "text-yellow-400",
+      icon: <Loader size={16} className="animate-spin" />,
     },
     stopping: {
       text: "Stopping...",
-      className: "text-orange-500 dark:text-orange-400",
-      icon: <Loader size={20} className="animate-spin" />,
+      className: "text-orange-400",
+      icon: <Loader size={16} className="animate-spin" />,
     },
     error: {
-      text: "Error State",
-      className: "text-red-500 dark:text-red-400",
-      icon: <AlertCircle size={20} />,
+      text: "Error",
+      className: "text-destructive",
+      icon: <AlertCircle size={16} />,
     },
   };
 
@@ -82,10 +82,10 @@ export const StatusIndicator = memo(() => {
 
   return (
     <div
-      className={`flex items-center space-x-2 p-3 rounded-lg bg-white/30 dark:bg-gray-900/30 backdrop-blur-sm ${className}`}
+      className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-background/80 border border-border ${className}`}
     >
       {icon}
-      <span className="font-semibold">{text}</span>
+      <span>{text}</span>
     </div>
   );
 });
@@ -101,8 +101,14 @@ const PowerButton = memo(
     onToggle: (checked: boolean) => void;
   }) => {
     const buttonVariants = {
-      off: { backgroundColor: "hsl(142.1 70.6% 30.2%)" }, // green-700
-      on: { backgroundColor: "hsl(24.6, 95.2%, 47.1%)" }, // orange-700
+      off: {
+        backgroundColor: "oklch(0.6 0.2 140)", // Green
+        boxShadow: "0px 4px 15px oklch(0.6 0.2 140 / 0.3)",
+      },
+      on: {
+        backgroundColor: "oklch(0.7 0.2 15)", // Red
+        boxShadow: "0px 4px 15px oklch(0.7 0.2 15 / 0.3)",
+      },
     };
 
     const iconAnimation = {
@@ -115,48 +121,26 @@ const PowerButton = memo(
       <motion.button
         onClick={() => onToggle(!isRunning)}
         disabled={isDisabled}
-        className="relative w-28 h-28 rounded-full flex items-center justify-center text-white shadow-lg disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:ring-white cursor-pointer"
+        className="relative w-16 h-16 rounded-full flex items-center justify-center text-primary-foreground shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:ring-ring"
         initial={isRunning ? "on" : "off"}
         animate={isRunning ? "on" : "off"}
         variants={buttonVariants}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.5, type: "spring" }}
         whileHover={{ scale: isDisabled ? 1 : 1.05 }}
         whileTap={{ scale: isDisabled ? 1 : 0.95 }}
       >
-        {isRunning && !isDisabled && (
-          <motion.div
-            className="absolute w-full h-full rounded-full bg-orange-700/30"
-            initial={{ scale: 0, opacity: 0.5 }}
-            animate={{
-              scale: 0.8,
-              opacity: 0,
-            }}
-            transition={{
-              duration: 2,
-              repeat: Infinity,
-              ease: "easeOut",
-              repeatDelay: 0.5,
-            }}
-          />
-        )}
         <AnimatePresence mode="wait" initial={false}>
           {isDisabled ? (
             <motion.div key="loader" {...iconAnimation}>
-              <div className="w-20 h-20 rounded-full flex items-center justify-center bg-black/20">
-                <Loader size={40} className="animate-spin" />
-              </div>
+              <Loader size={24} className="animate-spin" />
             </motion.div>
           ) : isRunning ? (
             <motion.div key="pause" {...iconAnimation}>
-              <div className="w-20 h-20 rounded-full flex items-center justify-center bg-black/20">
-                <Pause size={40} />
-              </div>
+              <Pause size={24} />
             </motion.div>
           ) : (
             <motion.div key="play" {...iconAnimation}>
-              <div className="w-20 h-20 rounded-full flex items-center justify-center bg-black/20">
-                <Play size={40} className="ml-1" />
-              </div>
+              <Play size={24} className="ml-1" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -168,8 +152,9 @@ const PowerButton = memo(
 export const Dashboard = memo(() => {
   const { status, stats, services } = useClientStore();
   const [service, setService] = useState("auto");
-  const [policy, setPolicy] = useState("public");
+  const [policy, setPolicy] = useState("own");
   const [allowedIds, setAllowedIds] = useState("");
+
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
 
@@ -189,89 +174,106 @@ export const Dashboard = memo(() => {
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
 
   return (
-    <div className="space-y-8 p-4 md:p-6">
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-6 p-4 rounded-lg bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50">
-        <div className="flex flex-col sm:flex-row items-center gap-6">
-          <PowerButton
-            isRunning={isRunning}
-            isDisabled={isDisabled}
-            onToggle={handleToggle}
-          />
-          <div className="flex flex-col items-center sm:items-start gap-2">
-            <h2 className="text-2xl font-bold text-center sm:text-left">
-              Workflows
-            </h2>
-            <Select
-              value={service}
-              onValueChange={setService}
-              disabled={isRunning || isDisabled}
-            >
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Select workflow" />
-              </SelectTrigger>
-              <SelectContent>
-                {services.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
+    <div className="space-y-6 p-4 md:p-8 min-h-screen">
+      <header className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <PowerButton
+              isRunning={isRunning}
+              isDisabled={isDisabled}
+              onToggle={handleToggle}
+            />
+            <div>
+              <h1 className="text-xl font-bold tracking-tighter">DGN Client</h1>
+              <div className="mt-1">
+                <StatusIndicator />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">Workflows:</span>
+              <Select
+                value={service}
+                onValueChange={setService}
+                disabled={isRunning || isDisabled}
+              >
+                <SelectTrigger className="w-48 bg-background/50 border-border">
+                  <SelectValue placeholder="Workflows" />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">Job Policy:</span>
+              <Select
+                value={policy}
+                onValueChange={setPolicy}
+                disabled={isRunning || isDisabled}
+              >
+                <SelectTrigger className="w-48 bg-background/50 border-border">
+                  <SelectValue placeholder="Select a policy" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="own">Only My Jobs</SelectItem>
+                  <SelectItem value="public">Everyone</SelectItem>
+                  <SelectItem value="specific_projects">
+                    Only Specific Projects
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <SelectItem value="specific_branches">
+                    Only Specific Branches
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
-        <div className="w-full lg:w-auto flex justify-center">
-          <StatusIndicator />
-        </div>
-      </div>
-
-      <JobPolicySettings
-        policy={policy}
-        setPolicy={setPolicy}
-        allowedIds={allowedIds}
-        setAllowedIds={setAllowedIds}
-        isDisabled={isRunning || isDisabled}
-      />
+        <JobPolicySettings
+          policy={policy}
+          allowedIds={allowedIds}
+          setAllowedIds={setAllowedIds}
+          isDisabled={isRunning || isDisabled}
+        />
+      </header>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Jobs in Queue"
+          title="In Queue"
           value={stats.pending}
-          icon={
-            <Server size={20} className="text-gray-500 dark:text-gray-400" />
-          }
-          className="text-yellow-500 dark:text-yellow-400"
+          icon={<Server size={20} className="text-muted-foreground" />}
+          className="text-yellow-400"
         />
         <StatCard
-          title="Jobs In Progress"
+          title="In Progress"
           value={stats.processing}
           icon={
             <Loader
               size={20}
-              className={`text-gray-500 dark:text-gray-400 ${
+              className={`text-muted-foreground ${
                 isProcessingAndRunning ? "animate-spin" : ""
               }`}
             />
           }
-          className="text-blue-500 dark:text-blue-400"
+          className="text-blue-400"
         />
         <StatCard
-          title="Jobs Completed"
+          title="Completed"
           value={stats.completed}
-          icon={
-            <CheckCircle
-              size={20}
-              className="text-gray-500 dark:text-gray-400"
-            />
-          }
-          className="text-green-500 dark:text-green-400"
+          icon={<CheckCircle size={20} className="text-muted-foreground" />}
+          className="text-green-400"
         />
         <StatCard
-          title="Jobs Failed"
+          title="Failed"
           value={stats.failed}
-          icon={
-            <XCircle size={20} className="text-gray-500 dark:text-gray-400" />
-          }
-          className="text-red-500 dark:text-red-400"
+          icon={<XCircle size={20} className="text-muted-foreground" />}
+          className="text-destructive"
         />
       </div>
     </div>
