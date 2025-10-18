@@ -65,6 +65,7 @@ jobs:
 
       - name: Install Electron app dependencies
         run: npm ci
+        shell: bash
 
       - name: Build and release Electron app
         env:
