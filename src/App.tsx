@@ -33,8 +33,8 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
@@ -46,14 +46,14 @@ function App() {
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
-      <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white p-4 md:p-8">
+      <div className="min-h-screen p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <header className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-3xl font-bold">
               Openfork Client
             </h1>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600 dark:text-gray-300">
+              <span className="text-sm text-muted-foreground">
                 {session.user.email}
               </span>
               <Button variant="outline" size="icon" onClick={handleLogout}>

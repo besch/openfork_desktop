@@ -1,4 +1,7 @@
+
+
 @import "tailwindcss";
+@import url("https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-sans/variable/geist-sans.css");
 
 @theme {
   --background: oklch(0.98 0.003 240); /* Almost white */
@@ -21,6 +24,9 @@
   --input: oklch(0.9 0.01 240);
   --ring: oklch(0.6 0.2 260 / 0.5);
   --radius: 0.75rem;
+  --border-radius-lg: var(--radius);
+  --border-radius-md: calc(var(--radius) - 2px);
+  --border-radius-sm: calc(var(--radius) - 4px);
 
   --sidebar: oklch(0.985 0.002 247.839);
   --sidebar-foreground: oklch(0.13 0.028 261.692);
@@ -30,6 +36,21 @@
   --sidebar-accent-foreground: oklch(0.21 0.034 264.665);
   --sidebar-border: oklch(0.928 0.006 264.531);
   --sidebar-ring: oklch(0.707 0.022 261.325);
+
+  --font-sans: "Geist Sans", system-ui, sans-serif;
+
+  --animation-shine-pulse: shine-pulse 6s infinite ease-in-out;
+  --animation-border-spin: border-spin 7s linear infinite;
+
+  @keyframes shine-pulse {
+    0% { background-position: 0% 0% }
+    50% { background-position: 100% 100% }
+    100% { background-position: 0% 0% }
+  }
+
+  @keyframes border-spin {
+    100% { transform: rotate(360deg) }
+  }
 }
 
 .dark {
@@ -65,7 +86,9 @@
 
 @layer base {
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
     min-height: 100vh;
   }
   body::before {
@@ -75,8 +98,16 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-image: radial-gradient(circle at 20% 20%, oklch(var(--primary) / 0.1), transparent 30%),
-      radial-gradient(circle at 80% 70%, oklch(0.7 0.2 200 / 0.1), transparent 30%);
+    background-image: radial-gradient(
+        circle at 20% 20%,
+        oklch(var(--primary) / 0.1),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 80% 70%,
+        oklch(0.7 0.2 200 / 0.1),
+        transparent 30%
+      );
     z-index: -1;
     pointer-events: none;
   }
