@@ -142,11 +142,11 @@ const PowerButton = memo(
             </motion.div>
           ) : isRunning ? (
             <motion.div key="pause" {...iconAnimation}>
-              <Pause size={24} />
+              <Pause size={24} className="text-white cursor-pointer" />
             </motion.div>
           ) : (
             <motion.div key="play" {...iconAnimation}>
-              <Play size={24} className="ml-1" />
+              <Play size={24} className="ml-1 text-white cursor-pointer" />
             </motion.div>
           )}
         </AnimatePresence>
