@@ -56,7 +56,7 @@
     "vite": "^7.1.0"
   },
   "build": {
-    "appId": "com.openfork.dgn-client",
+    "appId": "com.openfork.openfork_client",
     "productName": "Openfork Client",
     "artifactName": "${productName}-${os}-${arch}.${ext}",
     "files": [

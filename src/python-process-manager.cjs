@@ -14,7 +14,8 @@ class PythonProcessManager {
   }
 
   getPythonExecutablePath() {
-    const exeName = process.platform === "win32" ? "openfork_client.exe" : "openfork_client";
+    const exeName =
+      process.platform === "win32" ? "openfork_client.exe" : "openfork_client";
     if (app.isPackaged) {
       return path.join(process.resourcesPath, "bin", exeName);
     } else {
@@ -76,7 +77,7 @@ class PythonProcessManager {
   async start(service, policy, allowedIds) {
     if (!service) {
       console.error("Service type must be provided to start the DGN client.");
-      this.mainWindow.webContents.send("dgn-client:log", {
+      this.mainWindow.webContents.send("openfork_client:log", {
         type: "stderr",
         message:
           "ERROR: Service type must be selected before starting the client.",
@@ -92,7 +93,7 @@ class PythonProcessManager {
     if (sessionError || !data.session) {
       console.error("Could not get session:", sessionError?.message);
       await this.supabase.auth.signOut();
-      this.mainWindow.webContents.send("dgn-client:log", {
+      this.mainWindow.webContents.send("openfork_client:log", {
         type: "stderr",
         message:
           "Your session has expired. Please log in again to start the client.",
@@ -107,7 +108,7 @@ class PythonProcessManager {
 
     const dgnClientRootDir = app.isPackaged
       ? pythonExecutableDir
-      : path.join(__dirname, "..", "..", "dgn-client");
+      : path.join(__dirname, "..", "..", "openfork_client");
 
     const args = [
       "--access-token",
@@ -139,7 +140,7 @@ class PythonProcessManager {
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
       });
 
-      this.mainWindow.webContents.send("dgn-client:status", "starting");
+      this.mainWindow.webContents.send("openfork_client:status", "starting");
 
       const handlePythonLog = (log) => {
         if (log.startsWith("DGN_CLIENT_TOKEN_SERVER_PORT:")) {
@@ -210,11 +211,11 @@ class PythonProcessManager {
         }
 
         if (log.includes("DGN_CLIENT_RUNNING")) {
-          this.mainWindow.webContents.send("dgn-client:status", "running");
+          this.mainWindow.webContents.send("openfork_client:status", "running");
           return;
         }
 
-        this.mainWindow.webContents.send("dgn-client:log", {
+        this.mainWindow.webContents.send("openfork_client:log", {
           type: "stdout",
           message: log,
         });
@@ -230,7 +231,7 @@ class PythonProcessManager {
         console.error(`[PY_STDERR_RAW]: ${data}`); // Raw log for debugging
         const logs = data.toString().split(/\r?\n/).filter(Boolean);
         logs.forEach((log) => {
-          this.mainWindow.webContents.send("dgn-client:log", {
+          this.mainWindow.webContents.send("openfork_client:log", {
             type: "stderr",
             message: log,
           });
@@ -239,29 +240,29 @@ class PythonProcessManager {
 
       this.pythonProcess.on("close", (code) => {
         console.log(`Python process exited with code ${code}`);
-        this.mainWindow.webContents.send("dgn-client:status", "stopped");
+        this.mainWindow.webContents.send("openfork_client:status", "stopped");
         this.pythonProcess = null;
       });
 
       this.pythonProcess.on("error", (err) => {
         console.error(`Failed to start Python process: ${err}`);
-        this.mainWindow.webContents.send("dgn-client:status", "error");
+        this.mainWindow.webContents.send("openfork_client:status", "error");
         this.pythonProcess = null;
       });
     } catch (err) {
       console.error(`Error spawning Python process: ${err}`);
-      this.mainWindow.webContents.send("dgn-client:status", "error");
+      this.mainWindow.webContents.send("openfork_client:status", "error");
     }
   }
 
   stop() {
     return new Promise((resolve) => {
       if (!this.pythonProcess) {
-        this.mainWindow.webContents.send("dgn-client:status", "stopped");
+        this.mainWindow.webContents.send("openfork_client:status", "stopped");
         return resolve();
       }
 
-      this.mainWindow.webContents.send("dgn-client:status", "stopping");
+      this.mainWindow.webContents.send("openfork_client:status", "stopping");
 
       this.pythonProcess.once("close", () => {
         console.log("Python process confirmed closed.");

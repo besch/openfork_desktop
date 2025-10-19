@@ -8,12 +8,12 @@ const { PythonProcessManager } = require("./src/python-process-manager.cjs");
 
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient("dgn-client", process.execPath, [
+    app.setAsDefaultProtocolClient("openfork_client", process.execPath, [
       path.resolve(process.argv[1]),
     ]);
   }
 } else {
-  app.setAsDefaultProtocolClient("dgn-client");
+  app.setAsDefaultProtocolClient("openfork_client");
 }
 
 const store = new Store();
@@ -95,7 +95,7 @@ if (!gotTheLock) {
       mainWindow.focus();
     }
     const url = commandLine.pop();
-    if (url.startsWith("dgn-client://")) {
+    if (url.startsWith("openfork_client://")) {
       handleAuthCallback(url);
     }
   });
@@ -211,12 +211,12 @@ ipcMain.handle(
   }
 );
 
-ipcMain.on("dgn-client:start", (event, service, policy, allowedIds) => {
+ipcMain.on("openfork_client:start", (event, service, policy, allowedIds) => {
   // TODO: The PythonProcessManager must be updated to accept `policy` and `allowedIds`
   // and pass them as command-line arguments to the dgn_client.py script.
   if (pythonManager) pythonManager.start(service, policy, allowedIds);
 });
-ipcMain.on("dgn-client:stop", () => {
+ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
 });
 
