@@ -8,12 +8,12 @@ const { PythonProcessManager } = require("./src/python-process-manager.cjs");
 
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient("openfork_client", process.execPath, [
+    app.setAsDefaultProtocolClient("openfork-desktop-app", process.execPath, [
       path.resolve(process.argv[1]),
     ]);
   }
 } else {
-  app.setAsDefaultProtocolClient("openfork_client");
+  app.setAsDefaultProtocolClient("openfork-desktop-app");
 }
 
 const store = new Store();
@@ -95,7 +95,7 @@ if (!gotTheLock) {
       mainWindow.focus();
     }
     const url = commandLine.pop();
-    if (url.startsWith("openfork_client://")) {
+    if (url.startsWith("openfork-desktop-app://")) {
       handleAuthCallback(url);
     }
   });
