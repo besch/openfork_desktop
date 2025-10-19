@@ -101,10 +101,12 @@ const PowerButton = memo(
     isRunning,
     isDisabled,
     onToggle,
+    status,
   }: {
     isRunning: boolean;
     isDisabled: boolean;
     onToggle: (checked: boolean) => void;
+    status: string;
   }) => {
     const buttonVariants = {
       off: {
@@ -115,6 +117,10 @@ const PowerButton = memo(
         backgroundColor: "oklch(0.68 0.18 35)", // Warm orange
         boxShadow: "0px 4px 15px oklch(0.68 0.18 35 / 0.4)",
       },
+      starting: {
+        backgroundColor: "oklch(0.87 0.22 88.5)", // Yellow
+        boxShadow: "0px 4px 15px oklch(0.87 0.22 88.5 / 0.4)",
+      },
     };
 
     const iconAnimation = {
@@ -123,13 +129,16 @@ const PowerButton = memo(
       exit: { opacity: 0, scale: 0.5, transition: { duration: 0.2 } },
     };
 
+    const animationState =
+      status === "starting" ? "starting" : isRunning ? "on" : "off";
+
     return (
       <motion.button
         onClick={() => onToggle(!isRunning)}
         disabled={isDisabled}
         className="relative w-16 h-16 rounded-full flex items-center justify-center text-primary-foreground shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:ring-ring"
-        initial={isRunning ? "on" : "off"}
-        animate={isRunning ? "on" : "off"}
+        initial={animationState}
+        animate={animationState}
         variants={buttonVariants}
         transition={{ duration: 0.5, type: "spring" }}
         whileHover={{ scale: isDisabled ? 1 : 1.05 }}
@@ -188,6 +197,7 @@ export const Dashboard = memo(() => {
               isRunning={isRunning}
               isDisabled={isDisabled}
               onToggle={handleToggle}
+              status={status}
             />
             <div>
               <div className="mt-1 ml-4">
