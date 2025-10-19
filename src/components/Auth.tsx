@@ -6,12 +6,12 @@ export function Auth() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-50 bg-gray-900">
-      <div className="p-8 bg-primary bg-gray-800 rounded-lg shadow-md text-center">
-        <h1 className="text-2xl font-bold mb-2 text-white">
+    <div className="flex flex-col items-center justify-center h-screen bg-background">
+      <div className="p-8 bg-card rounded-lg shadow-md text-center">
+        <h1 className="text-2xl font-bold mb-2 text-card-foreground">
           Welcome to OpenFork Client
         </h1>
-        <p className="mb-6 text-gray-600 text-white">
+        <p className="mb-6 text-muted-foreground">
           Please sign in to continue
         </p>
         <Button

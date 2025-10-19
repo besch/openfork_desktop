@@ -40,7 +40,7 @@ function App() {
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
-      <div className="min-h-screen bg-gray-900 p-4 md:p-8">
+      <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <header className="flex items-center justify-between mb-6">
             <h1 className="text-3xl font-bold">Openfork Client</h1>

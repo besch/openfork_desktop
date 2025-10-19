@@ -21,14 +21,13 @@ export const LogViewer = () => {
           variant="destructive"
           size="sm"
           onClick={clearLogs}
-          className="text-white text-white"
         >
           Clear Logs
         </Button>
       </div>
       <div
         ref={logContainerRef}
-        className="flex-grow overflow-y-auto bg-gray-900 rounded p-2 font-mono text-sm h-[calc(100vh-300px)]"
+        className="flex-grow overflow-y-auto bg-card rounded p-2 font-mono text-sm h-[calc(100vh-300px)]"
       >
         {logs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -42,10 +41,10 @@ export const LogViewer = () => {
               <div
                 key={index}
                 className={`whitespace-pre-wrap ${
-                  log.type === "stderr" ? "text-red-400" : "text-gray-300"
+                  log.type === "stderr" ? "text-destructive" : "text-foreground"
                 }`}
               >
-                <span className="text-gray-500 mr-4">[{log.timestamp}]</span>
+                <span className="text-muted-foreground mr-4">[{log.timestamp}]</span>
                 {log.message}
               </div>
             ))

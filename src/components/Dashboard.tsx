@@ -184,8 +184,7 @@ export const Dashboard = memo(() => {
               onToggle={handleToggle}
             />
             <div>
-              <h1 className="text-xl font-bold tracking-tighter">DGN Client</h1>
-              <div className="mt-1">
+              <div className="mt-1 ml-4">
                 <StatusIndicator />
               </div>
             </div>
