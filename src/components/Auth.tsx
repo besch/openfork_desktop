@@ -57,12 +57,6 @@ export function Auth() {
               </svg>
               Sign In with Google
             </Button>
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground">
-                By signing in, you agree to our Terms of Service and Privacy
-                Policy
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>
