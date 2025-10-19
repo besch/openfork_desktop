@@ -181,8 +181,8 @@ export const Dashboard = memo(() => {
 
   return (
     <div className="space-y-6">
-      <header className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6 space-y-6 shadow-lg">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <header className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6 shadow-lg">
+        <div className="flex flex-wrap items-center content-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <PowerButton
               isRunning={isRunning}

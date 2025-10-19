@@ -48,7 +48,7 @@ function App() {
       {status === "stopping" && <ShutdownOverlay />}
       <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
-          <header className="flex items-center justify-between mb-8 p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 shadow-lg">
+          <header className="flex items-center justify-between mb-8 p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
                 <LayoutDashboard className="h-6 w-6 text-primary-foreground" />
@@ -82,7 +82,7 @@ function App() {
           </header>
 
           <Tabs>
-            <TabsList className="mb-4">
+            <TabsList className="mb-4 bg-card/80 backdrop-blur-sm">
               <TabsTrigger
                 value="dashboard"
                 activeTab={activeTab}
