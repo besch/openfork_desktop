@@ -18,7 +18,7 @@ const TabsList = ({ children, className }: TabsListProps) => {
   return (
     <div
       className={cn(
-        "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+        "inline-flex h-12 items-center justify-center rounded-xl bg-muted/50 backdrop-blur-sm p-1.5 text-muted-foreground border border-border/50 shadow-lg gap-1",
         className
       )}
     >
@@ -47,8 +47,10 @@ const TabsTrigger = ({
     <button
       onClick={() => setActiveTab(value)}
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-        isActive ? "bg-background text-foreground shadow-sm" : "",
+        "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-background/50",
+        isActive
+          ? "bg-background text-foreground shadow-md hover:shadow-lg"
+          : "text-muted-foreground hover:text-foreground",
         className
       )}
       {...props}
@@ -72,7 +74,14 @@ const TabsContent = ({
   className,
 }: TabsContentProps) => {
   return activeTab === value ? (
-    <div className={cn("mt-4", className)}>{children}</div>
+    <div
+      className={cn(
+        "mt-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-300",
+        className
+      )}
+    >
+      {children}
+    </div>
   ) : null;
 };
 

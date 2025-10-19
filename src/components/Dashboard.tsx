@@ -33,15 +33,21 @@ const StatCard = memo(
     icon: React.ReactNode;
     className?: string;
   }) => (
-    <Card className="bg-card/80 backdrop-blur-sm transition-all duration-300 hover:border-primary/50 hover:bg-card">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+    <Card className="bg-card/80 backdrop-blur-sm transition-all duration-300 hover:bg-card hover:shadow-xl group">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors duration-200">
           {title}
         </CardTitle>
-        {icon}
+        <div className="p-2 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors duration-200">
+          {icon}
+        </div>
       </CardHeader>
       <CardContent>
-        <div className={`text-3xl font-bold ${className}`}>{value}</div>
+        <div
+          className={`text-3xl font-bold ${className} transition-all duration-300`}
+        >
+          {value.toLocaleString()}
+        </div>
       </CardContent>
     </Card>
   )
@@ -102,12 +108,12 @@ const PowerButton = memo(
   }) => {
     const buttonVariants = {
       off: {
-        backgroundColor: "oklch(0.6 0.2 140)", // Green
-        boxShadow: "0px 4px 15px oklch(0.6 0.2 140 / 0.3)",
+        backgroundColor: "oklch(0.65 0.15 145)", // Warm green
+        boxShadow: "0px 4px 15px oklch(0.65 0.15 145 / 0.4)",
       },
       on: {
-        backgroundColor: "oklch(0.7 0.2 15)", // Red
-        boxShadow: "0px 4px 15px oklch(0.7 0.2 15 / 0.3)",
+        backgroundColor: "oklch(0.68 0.18 35)", // Warm orange
+        boxShadow: "0px 4px 15px oklch(0.68 0.18 35 / 0.4)",
       },
     };
 
@@ -175,7 +181,7 @@ export const Dashboard = memo(() => {
 
   return (
     <div className="space-y-6">
-      <header className="bg-card/80 backdrop-blur-sm border border-gray-700 rounded-lg p-4 space-y-4">
+      <header className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6 space-y-6 shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <PowerButton
