@@ -150,14 +150,15 @@ function createWindow() {
   });
 
   if (app.isPackaged) {
-    const url = require("url");
-    mainWindow.loadURL(
-      url.format({
-        pathname: path.join(__dirname, "dist", "index.html"),
-        protocol: "file:",
-        slashes: true,
-      })
-    );
+    // const url = require("url");
+    // mainWindow.loadURL(
+    //   url.format({
+    //     pathname: path.join(__dirname, "dist", "index.html"),
+    //     protocol: "file:",
+    //     slashes: true,
+    //   })
+    // );
+    mainWindow.loadURL(`file://${path.join(__dirname, "dist", "index.html")}`);
   } else {
     mainWindow.loadURL("http://localhost:5173");
   }
