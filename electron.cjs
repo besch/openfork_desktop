@@ -1,5 +1,19 @@
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, protocol, net } = require("electron");
 const path = require("path");
+
+if (app.isPackaged) {
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: "app",
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        bypassCSP: true,
+      },
+    },
+  ]);
+}
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
 const { PythonProcessManager } = require("./src/python-process-manager.cjs");
@@ -150,20 +164,21 @@ function createWindow() {
   });
 
   if (app.isPackaged) {
-    const url = require("url");
-    mainWindow.loadURL(
-      url.format({
-        pathname: path.join(__dirname, "dist", "index.html"),
-        protocol: "file:",
-        slashes: true,
-      })
-    );
+    mainWindow.loadURL("app://./index.html");
   } else {
     mainWindow.loadURL("http://localhost:5173");
   }
 }
 
 app.whenReady().then(() => {
+  if (app.isPackaged) {
+    protocol.handle("app", (req) => {
+      const url = req.url.replace(/^app:\/\/\.\//, "");
+      const filePath = path.join(__dirname, "dist", url);
+      return net.fetch(new URL("file:///" + filePath).toString());
+    });
+  }
+
   createWindow();
 
   app.on("activate", () => {
