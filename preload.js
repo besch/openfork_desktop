@@ -1,7 +1,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  // Orchestrator API URL
   getOrchestratorApiUrl: () => ipcRenderer.invoke("get-orchestrator-api-url"),
+
   // DGN Client controls
   startClient: (service, policy, allowedIds) => {
     console.log(
@@ -22,7 +24,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       callback(value)
     ),
 
-  // Auth
+  // Authentication
   loginWithGoogle: () => ipcRenderer.invoke("auth:google-login"),
   logout: () => ipcRenderer.invoke("auth:logout"),
   onSession: (callback) =>
@@ -36,9 +38,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       refreshToken
     ),
 
+  // Window controls
   setWindowClosable: (closable) =>
     ipcRenderer.send("window:set-closable", closable),
 
-  // General
+  // Utility to remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 });

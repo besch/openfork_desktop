@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+
 jobs:
   build-and-release:
     permissions:
@@ -66,6 +67,10 @@ jobs:
 
       - name: Install Electron app dependencies
         run: npm ci
+        shell: bash
+
+      - name: Build React app
+        run: npm run build
         shell: bash
 
       - name: Build and release Electron app
