@@ -1,18 +1,7 @@
-const { app, BrowserWindow, ipcMain, shell, protocol, net } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 
 if (app.isPackaged) {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: "app",
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        bypassCSP: true,
-      },
-    },
-  ]);
 }
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
@@ -125,6 +114,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false,
     },
   });
 
@@ -164,21 +154,13 @@ function createWindow() {
   });
 
   if (app.isPackaged) {
-    mainWindow.loadURL("app://./index.html");
+    mainWindow.loadFile(path.join(__dirname, "dist/index.html"));
   } else {
     mainWindow.loadURL("http://localhost:5173");
   }
 }
 
 app.whenReady().then(() => {
-  if (app.isPackaged) {
-    protocol.handle("app", (req) => {
-      const url = req.url.replace(/^app:\/\/\.\//, "");
-      const filePath = path.join(__dirname, "dist", url);
-      return net.fetch(new URL("file:///" + filePath).toString());
-    });
-  }
-
   createWindow();
 
   app.on("activate", () => {
