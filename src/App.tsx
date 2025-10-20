@@ -15,7 +15,7 @@ import {
   Loader2,
   BarChart as BarChartIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 function App() {
   const { status, session, isLoading } = useClientStore();

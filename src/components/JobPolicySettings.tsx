@@ -77,10 +77,10 @@ export const JobPolicySettings: React.FC<JobPolicySettingsProps> = ({
     if (isDialogOpen && allowedIds) {
       // A real implementation would fetch details for the IDs to show names.
       // For now, we just create placeholder items.
-      const itemsFromIds = allowedIds.split(",").map((id) => ({
+      const itemsFromIds = allowedIds.split(",").map((id): SelectedItem => ({
         id,
         name: `ID: ${id.substring(0, 8)}...`,
-        type: policy === "specific_projects" ? "project" : "branch",
+        type: (policy === "specific_projects" ? "project" : "branch") as SelectedItem['type'],
       }));
       setDisplayItems(itemsFromIds);
     } else if (!allowedIds) {
@@ -184,7 +184,8 @@ const SearchDialogContent = ({
   onConfirm: (items: SelectedItem[]) => void;
   onCancel: () => void;
 }) => {
-  const [tempSelection, setTempSelection] = useState<SelectedItem[]>(existingItems);
+  const [tempSelection, setTempSelection] =
+    useState<SelectedItem[]>(existingItems);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -192,7 +193,8 @@ const SearchDialogContent = ({
   const [branches, setBranches] = useState<Branch[]>([]);
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  const ORCHESTRATOR_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const ORCHESTRATOR_URL =
+    import.meta.env.VITE_NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   useEffect(() => {
     if (debouncedSearchQuery && !activeProject) {
@@ -301,7 +303,11 @@ const SearchDialogContent = ({
             key={project.id}
             onSelect={() => {
               if (policy === "specific_projects") {
-                handleSelectItem({ ...project, name: `${project.creator.username}/${project.title}`, type: "project" });
+                handleSelectItem({
+                  ...project,
+                  name: `${project.creator.username}/${project.title}`,
+                  type: "project",
+                });
               } else {
                 setActiveProject(project);
               }
@@ -340,7 +346,9 @@ const SearchDialogContent = ({
         />
         <CommandList>
           {isLoading ? (
-            <div className="p-4 text-sm text-center text-muted-foreground">Loading...</div>
+            <div className="p-4 text-sm text-center text-muted-foreground">
+              Loading...
+            </div>
           ) : (
             renderListView()
           )}
@@ -349,30 +357,44 @@ const SearchDialogContent = ({
       </Command>
 
       <div className="flex-grow mt-4 border rounded-lg p-2 space-y-2 overflow-y-auto">
-        <h4 className="text-sm font-medium text-muted-foreground px-1">Items to add</h4>
+        <h4 className="text-sm font-medium text-muted-foreground px-1">
+          Items to add
+        </h4>
         <div className="flex flex-wrap gap-2">
-        {tempSelection.map((item) => (
-          <Badge
-            key={item.id}
-            variant="secondary"
-            className="flex items-center gap-2 pl-3 pr-1 text-sm"
-          >
-            <span>{item.type === "project" ? item.name : `${item.projectName} / ${item.name}`}</span>
-            <button
-              onClick={() => handleRemoveTempItem(item.id)}
-              className="rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
+          {tempSelection.map((item) => (
+            <Badge
+              key={item.id}
+              variant="secondary"
+              className="flex items-center gap-2 pl-3 pr-1 text-sm"
             >
-              <X className="h-3 w-3" />
-            </button>
-          </Badge>
-        ))}
+              <span>
+                {item.type === "project"
+                  ? item.name
+                  : `${item.projectName} / ${item.name}`}
+              </span>
+              <button
+                onClick={() => handleRemoveTempItem(item.id)}
+                className="rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
         </div>
-        {tempSelection.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No items selected yet.</p>}
+        {tempSelection.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            No items selected yet.
+          </p>
+        )}
       </div>
 
       <DialogFooter>
-        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button onClick={() => onConfirm(tempSelection)}>Confirm Selection</Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={() => onConfirm(tempSelection)}>
+          Confirm Selection
+        </Button>
       </DialogFooter>
     </DialogContent>
   );
