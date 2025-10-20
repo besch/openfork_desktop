@@ -340,7 +340,20 @@ const SearchDialogContent = ({
       <Command className="border rounded-lg" shouldFilter={false}>
         <CommandInput
           value={searchQuery}
-          onValueChange={setSearchQuery}
+          onValueChange={(value) => {
+            try {
+              // If the input is a full URL, extract the user/project part
+              const url = new URL(value);
+              const pathParts = url.pathname.split("/").filter(Boolean);
+              if (pathParts.length >= 2) {
+                setSearchQuery(`${pathParts[0]}/${pathParts[1]}`);
+                return;
+              }
+            } catch (e) {
+              // Not a valid URL, treat as regular search query
+            }
+            setSearchQuery(value);
+          }}
           placeholder={placeholder}
           disabled={!!activeProject && policy !== "specific_branches"}
         />
