@@ -136,7 +136,7 @@ const PowerButton = memo(
       <motion.button
         onClick={() => onToggle(!isRunning)}
         disabled={isDisabled}
-        className="relative w-16 h-16 rounded-full flex items-center justify-center text-primary-foreground shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:ring-ring"
+        className="relative w-16 h-16 rounded-full flex items-center justify-center text-primary-foreground shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:ring-ring cursor-pointer"
         initial={animationState}
         animate={animationState}
         variants={buttonVariants}
@@ -151,11 +151,11 @@ const PowerButton = memo(
             </motion.div>
           ) : isRunning ? (
             <motion.div key="pause" {...iconAnimation}>
-              <Pause size={24} className="text-white cursor-pointer" />
+              <Pause size={24} className="text-white" />
             </motion.div>
           ) : (
             <motion.div key="play" {...iconAnimation}>
-              <Play size={24} className="ml-1 text-white cursor-pointer" />
+              <Play size={24} className="ml-1 text-white" />
             </motion.div>
           )}
         </AnimatePresence>
