@@ -221,7 +221,7 @@ const SearchDialogContent = ({
         }
       };
       fetchProjects();
-    } else {
+    } else if (!debouncedSearchQuery) {
       setSearchResults([]);
     }
   }, [debouncedSearchQuery, activeProject, ORCHESTRATOR_URL]);
@@ -252,6 +252,13 @@ const SearchDialogContent = ({
     }
   }, [activeProject, ORCHESTRATOR_URL]);
 
+  const resetSearchState = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setActiveProject(null);
+    setBranches([]);
+  };
+
   const handleSelectItem = (item: SelectedItem) => {
     if (!tempSelection.some((i) => i.id === item.id)) {
       setTempSelection([...tempSelection, item]);
@@ -259,14 +266,37 @@ const SearchDialogContent = ({
     resetSearchState();
   };
 
-  const handleRemoveTempItem = (idToRemove: string) => {
-    setTempSelection(tempSelection.filter((item) => item.id !== idToRemove));
+  const handleSelectProject = (projectId: string) => {
+    const project = searchResults.find((p) => p.id === projectId);
+    if (!project) return;
+
+    if (policy === "specific_projects") {
+      handleSelectItem({
+        id: project.id,
+        name: `${project.creator.username}/${project.title}`,
+        type: "project",
+      });
+    } else {
+      setActiveProject(project);
+      setSearchQuery(""); // Clear search query to hide project list
+      setSearchResults([]);
+    }
   };
 
-  const resetSearchState = () => {
-    setSearchQuery("");
-    setActiveProject(null);
-    setBranches([]);
+  const handleSelectBranch = (branchId: string) => {
+    const branch = branches.find((b) => b.id === branchId);
+    if (!branch || !activeProject) return;
+
+    handleSelectItem({
+      id: branch.id,
+      name: branch.name,
+      type: "branch",
+      projectName: `${activeProject.creator.username}/${activeProject.title}`,
+    });
+  };
+
+  const handleRemoveTempItem = (idToRemove: string) => {
+    setTempSelection(tempSelection.filter((item) => item.id !== idToRemove));
   };
 
   const placeholder = useMemo(() => {
@@ -281,13 +311,9 @@ const SearchDialogContent = ({
           {branches.map((branch) => (
             <CommandItem
               key={branch.id}
-              onSelect={() =>
-                handleSelectItem({
-                  ...branch,
-                  type: "branch",
-                  projectName: activeProject.title,
-                })
-              }
+              value={branch.id}
+              className="py-3 px-4 cursor-pointer rounded-md transition-colors aria-selected:bg-primary/10 hover:bg-accent/50"
+              onSelect={handleSelectBranch}
             >
               {branch.name}
             </CommandItem>
@@ -301,17 +327,9 @@ const SearchDialogContent = ({
         {searchResults.map((project) => (
           <CommandItem
             key={project.id}
-            onSelect={() => {
-              if (policy === "specific_projects") {
-                handleSelectItem({
-                  ...project,
-                  name: `${project.creator.username}/${project.title}`,
-                  type: "project",
-                });
-              } else {
-                setActiveProject(project);
-              }
-            }}
+            value={project.id}
+            className="py-3 px-4 cursor-pointer rounded-md transition-colors aria-selected:bg-primary/10 hover:bg-accent/50"
+            onSelect={handleSelectProject}
           >
             {project.creator.username} / {project.title}
           </CommandItem>
@@ -321,87 +339,99 @@ const SearchDialogContent = ({
   };
 
   return (
-    <DialogContent className="sm:max-w-lg h-[600px] flex flex-col">
-      <DialogHeader>
+    <DialogContent className="sm:max-w-2xl h-[700px] flex flex-col bg-card/80 backdrop-blur-sm border-border/50 p-0">
+      <DialogHeader className="p-6 pb-4">
         <div className="flex items-center gap-2">
           {activeProject && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setActiveProject(null)}
+              className="-ml-2"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
-          <DialogTitle>Search & Add Items</DialogTitle>
+          <DialogTitle className="text-xl">Search & Add Items</DialogTitle>
         </div>
       </DialogHeader>
 
-      <Command className="border rounded-lg" shouldFilter={false}>
-        <CommandInput
-          value={searchQuery}
-          onValueChange={(value) => {
-            try {
-              // If the input is a full URL, extract the user/project part
-              const url = new URL(value);
-              const pathParts = url.pathname.split("/").filter(Boolean);
-              if (pathParts.length >= 2) {
-                setSearchQuery(`${pathParts[0]}/${pathParts[1]}`);
-                return;
+      <div className="px-6">
+        <Command
+          className="border rounded-lg bg-background/50"
+          shouldFilter={false}
+        >
+          <CommandInput
+            className="h-12 text-base border-0 ring-offset-0 focus-visible:ring-1 focus-visible:ring-primary/50 placeholder:text-muted-foreground/60"
+            value={searchQuery}
+            onValueChange={(value) => {
+              try {
+                // If the input is a full URL, extract the user/project part
+                const url = new URL(value);
+                const pathParts = url.pathname.split("/").filter(Boolean);
+                if (pathParts.length >= 2) {
+                  setSearchQuery(`${pathParts[0]}/${pathParts[1]}`);
+                  return;
+                }
+              } catch (e) {
+                // Not a valid URL, treat as regular search query
               }
-            } catch (e) {
-              // Not a valid URL, treat as regular search query
-            }
-            setSearchQuery(value);
-          }}
-          placeholder={placeholder}
-          disabled={!!activeProject && policy !== "specific_branches"}
-        />
-        <CommandList>
-          {isLoading ? (
-            <div className="p-4 text-sm text-center text-muted-foreground">
-              Loading...
-            </div>
-          ) : (
-            renderListView()
-          )}
-          <CommandEmpty>No results found.</CommandEmpty>
-        </CommandList>
-      </Command>
-
-      <div className="flex-grow mt-4 border rounded-lg p-2 space-y-2 overflow-y-auto">
-        <h4 className="text-sm font-medium text-muted-foreground px-1">
-          Items to add
-        </h4>
-        <div className="flex flex-wrap gap-2">
-          {tempSelection.map((item) => (
-            <Badge
-              key={item.id}
-              variant="secondary"
-              className="flex items-center gap-2 pl-3 pr-1 text-sm"
-            >
-              <span>
-                {item.type === "project"
-                  ? item.name
-                  : `${item.projectName} / ${item.name}`}
-              </span>
-              <button
-                onClick={() => handleRemoveTempItem(item.id)}
-                className="rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
-        </div>
-        {tempSelection.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            No items selected yet.
-          </p>
-        )}
+              setSearchQuery(value);
+            }}
+            placeholder={placeholder}
+            disabled={!!activeProject}
+          />
+          <CommandList className="max-h-[250px]">
+            {isLoading ? (
+              <div className="p-6 text-sm text-center text-muted-foreground">
+                Loading...
+              </div>
+            ) : (
+              renderListView()
+            )}
+            <CommandEmpty>No results found.</CommandEmpty>
+          </CommandList>
+        </Command>
       </div>
 
-      <DialogFooter>
+      <div className="flex-1 flex flex-col mt-4 px-6 pb-6 min-h-0">
+        <h4 className="text-sm font-medium text-muted-foreground mb-2">
+          Items to add
+        </h4>
+        <div className="flex-grow border rounded-lg p-3 space-y-2 overflow-y-auto bg-background/50 min-h-[100px]">
+          {tempSelection.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {tempSelection.map((item) => (
+                <Badge
+                  key={item.id}
+                  variant="secondary"
+                  className="flex items-center gap-2 pl-3 pr-1 text-sm bg-primary/10 hover:bg-primary/20 border border-primary/20"
+                >
+                  <span>
+                    {item.type === "project"
+                      ? item.name
+                      : `${item.projectName} / ${item.name}`}
+                  </span>
+                  <button
+                    onClick={() => handleRemoveTempItem(item.id)}
+                    className="rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-xs text-muted-foreground text-center">
+                No items selected yet.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <DialogFooter className="p-6 pt-4 mt-auto border-t border-border/50">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

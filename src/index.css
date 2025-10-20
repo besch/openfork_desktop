@@ -183,8 +183,8 @@
 
 /* Selection styling */
 ::selection {
-  background: var(--color-primary) / 20;
-  color: var(--color-primary-foreground);
+  background: oklch(var(--color-foreground) / 0.2);
+  color: var(--color-primary);
 }
 
 /* Focus visible improvements */
