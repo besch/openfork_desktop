@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Session, RealtimeChannel } from "@supabase/supabase-js";
-import type { DGNClientStatus, LogEntry, JobStats } from "./types";
+import type { DGNClientStatus, LogEntry, JobStats, Project } from "./types";
 import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
@@ -16,6 +16,8 @@ interface DGNClientState {
   session: Session | null;
   jobSubscription: RealtimeChannel | null;
   services: Array<{ value: string; label: string }>;
+  projects: Project[];
+  selectedProjects: Project[];
   isLoading: boolean;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
@@ -26,6 +28,8 @@ interface DGNClientState {
   setSession: (session: Session | null) => Promise<void>;
   fetchStats: () => Promise<void>;
   fetchServices: () => Promise<void>;
+  fetchProjects: (query: string) => Promise<void>;
+  setSelectedProjects: (projects: Project[]) => void;
   subscribeToJobChanges: () => void;
   unsubscribeFromJobChanges: () => Promise<void>;
   setIsLoading: (loading: boolean) => void;
@@ -40,6 +44,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   session: null,
   jobSubscription: null,
   services: [{ value: "auto", label: "Auto-Select" }],
+  projects: [],
+  selectedProjects: [],
   isLoading: true,
   setStatus: (status) => set({ status }),
   addLog: (log) => {
@@ -56,6 +62,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   clearLogs: () => set({ logs: [] }),
   setTheme: (theme) => set({ theme }),
   setIsLoading: (loading) => set({ isLoading: loading }),
+  setSelectedProjects: (projects) => set({ selectedProjects: projects }),
   setSession: async (session) => {
     // Always clean up the old subscription on any session change.
     await get().unsubscribeFromJobChanges();
@@ -97,6 +104,27 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       }
     } catch (error) {
       console.error("Error fetching DGN services:", error);
+    }
+  },
+  fetchProjects: async (query) => {
+    if (!query) {
+      set({ projects: [] });
+      return;
+    }
+    try {
+      const apiUrl = await window.electronAPI.getOrchestratorApiUrl();
+      const fetchUrl = `${
+        import.meta.env.DEV ? "" : apiUrl
+      }/api/search?q=${encodeURIComponent(query)}`;
+      const response = await fetch(fetchUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch projects: ${response.statusText}`);
+      }
+      const projects = await response.json();
+      set({ projects });
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      set({ projects: [] });
     }
   },
   fetchStats: async () => {

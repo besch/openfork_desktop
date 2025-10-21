@@ -12,3 +12,9 @@ export interface JobStats {
   completed: number;
   failed: number;
 }
+
+export interface Project {
+  id: string;
+  title: string;
+  creator: { username: string };
+}
