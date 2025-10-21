@@ -1,5 +1,6 @@
-import React, { useState, useCallback, memo } from "react";
+import React, { useState, useCallback, memo, useMemo } from "react";
 import { useClientStore } from "@/store";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -7,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CheckCircle,
   XCircle,
@@ -17,9 +18,11 @@ import {
   AlertCircle,
   Play,
   Pause,
+  Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { JobPolicySettings } from "./JobPolicySettings";
+import { JobPolicySettings, type JobPolicy } from "./JobPolicySettings";
+import type { Project } from "@/types";
 
 const StatCard = memo(
   ({
@@ -167,23 +170,32 @@ const PowerButton = memo(
 export const Dashboard = memo(() => {
   const { status, stats, services } = useClientStore();
   const [service, setService] = useState("auto");
-  const [policy, setPolicy] = useState("own");
-  const [allowedIds, setAllowedIds] = useState("");
+  const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [jobPolicy, setJobPolicy] = useState<JobPolicy>("mine");
 
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
+
+  const allowedIds = useMemo(() => {
+    if (jobPolicy === "project") {
+      return selectedProjects.map((p) => p.id).join(",");
+    }
+    return "";
+  }, [selectedProjects, jobPolicy]);
 
   const handleToggle = useCallback(
     (checked: boolean) => {
       if (isDisabled) return;
 
       if (checked) {
-        window.electronAPI.startClient(service, policy, allowedIds);
+        window.electronAPI.startClient(service, jobPolicy, allowedIds);
       } else {
         window.electronAPI.stopClient();
       }
     },
-    [isDisabled, service, policy, allowedIds]
+    [isDisabled, service, jobPolicy, allowedIds]
   );
 
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
@@ -206,57 +218,62 @@ export const Dashboard = memo(() => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-4">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">Workflows:</span>
-              <Select
-                value={service}
-                onValueChange={setService}
-                disabled={isRunning || isDisabled}
-              >
-                <SelectTrigger className="w-48 bg-background/50">
-                  <SelectValue placeholder="Workflows" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">Job Policy:</span>
-              <Select
-                value={policy}
-                onValueChange={setPolicy}
-                disabled={isRunning || isDisabled}
-              >
-                <SelectTrigger className="w-48 bg-background/50">
-                  <SelectValue placeholder="Select a policy" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="own">Only My Jobs</SelectItem>
-                  <SelectItem value="public">Everyone</SelectItem>
-                  <SelectItem value="specific_projects">
-                    Only Specific Projects
-                  </SelectItem>
-                  <SelectItem value="specific_branches">
-                    Only Specific Branches
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => setIsSettingsOpen((prev) => !prev)}
+            className="bg-background/50"
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Settings</span>
+          </Button>
         </div>
-        <JobPolicySettings
-          policy={policy}
-          allowedIds={allowedIds}
-          setAllowedIds={setAllowedIds}
-          isDisabled={isRunning || isDisabled}
-        />
       </header>
+
+      <AnimatePresence>
+        {isSettingsOpen && (
+          <motion.section
+            key="settings-panel"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <Card className="bg-card/80 backdrop-blur-sm">
+              <CardContent className="p-6 space-y-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">
+                    Workflows:
+                  </span>
+                  <Select
+                    value={service}
+                    onValueChange={setService}
+                    disabled={isRunning || isDisabled}
+                  >
+                    <SelectTrigger className="w-48 bg-background/50">
+                      <SelectValue placeholder="Workflows" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {services.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <JobPolicySettings
+                  jobPolicy={jobPolicy}
+                  onJobPolicyChange={setJobPolicy}
+                  selectedProjects={selectedProjects}
+                  onSelectedProjectsChange={setSelectedProjects}
+                  disabled={isRunning || isDisabled}
+                />
+              </CardContent>
+            </Card>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
