@@ -1,11 +1,6 @@
 import { useState } from "react";
 import { useClientStore } from "./store";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs-new";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
 import { LogViewer } from "@/components/LogViewer";
 import { Auth } from "@/components/Auth";
@@ -20,7 +15,7 @@ import {
   Loader2,
   BarChart as BarChartIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button-new";
+import { Button } from "@/components/ui/button";
 
 function App() {
   const { status, session, isLoading } = useClientStore();

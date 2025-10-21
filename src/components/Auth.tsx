@@ -1,10 +1,5 @@
-import { Button } from "@/components/ui/button-new";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card-new";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function Auth() {
   const handleLogin = () => {
