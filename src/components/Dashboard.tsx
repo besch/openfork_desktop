@@ -221,7 +221,7 @@ export const Dashboard = memo(() => {
           <Button
             variant="outline"
             onClick={() => setIsSettingsOpen((prev) => !prev)}
-            className="bg-background/50"
+            className="bg-background/50 cursor-pointer"
           >
             <Settings className="mr-2 h-4 w-4" />
             <span>Settings</span>
