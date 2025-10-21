@@ -15,10 +15,10 @@ jobs:
         include:
           - os: macos-latest
             arch: x64
-          - os: ubuntu-latest
-            arch: x64
-          - os: windows-latest
-            arch: x64
+          # - os: ubuntu-latest
+          #   arch: x64
+          # - os: windows-latest
+          #   arch: x64
 
     steps:
       - name: Check out Electron app repository

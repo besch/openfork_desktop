@@ -27,8 +27,7 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-    "forceConsistentCasingInFileNames": false
+    "noUncheckedSideEffectImports": true
   },
   "include": ["src"]
 }
