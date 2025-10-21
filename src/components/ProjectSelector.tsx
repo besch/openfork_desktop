@@ -5,7 +5,7 @@ import { Check, ChevronsUpDown, Loader2, X } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useClientStore } from "@/store";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button-new";
 import { Badge } from "@/components/ui/badge";
 import {
   Command,

@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 import { useClientStore } from "@/store";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button-new";
 
 export const LogViewer = () => {
   const logs = useClientStore((state) => state.logs);

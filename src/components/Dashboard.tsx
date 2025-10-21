@@ -1,6 +1,6 @@
 import React, { useState, useCallback, memo, useMemo } from "react";
 import { useClientStore } from "@/store";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button-new";
 import {
   Select,
   SelectContent,
@@ -8,7 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card-new";
 import {
   CheckCircle,
   XCircle,

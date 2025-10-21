@@ -1,5 +1,10 @@
 import { useClientStore } from "@/store";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card-new";
 
 export function Profile() {
   const { session } = useClientStore();
