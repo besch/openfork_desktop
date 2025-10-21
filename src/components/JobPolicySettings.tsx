@@ -1,4 +1,3 @@
-import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -15,7 +14,11 @@ interface JobPolicySettingsProps {
   disabled?: boolean;
 }
 
-const policyOptions: { value: JobPolicy; label: string; description: string }[] = [
+const policyOptions: {
+  value: JobPolicy;
+  label: string;
+  description: string;
+}[] = [
   {
     value: "mine",
     label: "Accept my jobs only",
