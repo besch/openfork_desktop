@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 import { useClientStore } from "@/store";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 
 export const LogViewer = () => {
   const logs = useClientStore((state) => state.logs);
@@ -17,11 +17,7 @@ export const LogViewer = () => {
     <div className="h-full flex flex-col bg-secondary rounded-lg p-4">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold">Client Logs</h2>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={clearLogs}
-        >
+        <Button variant="destructive" size="sm" onClick={clearLogs}>
           Clear Logs
         </Button>
       </div>
@@ -44,7 +40,9 @@ export const LogViewer = () => {
                   log.type === "stderr" ? "text-destructive" : "text-foreground"
                 }`}
               >
-                <span className="text-muted-foreground mr-4">[{log.timestamp}]</span>
+                <span className="text-muted-foreground mr-4">
+                  [{log.timestamp}]
+                </span>
                 {log.message}
               </div>
             ))
