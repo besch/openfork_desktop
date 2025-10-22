@@ -115,6 +115,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: false,
+      devTools: false,
     },
   });
 
@@ -157,7 +158,6 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, "dist/index.html"));
   } else {
     mainWindow.loadURL("http://localhost:5173");
-    mainWindow.webContents.closeDevTools();
   }
 }
 
