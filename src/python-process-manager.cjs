@@ -7,6 +7,7 @@ class PythonProcessManager {
   constructor({ supabase, mainWindow, userDataPath }) {
     this.pythonProcess = null;
     this.tokenServerPort = 8001; // Default port, will be updated on client startup
+    this.shutdownServerPort = 8000; // Default port, will be updated on client startup
     this.supabase = supabase;
     this.mainWindow = mainWindow;
     this.isQuitting = false;
@@ -143,6 +144,20 @@ class PythonProcessManager {
       this.mainWindow.webContents.send("openfork_client:status", "starting");
 
       const handlePythonLog = (log) => {
+        if (log.startsWith("DGN_CLIENT_SHUTDOWN_SERVER_PORT:")) {
+          const portStr = log
+            .substring("DGN_CLIENT_SHUTDOWN_SERVER_PORT:".length)
+            .trim();
+          const port = parseInt(portStr, 10);
+          if (!isNaN(port)) {
+            this.shutdownServerPort = port;
+            console.log(
+              `Python shutdown server is running on port ${this.shutdownServerPort}`
+            );
+          }
+          return;
+        }
+        
         if (log.startsWith("DGN_CLIENT_TOKEN_SERVER_PORT:")) {
           const portStr = log
             .substring("DGN_CLIENT_TOKEN_SERVER_PORT:".length)
@@ -271,7 +286,7 @@ class PythonProcessManager {
       });
 
       // Send HTTP shutdown request to the DGN client's internal server
-      fetch(`http://localhost:8000/shutdown`).catch((error) => {
+      fetch(`http://localhost:${this.shutdownServerPort}/shutdown`).catch((error) => {
         console.error(
           `Error sending HTTP shutdown request: ${error}. Falling back to kill.`
         );
