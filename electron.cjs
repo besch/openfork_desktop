@@ -217,8 +217,6 @@ ipcMain.handle(
 );
 
 ipcMain.on("openfork_client:start", (event, service, policy, allowedIds) => {
-  // TODO: The PythonProcessManager must be updated to accept `policy` and `allowedIds`
-  // and pass them as command-line arguments to the dgn_client.py script.
   if (pythonManager) pythonManager.start(service, policy, allowedIds);
 });
 ipcMain.on("openfork_client:stop", () => {

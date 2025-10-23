@@ -126,8 +126,8 @@ class PythonProcessManager {
       policy,
     ];
 
-    if (allowedIds) {
-      args.push("--allowed-ids", allowedIds);
+    if (policy === 'project' && Array.isArray(allowedIds) && allowedIds.length > 0) {
+      args.push("--allowed-targets", allowedIds.join(','));
     }
 
     console.log(`Starting Python backend for '${service}' service...`);
