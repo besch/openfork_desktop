@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ProjectSelector } from "./ProjectSelector";
+import { ProjectSelector } from "@/components/ProjectSelector";
 import type { Project } from "@/types";
 
 export type JobPolicy = "all" | "mine" | "project";

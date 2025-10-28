@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useClientStore } from "./store";
+import { useClientStore } from "@/store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
 import { LogViewer } from "@/components/LogViewer";

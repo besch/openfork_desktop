@@ -124,10 +124,19 @@ function createWindow() {
   });
 
   mainWindow.webContents.on("did-finish-load", async () => {
-    const { data } = await supabase.auth.getSession();
-    session = data.session;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("auth:session", session);
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data.session;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("auth:session", session);
+      }
+    } catch (error) {
+      if (error.code === 'refresh_token_already_used') {
+        console.warn('Stale refresh token detected. Forcing logout to clear session.');
+        await logout();
+      } else {
+        console.error('Error getting session on load:', error);
+      }
     }
   });
 
@@ -216,8 +225,8 @@ ipcMain.handle(
   }
 );
 
-ipcMain.on("openfork_client:start", (event, service, policy, allowedIds) => {
-  if (pythonManager) pythonManager.start(service, policy, allowedIds);
+ipcMain.on("openfork_client:start", (event, policy, allowedIds) => {
+  if (pythonManager) pythonManager.start(policy, allowedIds);
 });
 ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();

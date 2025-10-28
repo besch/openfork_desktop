@@ -1,13 +1,6 @@
 import React, { useState, useCallback, memo, useMemo } from "react";
 import { useClientStore } from "@/store";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CheckCircle,
@@ -21,7 +14,10 @@ import {
   Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { JobPolicySettings, type JobPolicy } from "./JobPolicySettings";
+import {
+  JobPolicySettings,
+  type JobPolicy,
+} from "@/components/JobPolicySettings";
 import type { Project } from "@/types";
 
 const StatCard = memo(
@@ -168,8 +164,7 @@ const PowerButton = memo(
 );
 
 export const Dashboard = memo(() => {
-  const { status, stats, services } = useClientStore();
-  const [service, setService] = useState("auto");
+  const { status, stats } = useClientStore();
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -190,12 +185,12 @@ export const Dashboard = memo(() => {
       if (isDisabled) return;
 
       if (checked) {
-        window.electronAPI.startClient(service, jobPolicy, allowedIds);
+        window.electronAPI.startClient(jobPolicy, allowedIds);
       } else {
         window.electronAPI.stopClient();
       }
     },
-    [isDisabled, service, jobPolicy, allowedIds]
+    [isDisabled, jobPolicy, allowedIds]
   );
 
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
@@ -241,27 +236,6 @@ export const Dashboard = memo(() => {
           >
             <Card className="bg-card/80 backdrop-blur-sm">
               <CardContent className="p-6 space-y-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">
-                    Workflows:
-                  </span>
-                  <Select
-                    value={service}
-                    onValueChange={setService}
-                    disabled={isRunning || isDisabled}
-                  >
-                    <SelectTrigger className="w-48 bg-background/50">
-                      <SelectValue placeholder="Workflows" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {services.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
                 <JobPolicySettings
                   jobPolicy={jobPolicy}
                   onJobPolicyChange={setJobPolicy}

@@ -16,7 +16,7 @@ class PythonProcessManager {
 
   getPythonExecutablePath() {
     const exeName =
-      process.platform === "win32" ? "openfork_client.exe" : "openfork_client";
+      process.platform === "win32" ? "client.exe" : "client";
     if (app.isPackaged) {
       return path.join(process.resourcesPath, "bin", exeName);
     } else {
@@ -75,16 +75,7 @@ class PythonProcessManager {
     });
   }
 
-  async start(service, policy, allowedIds) {
-    if (!service) {
-      console.error("Service type must be provided to start the DGN client.");
-      this.mainWindow.webContents.send("openfork_client:log", {
-        type: "stderr",
-        message:
-          "ERROR: Service type must be selected before starting the client.",
-      });
-      return;
-    }
+  async start(policy, allowedIds) {
     if (this.pythonProcess) {
       console.log("Python process is already running.");
       return;
@@ -109,15 +100,13 @@ class PythonProcessManager {
 
     const dgnClientRootDir = app.isPackaged
       ? pythonExecutableDir
-      : path.join(__dirname, "..", "..", "openfork_client");
+      : path.join(__dirname, "..", "..", "client");
 
     const args = [
       "--access-token",
       currentSession.access_token,
       "--refresh-token",
       currentSession.refresh_token,
-      "--service",
-      service,
       "--root-dir",
       dgnClientRootDir,
       "--data-dir",
@@ -126,11 +115,15 @@ class PythonProcessManager {
       policy,
     ];
 
-    if (policy === 'project' && Array.isArray(allowedIds) && allowedIds.length > 0) {
-      args.push("--allowed-targets", allowedIds.join(','));
+    if (
+      policy === "project" &&
+      Array.isArray(allowedIds) &&
+      allowedIds.length > 0
+    ) {
+      args.push("--allowed-targets", allowedIds.join(","));
     }
 
-    console.log(`Starting Python backend for '${service}' service...`);
+    console.log(`Starting Python backend...`);
     const cwd = app.isPackaged ? pythonExecutableDir : dgnClientRootDir;
     console.log(`Using CWD: ${cwd}`);
 
@@ -157,7 +150,7 @@ class PythonProcessManager {
           }
           return;
         }
-        
+
         if (log.startsWith("DGN_CLIENT_TOKEN_SERVER_PORT:")) {
           const portStr = log
             .substring("DGN_CLIENT_TOKEN_SERVER_PORT:".length)
@@ -286,12 +279,14 @@ class PythonProcessManager {
       });
 
       // Send HTTP shutdown request to the DGN client's internal server
-      fetch(`http://localhost:${this.shutdownServerPort}/shutdown`).catch((error) => {
-        console.error(
-          `Error sending HTTP shutdown request: ${error}. Falling back to kill.`
-        );
-        if (this.pythonProcess) this.pythonProcess.kill();
-      });
+      fetch(`http://localhost:${this.shutdownServerPort}/shutdown`).catch(
+        (error) => {
+          console.error(
+            `Error sending HTTP shutdown request: ${error}. Falling back to kill.`
+          );
+          if (this.pythonProcess) this.pythonProcess.kill();
+        }
+      );
 
       // Failsafe timeout
       setTimeout(() => {

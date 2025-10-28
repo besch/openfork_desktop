@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Session, RealtimeChannel } from "@supabase/supabase-js";
-import type { DGNClientStatus, LogEntry, JobStats, Project } from "./types";
+import type { DGNClientStatus, LogEntry, JobStats, Project } from "@/types";
 import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
@@ -15,7 +15,6 @@ interface DGNClientState {
   theme: Theme;
   session: Session | null;
   jobSubscription: RealtimeChannel | null;
-  services: Array<{ value: string; label: string }>;
   projects: Project[];
   selectedProjects: Project[];
   isLoading: boolean;
@@ -27,7 +26,6 @@ interface DGNClientState {
   setTheme: (theme: Theme) => void;
   setSession: (session: Session | null) => Promise<void>;
   fetchStats: () => Promise<void>;
-  fetchServices: () => Promise<void>;
   fetchProjects: (query: string) => Promise<void>;
   setSelectedProjects: (projects: Project[]) => void;
   subscribeToJobChanges: () => void;
@@ -43,7 +41,6 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   theme: "dark",
   session: null,
   jobSubscription: null,
-  services: [{ value: "auto", label: "Auto-Select" }],
   projects: [],
   selectedProjects: [],
   isLoading: true,
@@ -83,29 +80,9 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     // If it's a new login, set up the new subscription.
     if (session) {
       get().subscribeToJobChanges();
-      get().fetchServices();
     }
   },
-  fetchServices: async () => {
-    try {
-      const apiUrl = await window.electronAPI.getOrchestratorApiUrl();
 
-      const fetchUrl = import.meta.env.DEV
-        ? "/api/dgn/config"
-        : `${apiUrl}/api/dgn/config`;
-
-      const response = await fetch(fetchUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch DGN config: ${response.statusText}`);
-      }
-      const config = await response.json();
-      if (config?.ui_services) {
-        set({ services: config.ui_services });
-      }
-    } catch (error) {
-      console.error("Error fetching DGN services:", error);
-    }
-  },
   fetchProjects: async (query) => {
     if (!query) {
       set({ projects: [] });

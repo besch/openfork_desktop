@@ -5,11 +5,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getOrchestratorApiUrl: () => ipcRenderer.invoke("get-orchestrator-api-url"),
 
   // DGN Client controls
-  startClient: (service, policy, allowedIds) => {
+  startClient: (policy, allowedIds) => {
     console.log(
-      `Preload: Sending openfork_client:start IPC message for service: ${service}.`
+      `Preload: Sending openfork_client:start IPC message.`
     );
-    ipcRenderer.send("openfork_client:start", service, policy, allowedIds);
+    ipcRenderer.send("openfork_client:start", policy, allowedIds);
   },
   stopClient: () => {
     console.log("Preload: Sending openfork_client:stop IPC message.");
