@@ -30,10 +30,7 @@ export const LogViewer = () => {
             <p>No logs yet. Start the client to see output.</p>
           </div>
         ) : (
-          logs
-            .slice()
-            .reverse()
-            .map((log, index) => (
+          logs.map((log, index) => (
               <div
                 key={index}
                 className={`whitespace-pre-wrap ${

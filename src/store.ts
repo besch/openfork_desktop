@@ -3,7 +3,7 @@ import type { Session, RealtimeChannel } from "@supabase/supabase-js";
 import type { DGNClientStatus, LogEntry, JobStats, Project } from "@/types";
 import { supabase } from "./supabase";
 
-const MAX_LOGS = 500;
+const MAX_LOGS = 50;
 
 type Theme = "dark" | "light" | "system";
 
