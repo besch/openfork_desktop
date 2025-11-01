@@ -19,6 +19,7 @@ import {
   type JobPolicy,
 } from "@/components/JobPolicySettings";
 import type { Project } from "@/types";
+import { DownloadProgress } from "@/components/DownloadProgress";
 
 const StatCard = memo(
   ({
@@ -248,6 +249,8 @@ export const Dashboard = memo(() => {
           </motion.section>
         )}
       </AnimatePresence>
+
+      <DownloadProgress />
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
