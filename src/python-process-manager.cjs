@@ -15,8 +15,7 @@ class PythonProcessManager {
   }
 
   getPythonExecutablePath() {
-    const exeName =
-      process.platform === "win32" ? "openfork_client.exe" : "openfork_client";
+    const exeName = process.platform === "win32" ? "client.exe" : "client";
     if (app.isPackaged) {
       return path.join(process.resourcesPath, "bin", exeName);
     } else {
@@ -126,8 +125,12 @@ class PythonProcessManager {
       policy,
     ];
 
-    if (policy === 'project' && Array.isArray(allowedIds) && allowedIds.length > 0) {
-      args.push("--allowed-targets", allowedIds.join(','));
+    if (
+      policy === "project" &&
+      Array.isArray(allowedIds) &&
+      allowedIds.length > 0
+    ) {
+      args.push("--allowed-targets", allowedIds.join(","));
     }
 
     console.log(`Starting Python backend for '${service}' service...`);
@@ -157,7 +160,7 @@ class PythonProcessManager {
           }
           return;
         }
-        
+
         if (log.startsWith("DGN_CLIENT_TOKEN_SERVER_PORT:")) {
           const portStr = log
             .substring("DGN_CLIENT_TOKEN_SERVER_PORT:".length)
@@ -286,12 +289,14 @@ class PythonProcessManager {
       });
 
       // Send HTTP shutdown request to the DGN client's internal server
-      fetch(`http://localhost:${this.shutdownServerPort}/shutdown`).catch((error) => {
-        console.error(
-          `Error sending HTTP shutdown request: ${error}. Falling back to kill.`
-        );
-        if (this.pythonProcess) this.pythonProcess.kill();
-      });
+      fetch(`http://localhost:${this.shutdownServerPort}/shutdown`).catch(
+        (error) => {
+          console.error(
+            `Error sending HTTP shutdown request: ${error}. Falling back to kill.`
+          );
+          if (this.pythonProcess) this.pythonProcess.kill();
+        }
+      );
 
       // Failsafe timeout
       setTimeout(() => {
