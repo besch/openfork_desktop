@@ -108,7 +108,7 @@ class PythonProcessManager {
 
     const dgnClientRootDir = app.isPackaged
       ? pythonExecutableDir
-      : path.join(__dirname, "..", "..", "openfork_client");
+      : path.join(__dirname, "..", "..", "client");
 
     const args = [
       "--access-token",
