@@ -13,35 +13,35 @@ import {
 } from "recharts";
 
 export const Chart = () => {
-  const { stats, theme } = useClientStore();
+  const { stats } = useClientStore();
 
   const chartData = [
     {
       name: "Completed",
       value: stats.completed,
-      color: theme === "dark" ? "#22c55e" : "#22c55e",
+      color: "#22c55e",
     }, // green-500
     {
       name: "Failed",
       value: stats.failed,
-      color: theme === "dark" ? "#b91c1c" : "#ef4444",
-    }, // red-700 vs red-600
+      color: "#ef4444",
+    }, // red-600
     {
       name: "In Progress",
       value: stats.processing,
-      color: theme === "dark" ? "#3b82f6" : "#3b82f6",
+      color: "#3b82f6",
     }, // blue-500
     {
       name: "In Queue",
       value: stats.pending,
-      color: theme === "dark" ? "#facc15" : "#eab308",
-    }, // yellow-400 vs yellow-500
+      color: "#eab308",
+    }, // yellow-500
   ];
 
   return (
-    <Card className="bg-gray-100 bg-gray-800">
+    <Card className="bg-gray-800">
       <CardHeader>
-        <CardTitle>Job Status Overview</CardTitle>
+        <CardTitle className="text-white">Job Status Overview</CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={400}>
@@ -49,29 +49,31 @@ export const Chart = () => {
             data={chartData}
             margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
           >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke={theme === "dark" ? "#374151" : "#e5e7eb"}
-            />
-            <XAxis
-              dataKey="name"
-              stroke={theme === "dark" ? "#9ca3af" : "#6b7280"}
-            />
-            <YAxis
-              allowDecimals={false}
-              stroke={theme === "dark" ? "#9ca3af" : "#6b7280"}
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis dataKey="name" stroke="#9ca3af" />
+            <YAxis allowDecimals={false} stroke="#9ca3af" />
             <Tooltip
               contentStyle={{
-                backgroundColor: theme === "dark" ? "#111827" : "#ffffff",
-                borderColor: theme === "dark" ? "#374151" : "#e5e7eb",
-                color: theme === "dark" ? "#f9fafb" : "#1f2937",
+                backgroundColor: "#111827",
+                borderColor: "#374151",
+                color: "#f9fafb",
+                border: "none",
+                borderRadius: "8px",
+                boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.3)",
               }}
-              labelStyle={{ color: theme === "dark" ? "#f9fafb" : "#1f2937" }}
+              labelStyle={{
+                color: "#f9fafb",
+                fontWeight: "600",
+                marginBottom: "4px",
+              }}
+              itemStyle={{
+                color: "#f9fafb",
+                fontWeight: "500",
+              }}
             />
             <Legend
               wrapperStyle={{
-                color: theme === "dark" ? "#f9fafb" : "#1f2937",
+                color: "#f9fafb",
               }}
             />
             <Bar dataKey="value" name="Jobs">

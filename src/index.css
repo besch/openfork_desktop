@@ -92,7 +92,7 @@
       transform: translateY(-10px);
     }
   }
-  
+
   @keyframes glow {
     0%,
     100% {
@@ -102,7 +102,7 @@
       box-shadow: 0 0 40px rgba(var(--primary), 0.8);
     }
   }
-  
+
   @keyframes slide-in-up {
     from {
       opacity: 0;
@@ -113,7 +113,7 @@
       transform: translateY(0);
     }
   }
-  
+
   @keyframes pulse-glow {
     0%,
     100% {
@@ -196,4 +196,41 @@
 /* Custom override to remove outline from command input */
 input[cmdk-input]:focus-visible {
   outline: none;
+}
+
+/* Chart Card specific styling - enforce dark background */
+.bg-gray-800 {
+  background-color: #1f2937 !important;
+}
+
+[data-theme] .bg-gray-800 {
+  background-color: #1f2937 !important;
+}
+
+/* Override Card component background - dark */
+[role="card"],
+.card,
+[data-role="card"] {
+  background-color: #1f2937 !important;
+}
+
+/* Ensure Card component maintains dark background */
+div[role="button"]:has(~ .card),
+.card:hover,
+.card:focus-within {
+  background-color: #1f2937 !important;
+}
+
+/* Shadcn/ui Card component specific styling - dark */
+[data-radix-collection-item] .bg-gray-800,
+.bg-gray-800,
+[data-radix-dialog] .bg-gray-800 {
+  background-color: #1f2937 !important;
+}
+
+/* Force dark background for chart container */
+.bg-gray-800,
+.bg-gray-800 * {
+  background-color: #1f2937 !important;
+  background: #1f2937 !important;
 }
