@@ -57,10 +57,10 @@ jobs:
             mv openfork_client/dist/client.exe bin/
           elif [ "$RUNNER_OS" == "macOS" ]; then
             mv openfork_client/dist/client bin/
-            chmod +x bin/openfork_client
+            chmod +x bin/client
           else
             mv openfork_client/dist/client bin/
-            chmod +x bin/openfork_client
+            chmod +x bin/client
           fi
 
       - name: Set up Node.js
