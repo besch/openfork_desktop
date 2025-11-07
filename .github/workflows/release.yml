@@ -44,7 +44,7 @@ jobs:
 
       - name: Build openfork_client with PyInstaller
         working-directory: openfork_client
-        run: pyinstaller --noconfirm openfork_client.spec
+        run: pyinstaller --noconfirm client.spec
 
       - name: Create bin directory for Electron app
         run: mkdir -p bin
