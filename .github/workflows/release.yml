@@ -54,12 +54,12 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            mv openfork_client/dist/openfork_client.exe bin/
+            mv openfork_client/dist/client.exe bin/
           elif [ "$RUNNER_OS" == "macOS" ]; then
-            mv openfork_client/dist/openfork_client bin/
+            mv openfork_client/dist/client bin/
             chmod +x bin/openfork_client
           else
-            mv openfork_client/dist/openfork_client bin/
+            mv openfork_client/dist/client bin/
             chmod +x bin/openfork_client
           fi
 
