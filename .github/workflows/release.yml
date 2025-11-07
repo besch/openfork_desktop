@@ -13,19 +13,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
-            arch: x64
-          - os: ubuntu-latest
-            arch: x64
+          # - os: macos-latest
+          #   arch: x64
+          # - os: ubuntu-latest
+          #   arch: x64
           - os: windows-latest
             arch: x64
 
     steps:
       - name: Check out Electron app repository
         uses: actions/checkout@v4
-        # This action checks out the repository where the workflow is located.
 
-      - name: Checkout Openfork Client repository
+      - name: Checkout openfork_client repository
         uses: actions/checkout@v4
         with:
           repository: besch/openfork_client
@@ -49,14 +48,19 @@ jobs:
 
       - name: Create bin directory for Electron app
         run: mkdir -p bin
+        shell: bash
 
       - name: Move openfork_client executable
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
             mv openfork_client/dist/openfork_client.exe bin/
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            mv openfork_client/dist/openfork_client bin/
+            chmod +x bin/openfork_client
           else
             mv openfork_client/dist/openfork_client bin/
+            chmod +x bin/openfork_client
           fi
 
       - name: Set up Node.js
@@ -67,11 +71,9 @@ jobs:
 
       - name: Install Electron app dependencies
         run: npm ci
-        shell: bash
 
       - name: Build React app
         run: npm run build
-        shell: bash
 
       - name: Build and release Electron app
         env:
