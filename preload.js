@@ -44,4 +44,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Utility to remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+
+  // Search
+  searchUsers: (term) => ipcRenderer.invoke("search:users", term),
+  searchProjects: (term) => ipcRenderer.invoke("search:projects", term),
 });

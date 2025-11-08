@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
 const path = require("path");
 
 if (app.isPackaged) {
@@ -230,3 +230,97 @@ ipcMain.on("window:set-closable", (event, closable) => {
 });
 
 ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
+
+ipcMain.handle("search:users", async (event, term) => {
+  if (!session) return [];
+  try {
+    const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/search/users`);
+    requestUrl.searchParams.set("term", term);
+
+    const request = net.request({
+      method: "GET",
+      url: requestUrl.toString(),
+    });
+
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+
+    return new Promise((resolve, reject) => {
+      let body = "";
+      request.on("response", (response) => {
+        if (response.statusCode !== 200) {
+          console.error(
+            `Search users failed with status ${response.statusCode}`
+          );
+          return resolve([]);
+        }
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          try {
+            console.log("Raw response body from search:users:", body);
+            resolve(JSON.parse(body));
+          } catch (e) {
+            console.error("Failed to parse search users response:", e);
+            resolve([]);
+          }
+        });
+      });
+      request.on("error", (error) => {
+        console.error("Failed to search users:", error);
+        resolve([]);
+      });
+      request.end();
+    });
+  } catch (error) {
+    console.error("Error searching users:", error);
+    return [];
+  }
+});
+
+ipcMain.handle("search:projects", async (event, term) => {
+  if (!session) return [];
+  try {
+    const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/search/projects`);
+    requestUrl.searchParams.set("term", term);
+
+    const request = net.request({
+      method: "GET",
+      url: requestUrl.toString(),
+    });
+
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+
+    return new Promise((resolve, reject) => {
+      let body = "";
+      request.on("response", (response) => {
+        if (response.statusCode !== 200) {
+          console.error(
+            `Search projects failed with status ${response.statusCode}`
+          );
+          return resolve([]);
+        }
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          try {
+            console.log("Raw response body from search:projects:", body);
+            resolve(JSON.parse(body));
+          } catch (e) {
+            console.error("Failed to parse search projects response:", e);
+            resolve([]);
+          }
+        });
+      });
+      request.on("error", (error) => {
+        console.error("Failed to search projects:", error);
+        resolve([]);
+      });
+      request.end();
+    });
+  } catch (error) {
+    console.error("Error searching projects:", error);
+    return [];
+  }
+});

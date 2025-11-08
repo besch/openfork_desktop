@@ -1,4 +1,4 @@
-import type { LogEntry, DGNClientStatus } from "./types";
+import type { LogEntry, DGNClientStatus, Profile, Project } from "./types";
 import type { Session, AuthError } from "@supabase/supabase-js";
 
 declare global {
@@ -29,6 +29,9 @@ declare global {
           | "auth:session"
           | "auth:callback"
       ) => void;
+      // New search methods
+      searchUsers: (term: string) => Promise<{ success: boolean; data: Profile[]; error?: string; }>;
+      searchProjects: (term: string) => Promise<{ success: boolean; data: Project[]; error?: string; }>;
     };
   }
 }

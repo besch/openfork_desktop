@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobPolicySettings, type JobPolicy } from "./JobPolicySettings";
-import type { Project } from "@/types";
+import type { Project, Profile } from "@/types";
 
 const StatCard = memo(
   ({
@@ -171,6 +171,7 @@ export const Dashboard = memo(() => {
   const { status, stats, services } = useClientStore();
   const [service, setService] = useState("auto");
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [jobPolicy, setJobPolicy] = useState<JobPolicy>("mine");
@@ -182,8 +183,11 @@ export const Dashboard = memo(() => {
     if (jobPolicy === "project") {
       return selectedProjects.map((p) => p.id).join(",");
     }
+    if (jobPolicy === "users") {
+      return selectedUsers.map((u) => u.id).join(",");
+    }
     return "";
-  }, [selectedProjects, jobPolicy]);
+  }, [selectedProjects, selectedUsers, jobPolicy]);
 
   const handleToggle = useCallback(
     (checked: boolean) => {
@@ -267,6 +271,8 @@ export const Dashboard = memo(() => {
                   onJobPolicyChange={setJobPolicy}
                   selectedProjects={selectedProjects}
                   onSelectedProjectsChange={setSelectedProjects}
+                  selectedUsers={selectedUsers}
+                  onSelectedUsersChange={setSelectedUsers}
                   disabled={isRunning || isDisabled}
                 />
               </CardContent>
