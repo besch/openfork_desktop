@@ -232,7 +232,7 @@ ipcMain.on("window:set-closable", (event, closable) => {
 ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
 
 ipcMain.handle("search:users", async (event, term) => {
-  if (!session) return [];
+  if (!session) return { success: false, error: "Not authenticated" };
   try {
     const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/search/users`);
     requestUrl.searchParams.set("term", term);
@@ -244,42 +244,46 @@ ipcMain.handle("search:users", async (event, term) => {
 
     request.setHeader("Authorization", `Bearer ${session.access_token}`);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        if (response.statusCode !== 200) {
-          console.error(
-            `Search users failed with status ${response.statusCode}`
-          );
-          return resolve([]);
-        }
         response.on("data", (chunk) => {
           body += chunk.toString();
         });
         response.on("end", () => {
+          if (response.statusCode !== 200) {
+            console.error(
+              `Search users failed with status ${response.statusCode}: ${body}`
+            );
+          }
           try {
-            console.log("Raw response body from search:users:", body);
             resolve(JSON.parse(body));
           } catch (e) {
             console.error("Failed to parse search users response:", e);
-            resolve([]);
+            resolve({
+              success: false,
+              error: "Failed to parse server response.",
+            });
           }
         });
       });
       request.on("error", (error) => {
         console.error("Failed to search users:", error);
-        resolve([]);
+        resolve({ success: false, error: "Network request failed." });
       });
       request.end();
     });
   } catch (error) {
     console.error("Error searching users:", error);
-    return [];
+    return {
+      success: false,
+      error: "An unexpected error occurred during search.",
+    };
   }
 });
 
 ipcMain.handle("search:projects", async (event, term) => {
-  if (!session) return [];
+  if (!session) return { success: false, error: "Not authenticated" };
   try {
     const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/search/projects`);
     requestUrl.searchParams.set("term", term);
@@ -291,36 +295,40 @@ ipcMain.handle("search:projects", async (event, term) => {
 
     request.setHeader("Authorization", `Bearer ${session.access_token}`);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        if (response.statusCode !== 200) {
-          console.error(
-            `Search projects failed with status ${response.statusCode}`
-          );
-          return resolve([]);
-        }
         response.on("data", (chunk) => {
           body += chunk.toString();
         });
         response.on("end", () => {
+          if (response.statusCode !== 200) {
+            console.error(
+              `Search projects failed with status ${response.statusCode}: ${body}`
+            );
+          }
           try {
-            console.log("Raw response body from search:projects:", body);
             resolve(JSON.parse(body));
           } catch (e) {
             console.error("Failed to parse search projects response:", e);
-            resolve([]);
+            resolve({
+              success: false,
+              error: "Failed to parse server response.",
+            });
           }
         });
       });
       request.on("error", (error) => {
         console.error("Failed to search projects:", error);
-        resolve([]);
+        resolve({ success: false, error: "Network request failed." });
       });
       request.end();
     });
   } catch (error) {
     console.error("Error searching projects:", error);
-    return [];
+    return {
+      success: false,
+      error: "An unexpected error occurred during search.",
+    };
   }
 });
