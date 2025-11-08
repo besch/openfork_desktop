@@ -245,8 +245,8 @@ export const Dashboard = memo(() => {
           >
             <Card className="bg-card/80 backdrop-blur-sm">
               <CardContent className="p-6 space-y-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">
+                <div className="flex items-center">
+                  <span className="w-48 shrink-0 pr-4 text-right text-sm text-muted-foreground">
                     Workflows:
                   </span>
                   <Select
@@ -254,7 +254,7 @@ export const Dashboard = memo(() => {
                     onValueChange={setService}
                     disabled={isRunning || isDisabled}
                   >
-                    <SelectTrigger className="w-48 bg-background/50">
+                    <SelectTrigger className="w-full bg-background/50">
                       <SelectValue placeholder="Workflows" />
                     </SelectTrigger>
                     <SelectContent>

@@ -33,8 +33,8 @@ export const JobPolicySettings: React.FC<JobPolicySettingsProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-muted-foreground">
+      <div className="flex items-center">
+        <span className="w-48 shrink-0 pr-4 text-right text-sm text-muted-foreground">
           Job Acceptance Policy:
         </span>
         <Select
@@ -42,7 +42,7 @@ export const JobPolicySettings: React.FC<JobPolicySettingsProps> = ({
           onValueChange={(value) => onJobPolicyChange(value as JobPolicy)}
           disabled={disabled}
         >
-          <SelectTrigger className="w-48 bg-background/50">
+          <SelectTrigger className="w-full bg-background/50">
             <SelectValue placeholder="Job Policy" />
           </SelectTrigger>
           <SelectContent>
