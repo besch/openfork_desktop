@@ -50,7 +50,7 @@ function App() {
         <div className="max-w-7xl mx-auto">
           <header className="flex items-center justify-between mb-8 p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg">
             <div className="flex items-center gap-4">
-              <img src="/logo.png" alt="logo" className="h-12" />
+              <img src="./logo.png" alt="logo" className="h-12" />
               <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
                   Openfork Client
