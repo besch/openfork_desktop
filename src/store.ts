@@ -91,17 +91,33 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       const apiUrl = await window.electronAPI.getOrchestratorApiUrl();
 
       const fetchUrl = import.meta.env.DEV
-        ? "/api/dgn/config"
-        : `${apiUrl}/api/dgn/config`;
+        ? `${apiUrl}/api/config`
+        : `${apiUrl}/api/config`;
 
       const response = await fetch(fetchUrl);
       if (!response.ok) {
         throw new Error(`Failed to fetch DGN config: ${response.statusText}`);
       }
-      const config = await response.json();
-      if (config?.ui_services) {
-        set({ services: config.ui_services });
+      const config: Record<string, { service_name: string; label: string }> =
+        await response.json();
+
+      const serviceMap = new Map<string, string>();
+      for (const workflow of Object.values(config)) {
+        if (workflow.service_name && workflow.label) {
+          serviceMap.set(workflow.service_name, workflow.label);
+        }
       }
+
+      const uiServices = Array.from(serviceMap.entries()).map(
+        ([value, label]) => ({
+          value,
+          label,
+        })
+      );
+
+      const services = [{ value: "auto", label: "Auto-Select" }, ...uiServices];
+
+      set({ services });
     } catch (error) {
       console.error("Error fetching DGN services:", error);
     }
