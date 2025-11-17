@@ -1,77 +1,71 @@
 const { spawn } = require("child_process");
 const path = require("path");
-const http = require("http");
 const { app } = require("electron");
 
 class PythonProcessManager {
   constructor({ supabase, mainWindow, userDataPath }) {
     this.pythonProcess = null;
-    this.tokenServerPort = 8001; // Default port, will be updated on client startup
-    this.shutdownServerPort = 8000; // Default port, will be updated on client startup
+    this.shutdownServerPort = 8000;
     this.supabase = supabase;
     this.mainWindow = mainWindow;
     this.isQuitting = false;
     this.userDataPath = userDataPath;
+    this.authSubscription = null;
+
+    this._listenForTokenRefresh();
   }
 
   getPythonExecutablePath() {
     const exeName = process.platform === "win32" ? "client.exe" : "client";
     if (app.isPackaged) {
+      // For production, the executable is packaged into the resources directory.
       return path.join(process.resourcesPath, "bin", exeName);
     } else {
-      // In dev, assumes the executable is in a 'bin' directory adjacent to 'electron.cjs'
+      // For development, assume the executable is in a 'bin' directory inside the 'desktop' project.
       return path.join(__dirname, "..", "bin", exeName);
     }
   }
 
-  updatePythonBackendTokens(accessToken, refreshToken) {
-    return new Promise((resolve, reject) => {
-      const payload = JSON.stringify({
+  _sendTokensToPython(accessToken, refreshToken) {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.error(
+        "Cannot send tokens: Python process not running or stdin not writable."
+      );
+      return;
+    }
+
+    const command = {
+      type: "UPDATE_TOKENS",
+      payload: {
         access_token: accessToken,
         refresh_token: refreshToken,
-      });
+      },
+    };
 
-      const options = {
-        hostname: "127.0.0.1",
-        port: this.tokenServerPort,
-        path: "/update-tokens",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": payload.length,
-        },
-      };
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Successfully sent token update command to Python process.");
+    } catch (error) {
+      console.error("Error writing to Python process stdin:", error);
+    }
+  }
 
-      const req = http.request(options, (res) => {
-        if (res.statusCode === 200) {
-          console.log("Successfully updated Python backend tokens.");
-          resolve();
-        } else {
-          let body = "";
-          res.on("data", (chunk) => {
-            body += chunk;
-          });
-          res.on("end", () => {
-            console.error(
-              `Failed to update Python backend tokens. Status: ${res.statusCode}, Body: ${body}`
-            );
-            reject(
-              new Error(
-                `Failed to update tokens with status: ${res.statusCode}`
-              )
-            );
-          });
+  _listenForTokenRefresh() {
+    if (this.authSubscription) {
+      this.authSubscription.unsubscribe();
+    }
+    const { data: subscription } = this.supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "TOKEN_REFRESHED" && session) {
+          console.log("Token refreshed proactively. Pushing update to Python.");
+          this._sendTokensToPython(
+            session.access_token,
+            session.refresh_token
+          );
         }
-      });
-
-      req.on("error", (error) => {
-        console.error("Error sending token update to Python backend:", error);
-        reject(error);
-      });
-
-      req.write(payload);
-      req.end();
-    });
+      }
+    );
+    this.authSubscription = subscription;
   }
 
   async start(service, policy, allowedIds) {
@@ -126,7 +120,7 @@ class PythonProcessManager {
     ];
 
     if (
-      policy === "project" &&
+      (policy === "project" || policy === "users") &&
       Array.isArray(allowedIds) &&
       allowedIds.length > 0
     ) {
@@ -140,13 +134,47 @@ class PythonProcessManager {
     try {
       this.pythonProcess = spawn(pythonExecutablePath, args, {
         cwd: cwd,
-        stdio: ["pipe", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
       });
 
       this.mainWindow.webContents.send("openfork_client:status", "starting");
 
-      const handlePythonLog = (log) => {
+      const handlePythonMessage = (log) => {
+        // First, check for structured JSON messages
+        try {
+          const message = JSON.parse(log);
+          if (message.status === "AUTH_EXPIRED") {
+            console.warn(
+              "Python reported auth expired. Attempting to refresh and recover."
+            );
+            (async () => {
+              const { data: freshData, error: refreshError } =
+                await this.supabase.auth.getSession();
+              if (refreshError || !freshData.session) {
+                console.error(
+                  "Could not recover session. Forcing logout.",
+                  refreshError?.message
+                );
+                await this.stop();
+                await this.supabase.auth.signOut();
+              } else {
+                console.log(
+                  "Recovered session. Pushing new tokens to Python."
+                );
+                this._sendTokensToPython(
+                  freshData.session.access_token,
+                  freshData.session.refresh_token
+                );
+              }
+            })();
+            return; // Handled
+          }
+        } catch (e) {
+          // Not a JSON message, treat as regular log
+        }
+
+        // Handle legacy/plain text logs
         if (log.startsWith("DGN_CLIENT_SHUTDOWN_SERVER_PORT:")) {
           const portStr = log
             .substring("DGN_CLIENT_SHUTDOWN_SERVER_PORT:".length)
@@ -161,78 +189,12 @@ class PythonProcessManager {
           return;
         }
 
-        if (log.startsWith("DGN_CLIENT_TOKEN_SERVER_PORT:")) {
-          const portStr = log
-            .substring("DGN_CLIENT_TOKEN_SERVER_PORT:".length)
-            .trim();
-          const port = parseInt(portStr, 10);
-          if (!isNaN(port)) {
-            this.tokenServerPort = port;
-            console.log(
-              `Python token server is running on port ${this.tokenServerPort}`
-            );
-          }
-          return;
-        }
-
-        if (log.startsWith("DGN_CLIENT_TOKENS_REFRESHED:")) {
-          try {
-            const jsonString = log.substring(
-              "DGN_CLIENT_TOKENS_REFRESHED:".length
-            );
-            const tokens = JSON.parse(jsonString);
-            console.log(
-              "Received refreshed tokens from Python. Updating main session."
-            );
-            this.supabase.auth.setSession({
-              access_token: tokens.access_token,
-              refresh_token: tokens.refresh_token,
-            });
-          } catch (e) {
-            console.error("Failed to parse refreshed tokens from Python:", e);
-          }
-          return;
-        }
-
-        if (log.includes("DGN_CLIENT_AUTH_REFRESH_FAILED")) {
-          console.warn(
-            "Python reported auth failure. Attempting to recover session."
-          );
-          (async () => {
-            const { data: freshData, error: refreshError } =
-              await this.supabase.auth.getSession();
-            if (refreshError || !freshData.session) {
-              console.error(
-                "Could not recover session. Forcing logout.",
-                refreshError?.message
-              );
-              await this.stop();
-              await this.supabase.auth.signOut();
-            } else {
-              console.log("Recovered session. Pushing new tokens to Python.");
-              try {
-                await this.updatePythonBackendTokens(
-                  freshData.session.access_token,
-                  freshData.session.refresh_token
-                );
-              } catch (updateError) {
-                console.error(
-                  "Failed to push updated tokens to Python. Shutting down.",
-                  updateError
-                );
-                await this.stop();
-                await this.supabase.auth.signOut();
-              }
-            }
-          })();
-          return;
-        }
-
         if (log.includes("DGN_CLIENT_RUNNING")) {
           this.mainWindow.webContents.send("openfork_client:status", "running");
           return;
         }
 
+        // Forward all other logs to the renderer
         this.mainWindow.webContents.send("openfork_client:log", {
           type: "stdout",
           message: log,
@@ -240,13 +202,13 @@ class PythonProcessManager {
       };
 
       this.pythonProcess.stdout.on("data", (data) => {
-        console.log(`[PY_STDOUT_RAW]: ${data}`); // Raw log for debugging
+        console.log(`[PY_STDOUT_RAW]: ${data}`);
         const logs = data.toString().split(/\r?\n/).filter(Boolean);
-        logs.forEach(handlePythonLog);
+        logs.forEach(handlePythonMessage);
       });
 
       this.pythonProcess.stderr.on("data", (data) => {
-        console.error(`[PY_STDERR_RAW]: ${data}`); // Raw log for debugging
+        console.error(`[PY_STDERR_RAW]: ${data}`);
         const logs = data.toString().split(/\r?\n/).filter(Boolean);
         logs.forEach((log) => {
           this.mainWindow.webContents.send("openfork_client:log", {
@@ -288,21 +250,25 @@ class PythonProcessManager {
         resolve();
       });
 
-      // Send HTTP shutdown request to the DGN client's internal server
-      fetch(`http://localhost:${this.shutdownServerPort}/shutdown`).catch(
-        (error) => {
-          console.error(
-            `Error sending HTTP shutdown request: ${error}. Falling back to kill.`
-          );
-          if (this.pythonProcess) this.pythonProcess.kill();
+      // Gracefully shutdown via HTTP endpoint
+      const request = http.get(
+        `http://localhost:${this.shutdownServerPort}/shutdown`,
+        () => {
+          console.log("Sent HTTP shutdown request to Python backend.");
         }
       );
+      request.on("error", (err) => {
+        console.error(
+          `Error sending HTTP shutdown request: ${err.message}. Falling back to kill.`
+        );
+        if (this.pythonProcess) this.pythonProcess.kill("SIGTERM");
+      });
 
       // Failsafe timeout
       setTimeout(() => {
         if (this.pythonProcess) {
           console.warn("Python process did not exit gracefully, forcing kill.");
-          this.pythonProcess.kill();
+          this.pythonProcess.kill("SIGKILL");
         }
       }, 8000);
     });
