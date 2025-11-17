@@ -11,21 +11,11 @@ export function Auth() {
       <div className="w-full max-w-md">
         <Card className="bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl hover:shadow-3xl transition-all duration-300">
           <CardHeader className="text-center pb-6">
-            <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg mb-4">
-              <svg
-                className="h-8 w-8 text-primary-foreground"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </div>
+            <img
+              src="./logo.png"
+              alt="OpenFork Logo"
+              className="h-16 mx-auto mb-4"
+            />
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
               Welcome to OpenFork
             </CardTitle>
