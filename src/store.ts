@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { Session, RealtimeChannel } from "@supabase/supabase-js";
-import type { DGNClientStatus, LogEntry, JobStats, Project } from "./types";
+import type {
+  DGNClientStatus,
+  LogEntry,
+  JobStats,
+  Project,
+  JobPolicy,
+} from "./types";
 import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
@@ -19,6 +25,8 @@ interface DGNClientState {
   projects: Project[];
   selectedProjects: Project[];
   isLoading: boolean;
+  jobPolicy: JobPolicy;
+  allowedIds: string;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
   setStats: (stats: JobStats) => void;
@@ -33,6 +41,7 @@ interface DGNClientState {
   subscribeToJobChanges: () => void;
   unsubscribeFromJobChanges: () => Promise<void>;
   setIsLoading: (loading: boolean) => void;
+  setSubscriptionPolicy: (policy: JobPolicy, ids: string) => Promise<void>;
 }
 
 export const useClientStore = create<DGNClientState>((set, get) => ({
@@ -47,6 +56,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   projects: [],
   selectedProjects: [],
   isLoading: true,
+  jobPolicy: "mine",
+  allowedIds: "",
   setStatus: (status) => set({ status }),
   addLog: (log) => {
     const newLog: LogEntry = {
@@ -63,6 +74,11 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setTheme: (theme) => set({ theme }),
   setIsLoading: (loading) => set({ isLoading: loading }),
   setSelectedProjects: (projects) => set({ selectedProjects: projects }),
+  setSubscriptionPolicy: async (policy, ids) => {
+    await get().unsubscribeFromJobChanges();
+    set({ jobPolicy: policy, allowedIds: ids });
+    get().subscribeToJobChanges();
+  },
   setSession: async (session) => {
     // Always clean up the old subscription on any session change.
     await get().unsubscribeFromJobChanges();
@@ -144,14 +160,18 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     }
   },
   fetchStats: async () => {
-    const { session } = get();
+    const { session, jobPolicy, allowedIds } = get();
     if (!session?.user) {
       set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
       return;
     }
     try {
       const { data, error } = await supabase
-        .rpc("fetch_dgn_job_stats", { p_user_id: session.user.id })
+        .rpc("fetch_dgn_job_stats_for_policy", {
+          p_policy: jobPolicy,
+          p_user_id: session.user.id,
+          p_allowed_ids: allowedIds,
+        })
         .single();
 
       if (error) throw error;
@@ -164,28 +184,82 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     }
   },
   subscribeToJobChanges: () => {
-    const { session, fetchStats, jobSubscription } = get();
+    const { session, fetchStats, jobSubscription, jobPolicy, allowedIds } =
+      get();
     if (!session || !session.user || jobSubscription) {
       return;
     }
 
-    const channelName = `dgn-jobs-user-changes:${session.user.id}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
+    // For project/users policies, don't subscribe if there are no IDs.
+    if ((jobPolicy === "project" || jobPolicy === "users") && !allowedIds) {
+      set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
+      // Ensure no lingering subscription
+      get().unsubscribeFromJobChanges();
+      return;
+    }
+
+    let channelName: string;
+    let postgresChangesOptions: any;
+
+    switch (jobPolicy) {
+      case "mine":
+        channelName = `dgn-jobs-user-changes:${session.user.id}`;
+        postgresChangesOptions = {
           event: "*",
           schema: "public",
           table: "dgn_jobs",
           filter: `user_id=eq.${session.user.id}`,
-        },
+        };
+        break;
+      case "project":
+        channelName = `dgn-jobs-project-changes:${allowedIds
+          .split(",")
+          .sort()
+          .join(",")}`;
+        postgresChangesOptions = {
+          event: "*",
+          schema: "public",
+          table: "dgn_jobs",
+          filter: `project_id=in.(${allowedIds})`,
+        };
+        break;
+      case "users":
+        channelName = `dgn-jobs-users-changes:${allowedIds
+          .split(",")
+          .sort()
+          .join(",")}`;
+        postgresChangesOptions = {
+          event: "*",
+          schema: "public",
+          table: "dgn_jobs",
+          filter: `user_id=in.(${allowedIds})`,
+        };
+        break;
+      case "all":
+        channelName = "dgn-jobs-all-changes";
+        postgresChangesOptions = {
+          event: "*",
+          schema: "public",
+          table: "dgn_jobs",
+        };
+        break;
+      default:
+        // This case should not be reached if logic is correct
+        return;
+    }
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        postgresChangesOptions,
         () => {
           fetchStats();
         }
       )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
+          // Fetch initial stats once subscribed.
           fetchStats();
         }
         if (err) {

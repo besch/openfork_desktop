@@ -1,4 +1,10 @@
-import React, { useState, useCallback, memo, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  memo,
+  useMemo,
+  useEffect,
+} from "react";
 import { useClientStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,8 +27,8 @@ import {
   Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { JobPolicySettings, type JobPolicy } from "./JobPolicySettings";
-import type { Project, Profile } from "@/types";
+import { JobPolicySettings } from "./JobPolicySettings";
+import type { Project, Profile, JobPolicy } from "@/types";
 
 const StatCard = memo(
   ({
@@ -168,26 +174,31 @@ const PowerButton = memo(
 );
 
 export const Dashboard = memo(() => {
-  const { status, stats, services } = useClientStore();
+  const { status, stats, services, jobPolicy, setSubscriptionPolicy } =
+    useClientStore();
   const [service, setService] = useState("auto");
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const [jobPolicy, setJobPolicy] = useState<JobPolicy>("mine");
+  const [jobPolicyState, setJobPolicyState] = useState<JobPolicy>("mine");
 
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
 
   const allowedIds = useMemo(() => {
-    if (jobPolicy === "project") {
+    if (jobPolicyState === "project") {
       return selectedProjects.map((p) => p.id).join(",");
     }
-    if (jobPolicy === "users") {
+    if (jobPolicyState === "users") {
       return selectedUsers.map((u) => u.id).join(",");
     }
     return "";
-  }, [selectedProjects, selectedUsers, jobPolicy]);
+  }, [selectedProjects, selectedUsers, jobPolicyState]);
+
+  useEffect(() => {
+    setSubscriptionPolicy(jobPolicyState, allowedIds);
+  }, [jobPolicyState, allowedIds, setSubscriptionPolicy]);
 
   const handleToggle = useCallback(
     (checked: boolean) => {
@@ -201,6 +212,10 @@ export const Dashboard = memo(() => {
     },
     [isDisabled, service, jobPolicy, allowedIds]
   );
+
+  const handleJobPolicyChange = (policy: JobPolicy) => {
+    setJobPolicyState(policy);
+  };
 
   const isProcessingAndRunning = status === "running" && stats.processing > 0;
 
@@ -267,8 +282,8 @@ export const Dashboard = memo(() => {
                   </Select>
                 </div>
                 <JobPolicySettings
-                  jobPolicy={jobPolicy}
-                  onJobPolicyChange={setJobPolicy}
+                  jobPolicy={jobPolicyState}
+                  onJobPolicyChange={handleJobPolicyChange}
                   selectedProjects={selectedProjects}
                   onSelectedProjectsChange={setSelectedProjects}
                   selectedUsers={selectedUsers}

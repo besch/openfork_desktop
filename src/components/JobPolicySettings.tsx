@@ -9,8 +9,7 @@ import {
 import { ProjectSelection } from "./ProjectSelection";
 import { UserSelection } from "./UserSelection";
 import type { Project, Profile } from "@/types";
-
-export type JobPolicy = "all" | "mine" | "project" | "users";
+import type { JobPolicy } from "@/types";
 
 interface JobPolicySettingsProps {
   jobPolicy: JobPolicy;

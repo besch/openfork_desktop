@@ -58,3 +58,5 @@ export interface Project {
   logo_url?: string;
   slug: string;
 }
+
+export type JobPolicy = "all" | "mine" | "project" | "users";
