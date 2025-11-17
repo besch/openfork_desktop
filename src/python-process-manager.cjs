@@ -1,6 +1,7 @@
 const { spawn } = require("child_process");
 const path = require("path");
 const { app } = require("electron");
+const http = require("http");
 
 class PythonProcessManager {
   constructor({ supabase, mainWindow, userDataPath }) {
