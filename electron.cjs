@@ -109,12 +109,12 @@ function createWindow() {
     width: 1024,
     height: 768,
     show: false,
-    backgroundColor: "#111827", // bg-gray-900 from tailwind
+    backgroundColor: "#111827",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
+      webSecurity: true,
       devTools: false,
     },
   });
@@ -330,5 +330,91 @@ ipcMain.handle("search:projects", async (event, term) => {
       success: false,
       error: "An unexpected error occurred during search.",
     };
+  }
+});
+
+ipcMain.handle("fetch:config", async () => {
+  try {
+    const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/config`);
+    const request = net.request({
+      method: "GET",
+      url: requestUrl.toString(),
+    });
+
+    return new Promise((resolve) => {
+      let body = "";
+      request.on("response", (response) => {
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          if (response.statusCode !== 200) {
+            console.error(
+              `Fetch config failed with status ${response.statusCode}: ${body}`
+            );
+            resolve({}); // Return empty object on failure
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            console.error("Failed to parse config response:", e);
+            resolve({});
+          }
+        });
+      });
+      request.on("error", (error) => {
+        console.error("Failed to fetch config:", error);
+        resolve({});
+      });
+      request.end();
+    });
+  } catch (error) {
+    console.error("Error fetching config:", error);
+    return {};
+  }
+});
+
+ipcMain.handle("search:general", async (event, query) => {
+  try {
+    const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/search`);
+    requestUrl.searchParams.set("q", query);
+    
+    const request = net.request({
+      method: "GET",
+      url: requestUrl.toString(),
+    });
+
+    return new Promise((resolve) => {
+      let body = "";
+      request.on("response", (response) => {
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          if (response.statusCode !== 200) {
+            console.error(
+              `Search general failed with status ${response.statusCode}: ${body}`
+            );
+            resolve([]); // Return empty array on failure
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            console.error("Failed to parse search general response:", e);
+            resolve([]);
+          }
+        });
+      });
+      request.on("error", (error) => {
+        console.error("Failed to search general:", error);
+        resolve([]);
+      });
+      request.end();
+    });
+  } catch (error) {
+    console.error("Error searching general:", error);
+    return [];
   }
 });

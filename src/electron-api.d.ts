@@ -32,6 +32,8 @@ declare global {
       // New search methods
       searchUsers: (term: string) => Promise<{ success: boolean; data: Profile[]; error?: string; }>;
       searchProjects: (term: string) => Promise<{ success: boolean; data: Project[]; error?: string; }>;
+      fetchConfig: () => Promise<Record<string, { service_name: string; label: string }>>;
+      searchGeneral: (query: string) => Promise<Project[]>;
     };
   }
 }

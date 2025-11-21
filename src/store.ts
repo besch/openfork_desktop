@@ -104,18 +104,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   },
   fetchServices: async () => {
     try {
-      const apiUrl = await window.electronAPI.getOrchestratorApiUrl();
-
-      const fetchUrl = import.meta.env.DEV
-        ? `${apiUrl}/api/config`
-        : `${apiUrl}/api/config`;
-
-      const response = await fetch(fetchUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch DGN config: ${response.statusText}`);
-      }
       const config: Record<string, { service_name: string; label: string }> =
-        await response.json();
+        await window.electronAPI.fetchConfig();
 
       const serviceMap = new Map<string, string>();
       for (const workflow of Object.values(config)) {
@@ -144,15 +134,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       return;
     }
     try {
-      const apiUrl = await window.electronAPI.getOrchestratorApiUrl();
-      const fetchUrl = `${
-        import.meta.env.DEV ? "" : apiUrl
-      }/api/search?q=${encodeURIComponent(query)}`;
-      const response = await fetch(fetchUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch projects: ${response.statusText}`);
-      }
-      const projects = await response.json();
+      const projects = await window.electronAPI.searchGeneral(query);
       set({ projects });
     } catch (error) {
       console.error("Error fetching projects:", error);

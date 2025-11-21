@@ -48,4 +48,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Search
   searchUsers: (term) => ipcRenderer.invoke("search:users", term),
   searchProjects: (term) => ipcRenderer.invoke("search:projects", term),
+  
+  // Config
+  fetchConfig: () => ipcRenderer.invoke("fetch:config"),
+  
+  // General Search
+  searchGeneral: (query) => ipcRenderer.invoke("search:general", query),
 });

@@ -63,6 +63,9 @@ class PythonProcessManager {
             session.access_token,
             session.refresh_token
           );
+        } else if (event === "SIGNED_OUT") {
+          console.log("User signed out. Stopping Python client.");
+          this.stop();
         }
       }
     );
@@ -150,8 +153,10 @@ class PythonProcessManager {
               "Python reported auth expired. Attempting to refresh and recover."
             );
             (async () => {
+              // Force a refresh since the client reported the current token is invalid
               const { data: freshData, error: refreshError } =
-                await this.supabase.auth.getSession();
+                await this.supabase.auth.refreshSession();
+              
               if (refreshError || !freshData.session) {
                 console.error(
                   "Could not recover session. Forcing logout.",
@@ -161,7 +166,7 @@ class PythonProcessManager {
                 await this.supabase.auth.signOut();
               } else {
                 console.log(
-                  "Recovered session. Pushing new tokens to Python."
+                  "Recovered session via refresh. Pushing new tokens to Python."
                 );
                 this._sendTokensToPython(
                   freshData.session.access_token,
