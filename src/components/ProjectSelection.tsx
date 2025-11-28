@@ -94,10 +94,7 @@ export const ProjectSelection: React.FC<ProjectSelectionProps> = ({
                 exit={{ opacity: 0, scale: 0.5 }}
                 transition={{ duration: 0.2 }}
               >
-                <Badge
-                  variant="secondary"
-                  className="flex items-center gap-1.5"
-                >
+                <Badge className="flex items-center gap-1.5">
                   {project.title}
                   {!disabled && (
                     <button
