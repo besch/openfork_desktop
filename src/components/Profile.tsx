@@ -9,7 +9,7 @@ export function Profile() {
   }
 
   return (
-    <Card>
+    <Card className="bg-card/50 backdrop-blur-sm border-white/10">
       <CardHeader>
         <CardTitle>User Profile</CardTitle>
       </CardHeader>
@@ -17,11 +17,11 @@ export function Profile() {
         <div className="space-y-4">
           <div>
             <h3 className="font-medium">Email</h3>
-            <p className="text-gray-500 text-gray-400">{session.user.email}</p>
+            <p className="text-muted-foreground">{session.user.email}</p>
           </div>
           <div>
             <h3 className="font-medium">User ID</h3>
-            <p className="text-gray-500 text-gray-400">{session.user.id}</p>
+            <p className="text-muted-foreground">{session.user.id}</p>
           </div>
           {/* Add more profile information here as needed */}
         </div>

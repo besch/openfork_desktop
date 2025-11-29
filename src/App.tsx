@@ -27,7 +27,7 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-background via-background/95 to-background/90">
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
         <div className="relative">
           <Loader2 className="h-16 w-16 animate-spin text-primary" />
           <div className="absolute inset-0 h-16 w-16 animate-ping bg-primary/20 rounded-full" />
@@ -48,7 +48,7 @@ function App() {
       {status === "stopping" && <ShutdownOverlay />}
       <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
-          <header className="flex items-center justify-between mb-8 p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg">
+          <header className="flex items-center justify-between mb-8 p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-white/10 shadow-lg">
             <div className="flex items-center gap-4">
               <img src="./logo.png" alt="logo" className="h-12" />
               <div>
@@ -67,64 +67,43 @@ function App() {
                   {session.user.email}
                 </span>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleLogout}
-                className="hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive transition-all duration-200"
-              >
+              <Button variant="destructive" size="icon" onClick={handleLogout}>
                 <LogOut className="h-[1.2rem] w-[1.2rem]" />
                 <span className="sr-only">Logout</span>
               </Button>
             </div>
           </header>
 
-          <Tabs>
-            <TabsList className="mb-4 bg-card/80 backdrop-blur-sm">
-              <TabsTrigger
-                value="dashboard"
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-              >
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="mb-4 bg-card/50 backdrop-blur-sm border-white/10">
+              <TabsTrigger value="dashboard">
                 <LayoutDashboard className="mr-2" size={16} />
                 Dashboard
               </TabsTrigger>
-              <TabsTrigger
-                value="chart"
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-              >
+              <TabsTrigger value="chart">
                 <BarChartIcon className="mr-2" size={16} />
                 Chart
               </TabsTrigger>
-              <TabsTrigger
-                value="logs"
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-              >
+              <TabsTrigger value="logs">
                 <Terminal className="mr-2" size={16} />
                 Logs
               </TabsTrigger>
-              <TabsTrigger
-                value="profile"
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-              >
+              <TabsTrigger value="profile">
                 <User className="mr-2" size={16} />
                 Profile
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="dashboard" activeTab={activeTab}>
+            <TabsContent value="dashboard">
               <Dashboard />
             </TabsContent>
-            <TabsContent value="chart" activeTab={activeTab}>
+            <TabsContent value="chart">
               <Chart />
             </TabsContent>
-            <TabsContent value="logs" activeTab={activeTab}>
+            <TabsContent value="logs">
               <LogViewer />
             </TabsContent>
-            <TabsContent value="profile" activeTab={activeTab}>
+            <TabsContent value="profile">
               <Profile />
             </TabsContent>
           </Tabs>

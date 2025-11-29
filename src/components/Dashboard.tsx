@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useCallback,
-  memo,
-  useMemo,
-  useEffect,
-} from "react";
+import React, { useState, useCallback, memo, useMemo, useEffect } from "react";
 import { useClientStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +36,7 @@ const StatCard = memo(
     icon: React.ReactNode;
     className?: string;
   }) => (
-    <Card className="bg-card/80 backdrop-blur-sm transition-all duration-300 hover:bg-card hover:shadow-xl group">
+    <Card className="transition-all duration-300 hover:shadow-xl group border-white/10 bg-card/50 backdrop-blur-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors duration-200">
           {title}
@@ -68,27 +62,27 @@ export const StatusIndicator = memo(() => {
   const statusConfig = {
     running: {
       text: "Running",
-      className: "text-green-400",
+      className: "text-green-400 border-green-400/20 bg-green-400/10",
       icon: <Power size={16} />,
     },
     stopped: {
       text: "Stopped",
-      className: "text-muted-foreground",
+      className: "text-muted-foreground border-border bg-muted/10",
       icon: <Power size={16} />,
     },
     starting: {
       text: "Starting...",
-      className: "text-yellow-400",
+      className: "text-yellow-400 border-yellow-400/20 bg-yellow-400/10",
       icon: <Loader size={16} className="animate-spin" />,
     },
     stopping: {
       text: "Stopping...",
-      className: "text-orange-400",
+      className: "text-orange-400 border-orange-400/20 bg-orange-400/10",
       icon: <Loader size={16} className="animate-spin" />,
     },
     error: {
       text: "Error",
-      className: "text-destructive",
+      className: "text-destructive border-destructive/20 bg-destructive/10",
       icon: <AlertCircle size={16} />,
     },
   };
@@ -97,7 +91,7 @@ export const StatusIndicator = memo(() => {
 
   return (
     <div
-      className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-background/80 border border-border ${className}`}
+      className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${className}`}
     >
       {icon}
       <span>{text}</span>
@@ -119,16 +113,16 @@ const PowerButton = memo(
   }) => {
     const buttonVariants = {
       off: {
-        backgroundColor: "oklch(0.65 0.15 145)", // Warm green
-        boxShadow: "0px 4px 15px oklch(0.65 0.15 145 / 0.4)",
+        backgroundColor: "#22c55e", // Green
+        boxShadow: "0px 4px 15px rgba(34, 197, 94, 0.4)",
       },
       on: {
-        backgroundColor: "oklch(0.68 0.18 35)", // Warm orange
-        boxShadow: "0px 4px 15px oklch(0.68 0.18 35 / 0.4)",
+        backgroundColor: "#ef4444", // Red
+        boxShadow: "0px 4px 15px rgba(239, 68, 68, 0.4)",
       },
       starting: {
-        backgroundColor: "oklch(0.87 0.22 88.5)", // Yellow
-        boxShadow: "0px 4px 15px oklch(0.87 0.22 88.5 / 0.4)",
+        backgroundColor: "#eab308", // Yellow
+        boxShadow: "0px 4px 15px rgba(234, 179, 8, 0.4)",
       },
     };
 
@@ -221,7 +215,7 @@ export const Dashboard = memo(() => {
 
   return (
     <div className="space-y-6">
-      <header className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-xl p-6 shadow-lg">
+      <header className="bg-card/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 shadow-lg">
         <div className="flex flex-wrap items-center content-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <PowerButton
@@ -238,9 +232,8 @@ export const Dashboard = memo(() => {
           </div>
 
           <Button
-            variant="outline"
+            variant="primary"
             onClick={() => setIsSettingsOpen((prev) => !prev)}
-            className="bg-background/50 cursor-pointer"
           >
             <Settings className="mr-2 h-4 w-4" />
             <span>Settings</span>
@@ -258,7 +251,7 @@ export const Dashboard = memo(() => {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <Card className="bg-card/80 backdrop-blur-sm">
+            <Card className="bg-card/50 backdrop-blur-sm border-white/10">
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center">
                   <span className="w-48 shrink-0 pr-4 text-right text-sm text-muted-foreground">

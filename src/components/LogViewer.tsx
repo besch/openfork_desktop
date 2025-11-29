@@ -14,7 +14,7 @@ export const LogViewer = () => {
   }, [logs]);
 
   return (
-    <div className="h-full flex flex-col bg-secondary rounded-lg p-4">
+    <div className="h-full flex flex-col bg-card/50 backdrop-blur-sm border border-white/10 rounded-lg p-4">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold">Client Logs</h2>
         <Button variant="destructive" size="sm" onClick={clearLogs}>
@@ -23,7 +23,7 @@ export const LogViewer = () => {
       </div>
       <div
         ref={logContainerRef}
-        className="flex-grow overflow-y-auto bg-card rounded p-2 font-mono text-sm h-[calc(100vh-300px)]"
+        className="flex-grow overflow-y-auto bg-background/50 rounded p-2 font-mono text-sm h-[calc(100vh-300px)] border border-white/5"
       >
         {logs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">

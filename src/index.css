@@ -1,236 +1,287 @@
-@import url("https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-sans/variable/geist-sans.css");
 @import "tailwindcss";
 
 @layer base {
   body {
+    background: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-family-sans);
-    min-height: 100vh;
+    font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   }
-  body::before {
+
+  .surface {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+
+  .muted {
+    color: var(--color-muted);
+  }
+
+  .border-base * {
+    border-color: var(--color-border);
+  }
+
+  :root {
+    --video-track-height: 80px;
+    --audio-track-height: 52px;
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    box-shadow: 0 0 20px rgba(251, 146, 60, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .btn-primary:hover {
+    background: var(--color-primary-hover);
+    box-shadow: 0 0 30px rgba(253, 186, 116, 0.5);
+  }
+
+  .card {
+    background: linear-gradient(
+      135deg,
+      rgba(37, 32, 24, 0.9) 0%,
+      rgba(45, 38, 32, 0.8) 100%
+    );
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(251, 146, 60, 0.15);
+    border-radius: 0.75rem;
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.2),
+      0 2px 4px -1px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .input-surface {
+    background: rgba(37, 32, 24, 0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--color-border);
+    color: var(--color-foreground);
+    transition: all 0.2s ease;
+  }
+
+  .input-surface:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.15);
+  }
+
+  .backdrop {
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(12px);
+  }
+
+  /* Custom Scrollbar Styling */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(37, 32, 24, 0.5);
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+      135deg,
+      rgba(251, 146, 60, 0.6) 0%,
+      rgba(253, 186, 116, 0.6) 100%
+    );
+    border-radius: 10px;
+    border: 2px solid rgba(37, 32, 24, 0.5);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(251, 146, 60, 0.8) 0%,
+      rgba(253, 186, 116, 0.8) 100%
+    );
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  body.grabbing,
+  body.grabbing * {
+    cursor: grabbing !important;
+  }
+
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .download-page-grid {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-background);
+  }
+
+  .download-page-grid::before {
     content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-image: radial-gradient(
-        circle at 20% 20%,
-        oklch(var(--color-primary) / 0.1),
-        transparent 30%
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(
+        circle at 15% 25%,
+        var(--color-glow-accent) 0%,
+        transparent 15%
       ),
       radial-gradient(
-        circle at 80% 70%,
-        oklch(0.7 0.2 200 / 0.1),
-        transparent 30%
+        circle at 85% 75%,
+        var(--color-primary) 0%,
+        transparent 20%
       );
-    z-index: -1;
-    pointer-events: none;
+    opacity: 0.3;
+    filter: blur(60px);
+    animation: background-glow 10s ease-in-out infinite;
   }
+
+  .download-page-grid::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232a2a2a' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    animation: background-pan 10s linear infinite;
+  }
+}
+
+/* React Flow Controls Customization */
+.react-flow__controls {
+  box-shadow: none;
+}
+.react-flow__controls .react-flow__controls-button {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+.react-flow__controls .react-flow__controls-button:last-of-type {
+  border-bottom: none;
+}
+.react-flow__controls .react-flow__controls-button:hover {
+  background-color: color-mix(
+    in oklab,
+    var(--color-surface) 85%,
+    var(--color-foreground) 15%
+  );
+}
+.react-flow__controls .react-flow__controls-button svg {
+  fill: var(--color-foreground);
+}
+.react-flow__controls .react-flow__controls-button:disabled svg {
+  fill: var(--color-muted);
 }
 
 @theme {
-  --color-background: oklch(0.35 0.03 250);
-  --color-foreground: oklch(0.95 0.01 240);
-  --color-card: oklch(0.22 0.02 240 / 0.8);
-  --color-card-foreground: oklch(0.95 0.01 240);
-  --color-popover: oklch(0.2 0.02 240);
-  --color-popover-foreground: oklch(0.95 0.01 240);
-  --color-primary: oklch(0.7 0.2 260);
-  --color-primary-foreground: oklch(0.1 0.02 240);
-  --color-secondary: oklch(0.3 0.02 240);
-  --color-secondary-foreground: oklch(0.95 0.01 240);
-  --color-muted: oklch(0.3 0.02 240);
-  --color-muted-foreground: oklch(0.65 0.01 240);
-  --color-accent: oklch(0.3 0.02 240);
-  --color-accent-foreground: oklch(0.95 0.01 240);
-  --color-destructive: oklch(0.5 0.2 15);
-  --color-destructive-foreground: oklch(0.95 0.01 240);
-  --color-border: oklch(0.65 0.01 240 / 0.3);
-  --color-input: oklch(1 0 0 / 0.1);
-  --color-ring: oklch(0.7 0.2 260);
-  --color-sidebar: oklch(0.985 0.002 247.839);
-  --color-sidebar-foreground: oklch(0.13 0.028 261.692);
-  --color-sidebar-primary: oklch(0.21 0.034 264.665);
-  --color-sidebar-primary-foreground: oklch(0.985 0.002 247.839);
-  --color-sidebar-accent: oklch(0.967 0.003 264.542);
-  --color-sidebar-accent-foreground: oklch(0.21 0.034 264.665);
-  --color-sidebar-border: oklch(0.928 0.006 264.531);
-  --color-sidebar-ring: oklch(0.707 0.022 261.325);
+  --font-sans: "Geist Sans", system-ui, sans-serif;
+  --font-mono: "Geist Mono", monospace;
+  --selection-active-rgb: 251, 146, 60;
+  --overlay: rgba(0, 0, 0, 0.5);
 
-  --font-family-sans: "Geist Sans", system-ui, sans-serif;
-  --radius: 0.75rem;
+  /* Core colors - Warm brownish dark mode */
+  --color-background: #1c1814;
+  --color-foreground: #f5f1ed;
+  --color-surface: #252018;
+  --color-surface-highlight: #2d2620;
+  --color-muted: #b5a99a;
+  --color-border: #3d3528;
 
-  --animation-shine-pulse: shine-pulse 6s infinite ease-in-out;
-  --animation-border-spin: border-spin 7s linear infinite;
+  /* Popover */
+  --color-popover: #252018;
+  --color-popover-foreground: #f5f1ed;
 
-  @keyframes shine-pulse {
-    0% {
-      background-position: 0% 0%;
-    }
-    50% {
-      background-position: 100% 100%;
-    }
-    100% {
-      background-position: 0% 0%;
-    }
-  }
+  /* Primary - Warm amber/orange */
+  --color-primary: #fb923c;
+  --color-primary-foreground: #000000;
+  --color-primary-hover: #fdba74;
 
-  @keyframes border-spin {
-    100% {
-      transform: rotate(360deg);
-    }
-  }
+  /* Secondary - Warm teal accent */
+  --color-secondary: #2dd4bf;
+  --color-secondary-foreground: #1c1814;
+  --color-secondary-border: #2dd4bf33;
+  --color-secondary-hover-bg: #14b8a6;
 
-  /* Custom animations for professional micro-interactions */
-  @keyframes float {
-    0%,
-    100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-10px);
-    }
-  }
+  /* Merged status - Soft amber */
+  --color-merged-status: #fcd34d;
+  --color-merged-status-foreground: #1c1814;
 
-  @keyframes glow {
-    0%,
-    100% {
-      box-shadow: 0 0 20px rgba(var(--primary), 0.5);
-    }
-    50% {
-      box-shadow: 0 0 40px rgba(var(--primary), 0.8);
-    }
-  }
+  /* Link */
+  --color-link: #fb923c;
 
-  @keyframes slide-in-up {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  /* Accent */
+  --color-accent: #2d2620;
+  --color-accent-foreground: #f5f1ed;
 
-  @keyframes pulse-glow {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 rgba(var(--primary), 0.7);
-    }
-    70% {
-      box-shadow: 0 0 0 10px rgba(var(--primary), 0);
-    }
-  }
-}
+  /* Destructive - Warm coral */
+  --color-destructive: #2a313c;
+  --color-destructive-foreground: #ea5c53;
+  --color-destructive-border: #cdd9e526;
+  --color-destructive-hover-bg: #ad2e2c;
+  --color-destructive-hover-fg: #ffffff;
 
-/* Utility classes for animations - moved outside @theme block */
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
+  /* Special effects */
+  --color-glow-accent: #fb923c;
+  --color-timeline-cursor: #fb923c;
 
-.animate-glow {
-  animation: glow 2s ease-in-out infinite;
-}
-
-.animate-slide-in-up {
-  animation: slide-in-up 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s infinite;
-}
-
-/* Glass morphism effect */
-.glass {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Gradient text utility */
-.gradient-text {
-  background: linear-gradient(
+  /* Gradients */
+  --gradient-primary: linear-gradient(
     135deg,
-    var(--color-primary),
-    var(--color-accent)
+    #fb923c 0%,
+    #fdba74 50%,
+    #fcd34d 100%
   );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  --gradient-secondary: linear-gradient(135deg, #2dd4bf 0%, #14b8a6 100%);
+  --gradient-surface: linear-gradient(135deg, #252018 0%, #2d2620 100%);
+}
+@keyframes background-glow {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2) rotate(5deg);
+    opacity: 0.4;
+  }
 }
 
-/* Smooth scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+@keyframes background-pan {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 60px 60px;
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: var(--color-muted);
-  border-radius: 4px;
+.download-buttons-container button {
+  transition: all 0.3s ease;
+  box-shadow: 0 0 0 0 transparent;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-primary);
-  border-radius: 4px;
+.download-buttons-container button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px 0
+    color-mix(in oklab, var(--color-primary) 50%, transparent);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary) / 80;
+/* Slow spin animation for pending clock */
+@keyframes slow-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
-/* Selection styling */
-::selection {
-  background: oklch(var(--color-foreground) / 0.2);
-  color: var(--color-primary);
-}
-
-/* Focus visible improvements */
-:focus-visible {
-  outline: 2px solid var(--color-ring);
-  outline-offset: 2px;
-}
-
-/* Custom override to remove outline from command input */
-input[cmdk-input]:focus-visible {
-  outline: none;
-}
-
-/* Chart Card specific styling - enforce dark background */
-.bg-gray-800 {
-  background-color: #1f2937 !important;
-}
-
-[data-theme] .bg-gray-800 {
-  background-color: #1f2937 !important;
-}
-
-/* Override Card component background - dark */
-[role="card"],
-.card,
-[data-role="card"] {
-  background-color: #1f2937 !important;
-}
-
-/* Ensure Card component maintains dark background */
-div[role="button"]:has(~ .card),
-.card:hover,
-.card:focus-within {
-  background-color: #1f2937 !important;
-}
-
-/* Shadcn/ui Card component specific styling - dark */
-[data-radix-collection-item] .bg-gray-800,
-.bg-gray-800,
-[data-radix-dialog] .bg-gray-800 {
-  background-color: #1f2937 !important;
-}
-
-/* Force dark background for chart container */
-.bg-gray-800,
-.bg-gray-800 * {
-  background-color: #1f2937 !important;
-  background: #1f2937 !important;
+.animate-slow-spin {
+  animation: slow-spin 3s linear infinite;
 }

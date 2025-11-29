@@ -19,29 +19,29 @@ export const Chart = () => {
     {
       name: "Completed",
       value: stats.completed,
-      color: "#22c55e",
-    }, // green-500
+      color: "#22c55e", // green-500
+    },
     {
       name: "Failed",
       value: stats.failed,
-      color: "#ef4444",
-    }, // red-600
+      color: "#ef4444", // red-500
+    },
     {
       name: "In Progress",
       value: stats.processing,
-      color: "#3b82f6",
-    }, // blue-500
+      color: "#3b82f6", // blue-500
+    },
     {
       name: "In Queue",
       value: stats.pending,
-      color: "#eab308",
-    }, // yellow-500
+      color: "#eab308", // yellow-500
+    },
   ];
 
   return (
-    <Card className="bg-gray-800">
+    <Card className="bg-card/50 backdrop-blur-sm border-white/10">
       <CardHeader>
-        <CardTitle className="text-white">Job Status Overview</CardTitle>
+        <CardTitle>Job Status Overview</CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={400}>
@@ -49,15 +49,14 @@ export const Chart = () => {
             data={chartData}
             margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="name" stroke="#9ca3af" />
-            <YAxis allowDecimals={false} stroke="#9ca3af" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis dataKey="name" stroke="#a1a1aa" />
+            <YAxis allowDecimals={false} stroke="#a1a1aa" />
             <Tooltip
               contentStyle={{
-                backgroundColor: "#111827",
-                borderColor: "#374151",
+                backgroundColor: "#1c1917",
+                borderColor: "rgba(255,255,255,0.1)",
                 color: "#f9fafb",
-                border: "none",
                 borderRadius: "8px",
                 boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.3)",
               }}
@@ -70,13 +69,14 @@ export const Chart = () => {
                 color: "#f9fafb",
                 fontWeight: "500",
               }}
+              cursor={{ fill: "rgba(255,255,255,0.05)" }}
             />
             <Legend
               wrapperStyle={{
                 color: "#f9fafb",
               }}
             />
-            <Bar dataKey="value" name="Jobs">
+            <Bar dataKey="value" name="Jobs" radius={[4, 4, 0, 0]}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}

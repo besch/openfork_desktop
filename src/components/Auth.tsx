@@ -7,9 +7,9 @@ export function Auth() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-background via-background/95 to-background/90 p-4">
+    <div className="flex flex-col items-center justify-center h-screen bg-background p-4">
       <div className="w-full max-w-md">
-        <Card className="bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl hover:shadow-3xl transition-all duration-300">
+        <Card className="bg-card/50 backdrop-blur-sm border-white/10 shadow-2xl hover:shadow-3xl transition-all duration-300">
           <CardHeader className="text-center pb-6">
             <img
               src="./logo.png"
@@ -31,9 +31,10 @@ export function Auth() {
               </p>
             </div>
             <Button
+              variant="primary"
               onClick={handleLogin}
               size="lg"
-              className="w-full h-12 text-base font-medium bg-gradient-to-r from-[#4285F4] to-[#1967D2] hover:from-[#1967D2] hover:to-[#4285F4] text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 active:scale-[0.98]"
+              className="w-full h-12 text-base font-medium mb-4"
             >
               <svg
                 className="w-5 h-5 mr-2"
