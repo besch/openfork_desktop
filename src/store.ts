@@ -80,7 +80,24 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     get().subscribeToJobChanges();
   },
   setSession: async (session) => {
-    // Always clean up the old subscription on any session change.
+    const currentSession = get().session;
+    const isSameUser =
+      currentSession?.user?.id === session?.user?.id && !!session;
+
+    if (isSameUser && session) {
+      // Just update the tokens without resetting subscriptions
+      await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+      supabase.realtime.setAuth(session.access_token);
+      set({ session });
+      // Refresh stats to ensure we're in sync, in case any requests failed during token expiry
+      get().fetchStats();
+      return;
+    }
+
+    // Always clean up the old subscription on any actual session change (login/logout/user switch).
     await get().unsubscribeFromJobChanges();
 
     // Update the Supabase client and the store's state.
