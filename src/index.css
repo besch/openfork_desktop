@@ -46,8 +46,7 @@
     backdrop-filter: blur(12px);
     border: 1px solid rgba(251, 146, 60, 0.15);
     border-radius: 0.75rem;
-    box-shadow:
-      0 4px 6px -1px rgba(0, 0, 0, 0.2),
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2),
       0 2px 4px -1px rgba(0, 0, 0, 0.15),
       inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
   }
@@ -129,8 +128,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background-image:
-      radial-gradient(
+    background-image: radial-gradient(
         circle at 15% 25%,
         var(--color-glow-accent) 0%,
         transparent 15%
@@ -197,10 +195,10 @@
   --color-popover: #252018;
   --color-popover-foreground: #f5f1ed;
 
-  /* Primary - Warm amber/orange */
-  --color-primary: #fb923c;
-  --color-primary-foreground: #000000;
-  --color-primary-hover: #fdba74;
+  /* Primary - Warm green */
+  --color-primary: #15803d;
+  --color-primary-foreground: #ffffff;
+  --color-primary-hover: #16a34a;
 
   /* Secondary - Warm teal accent */
   --color-secondary: #2dd4bf;
