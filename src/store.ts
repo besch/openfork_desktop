@@ -42,6 +42,9 @@ interface DGNClientState {
   unsubscribeFromJobChanges: () => Promise<void>;
   setIsLoading: (loading: boolean) => void;
   setSubscriptionPolicy: (policy: JobPolicy, ids: string) => Promise<void>;
+  setJobPolicy: (policy: JobPolicy) => void;
+  loadPersistentSettings: () => Promise<void>;
+  savePersistentSettings: () => Promise<void>;
 }
 
 export const useClientStore = create<DGNClientState>((set, get) => ({
@@ -73,6 +76,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   clearLogs: () => set({ logs: [] }),
   setTheme: (theme) => set({ theme }),
   setIsLoading: (loading) => set({ isLoading: loading }),
+  setJobPolicy: (policy) => set({ jobPolicy: policy }),
   setSelectedProjects: (projects) => set({ selectedProjects: projects }),
   setSubscriptionPolicy: async (policy, ids) => {
     await get().unsubscribeFromJobChanges();
@@ -249,13 +253,9 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
     const channel = supabase
       .channel(channelName)
-      .on(
-        "postgres_changes",
-        postgresChangesOptions,
-        () => {
-          fetchStats();
-        }
-      )
+      .on("postgres_changes", postgresChangesOptions, () => {
+        fetchStats();
+      })
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           // Fetch initial stats once subscribed.
@@ -272,6 +272,45 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     if (jobSubscription) {
       await supabase.removeChannel(jobSubscription);
       set({ jobSubscription: null });
+    }
+  },
+  loadPersistentSettings: async () => {
+    try {
+      const settings = await window.electronAPI.loadSettings();
+      if (settings) {
+        // Validate the loaded settings before applying them
+        const validatedJobPolicy: JobPolicy = (
+          ["all", "mine", "project", "users"] as JobPolicy[]
+        ).includes(settings.jobPolicy as JobPolicy)
+          ? (settings.jobPolicy as JobPolicy)
+          : "mine";
+
+        const validatedTheme: Theme = (
+          ["dark", "light", "system"] as Theme[]
+        ).includes(settings.theme as Theme)
+          ? (settings.theme as Theme)
+          : "dark";
+
+        set({
+          jobPolicy: validatedJobPolicy,
+          theme: validatedTheme,
+        });
+        console.log("Loaded persistent settings:", settings);
+      }
+    } catch (error) {
+      console.error("Error loading persistent settings:", error);
+    }
+  },
+  savePersistentSettings: async () => {
+    try {
+      const { jobPolicy, theme } = get();
+      await window.electronAPI.saveSettings({
+        jobPolicy,
+        theme,
+      });
+      console.log("Saved persistent settings:", { jobPolicy, theme });
+    } catch (error) {
+      console.error("Error saving persistent settings:", error);
     }
   },
 }));

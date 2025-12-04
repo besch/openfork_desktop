@@ -231,6 +231,29 @@ ipcMain.on("window:set-closable", (event, closable) => {
 
 ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
 
+// Add persistence handlers for job policy settings
+ipcMain.handle("load-settings", async () => {
+  try {
+    const settings = store.get("appSettings") || {};
+    console.log("Loaded settings from store:", settings);
+    return settings;
+  } catch (error) {
+    console.error("Error loading settings:", error);
+    return null;
+  }
+});
+
+ipcMain.handle("save-settings", async (event, settings) => {
+  try {
+    console.log("Saving settings to store:", settings);
+    store.set("appSettings", settings);
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving settings:", error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle("search:users", async (event, term) => {
   if (!session) return { success: false, error: "Not authenticated" };
   try {
@@ -379,7 +402,7 @@ ipcMain.handle("search:general", async (event, query) => {
   try {
     const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/search`);
     requestUrl.searchParams.set("q", query);
-    
+
     const request = net.request({
       method: "GET",
       url: requestUrl.toString(),
