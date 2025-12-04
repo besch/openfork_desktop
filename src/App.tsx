@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useClientStore } from "./store";
+import type { Session } from "@supabase/supabase-js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
 import { LogViewer } from "@/components/LogViewer";
@@ -18,12 +19,42 @@ import {
 import { Button } from "@/components/ui/button";
 
 function App() {
-  const { status, session, isLoading } = useClientStore();
+  const { status, session, isLoading, setSession } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [forceRefreshKey, setForceRefreshKey] = useState(0);
 
   const handleLogout = () => {
     window.electronAPI.logout();
   };
+
+  // Handle force refresh from main process
+  useEffect(() => {
+    const handleForceRefresh = () => {
+      console.log("Received force refresh request from main process");
+      setForceRefreshKey((prev) => prev + 1);
+      // Force recheck of session
+      window.electronAPI
+        .getSession()
+        .then((currentSession: Session | null) => {
+          if (!currentSession) {
+            setSession(null);
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Failed to get current session during force refresh:",
+            error
+          );
+          setSession(null);
+        });
+    };
+
+    window.electronAPI.onForceRefresh(handleForceRefresh);
+
+    return () => {
+      // No cleanup needed for simple force refresh listener
+    };
+  }, [setSession]);
 
   if (isLoading) {
     return (

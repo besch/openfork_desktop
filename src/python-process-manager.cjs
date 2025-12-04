@@ -59,10 +59,7 @@ class PythonProcessManager {
       (event, session) => {
         if (event === "TOKEN_REFRESHED" && session) {
           console.log("Token refreshed proactively. Pushing update to Python.");
-          this._sendTokensToPython(
-            session.access_token,
-            session.refresh_token
-          );
+          this._sendTokensToPython(session.access_token, session.refresh_token);
         } else if (event === "SIGNED_OUT") {
           console.log("User signed out. Stopping Python client.");
           this.stop();
@@ -156,7 +153,7 @@ class PythonProcessManager {
               // Force a refresh since the client reported the current token is invalid
               const { data: freshData, error: refreshError } =
                 await this.supabase.auth.refreshSession();
-              
+
               if (refreshError || !freshData.session) {
                 console.error(
                   "Could not recover session. Forcing logout.",
@@ -164,6 +161,15 @@ class PythonProcessManager {
                 );
                 await this.stop();
                 await this.supabase.auth.signOut();
+
+                // Notify the renderer process about the auth failure
+                if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                  this.mainWindow.webContents.send("auth:session", null);
+                  this.mainWindow.webContents.send("openfork_client:log", {
+                    type: "stderr",
+                    message: "Authentication failed. Please log in again.",
+                  });
+                }
               } else {
                 console.log(
                   "Recovered session via refresh. Pushing new tokens to Python."
@@ -172,6 +178,14 @@ class PythonProcessManager {
                   freshData.session.access_token,
                   freshData.session.refresh_token
                 );
+
+                // Notify renderer that tokens were refreshed successfully
+                if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                  this.mainWindow.webContents.send(
+                    "auth:session",
+                    freshData.session
+                  );
+                }
               }
             })();
             return; // Handled

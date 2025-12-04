@@ -11,14 +11,11 @@ import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
 
-type Theme = "dark" | "light" | "system";
-
 interface DGNClientState {
   status: DGNClientStatus;
   logs: LogEntry[];
   stats: JobStats;
   providerId: string | null;
-  theme: Theme;
   session: Session | null;
   jobSubscription: RealtimeChannel | null;
   services: Array<{ value: string; label: string }>;
@@ -32,7 +29,6 @@ interface DGNClientState {
   setStats: (stats: JobStats) => void;
   setProviderId: (id: string | null) => void;
   clearLogs: () => void;
-  setTheme: (theme: Theme) => void;
   setSession: (session: Session | null) => Promise<void>;
   fetchStats: () => Promise<void>;
   fetchServices: () => Promise<void>;
@@ -74,7 +70,6 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setStats: (stats) => set({ stats }),
   setProviderId: (id) => set({ providerId: id }),
   clearLogs: () => set({ logs: [] }),
-  setTheme: (theme) => set({ theme }),
   setIsLoading: (loading) => set({ isLoading: loading }),
   setJobPolicy: (policy) => set({ jobPolicy: policy }),
   setSelectedProjects: (projects) => set({ selectedProjects: projects }),
@@ -263,8 +258,34 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         }
         if (err) {
           console.error(`store.ts: Subscription error on ${channelName}:`, err);
+          // If subscription fails due to auth issues, attempt to recover
+          if (
+            err.message.includes("JWT") ||
+            err.message.includes("auth") ||
+            err.message.includes("token")
+          ) {
+            console.warn(
+              "Subscription failed due to authentication issues, attempting recovery..."
+            );
+            // Force a session refresh
+            window.electronAPI
+              .getSession()
+              .then((currentSession: Session | null) => {
+                if (!currentSession) {
+                  console.error(
+                    "No valid session available, unsubscribing from job changes"
+                  );
+                  get().unsubscribeFromJobChanges();
+                }
+              })
+              .catch((error) => {
+                console.error("Failed to get current session:", error);
+                get().unsubscribeFromJobChanges();
+              });
+          }
         }
       });
+
     set({ jobSubscription: channel });
   },
   unsubscribeFromJobChanges: async () => {
@@ -285,15 +306,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
           ? (settings.jobPolicy as JobPolicy)
           : "mine";
 
-        const validatedTheme: Theme = (
-          ["dark", "light", "system"] as Theme[]
-        ).includes(settings.theme as Theme)
-          ? (settings.theme as Theme)
-          : "dark";
-
         set({
           jobPolicy: validatedJobPolicy,
-          theme: validatedTheme,
         });
         console.log("Loaded persistent settings:", settings);
       }
@@ -303,12 +317,11 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   },
   savePersistentSettings: async () => {
     try {
-      const { jobPolicy, theme } = get();
+      const { jobPolicy } = get();
       await window.electronAPI.saveSettings({
         jobPolicy,
-        theme,
       });
-      console.log("Saved persistent settings:", { jobPolicy, theme });
+      console.log("Saved persistent settings:", { jobPolicy });
     } catch (error) {
       console.error("Error saving persistent settings:", error);
     }

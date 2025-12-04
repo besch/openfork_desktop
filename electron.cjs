@@ -50,6 +50,17 @@ supabase.auth.onAuthStateChange((event, newSession) => {
   // Notify the renderer process of the session change
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("auth:session", session);
+
+    // If session is lost and we couldn't refresh, force UI update
+    if (
+      event === "SIGNED_OUT" ||
+      (event === "TOKEN_REFRESHED" && !newSession)
+    ) {
+      console.warn(
+        "Authentication state changed to unauthenticated, forcing UI refresh"
+      );
+      mainWindow.webContents.send("auth:force-refresh");
+    }
   }
 });
 
@@ -198,6 +209,11 @@ app.on("open-url", (event, url) => {
 // --- IPC HANDLERS ---
 ipcMain.handle("auth:google-login", googleLogin);
 ipcMain.handle("auth:logout", logout);
+ipcMain.on("auth:force-refresh", () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:force-refresh");
+  }
+});
 ipcMain.handle(
   "auth:set-session-from-tokens",
   async (event, accessToken, refreshToken) => {
@@ -230,6 +246,9 @@ ipcMain.on("window:set-closable", (event, closable) => {
 });
 
 ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
+ipcMain.handle("get-session", async () => {
+  return session;
+});
 
 // Add persistence handlers for job policy settings
 ipcMain.handle("load-settings", async () => {

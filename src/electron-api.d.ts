@@ -20,6 +20,8 @@ declare global {
         accessToken: string,
         refreshToken: string
       ) => Promise<{ session: Session | null; error: AuthError | null }>;
+      getSession: () => Promise<Session | null>;
+      onForceRefresh: (callback: () => void) => void;
       setWindowClosable: (closable: boolean) => void;
       getOrchestratorApiUrl: () => Promise<string>;
       removeAllListeners: (
@@ -46,7 +48,7 @@ declare global {
       } | null>;
       saveSettings: (settings: {
         jobPolicy: string;
-        theme: string;
+        theme?: string;
       }) => Promise<void>;
     };
   }

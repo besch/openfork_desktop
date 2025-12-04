@@ -42,16 +42,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setWindowClosable: (closable) =>
     ipcRenderer.send("window:set-closable", closable),
 
+  // Force refresh handling
+  onForceRefresh: (callback) =>
+    ipcRenderer.on("auth:force-refresh", () => callback()),
+
+  // Session management
+  getSession: () => ipcRenderer.invoke("get-session"),
+
   // Utility to remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 
   // Search
   searchUsers: (term) => ipcRenderer.invoke("search:users", term),
   searchProjects: (term) => ipcRenderer.invoke("search:projects", term),
-  
+
   // Config
   fetchConfig: () => ipcRenderer.invoke("fetch:config"),
-  
+
   // General Search
   searchGeneral: (query) => ipcRenderer.invoke("search:general", query),
 });
