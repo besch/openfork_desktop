@@ -338,7 +338,7 @@ export const Dashboard = memo(() => {
           title="Failed"
           value={stats.failed}
           icon={<XCircle size={20} className="text-muted-foreground" />}
-          className="text-destructive"
+          className="text-destructive-foreground"
         />
       </div>
     </div>
