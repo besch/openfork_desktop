@@ -12,6 +12,8 @@ This app connects your computer to [openfork.video](https://openfork.video) — 
 
 **Zero Setup**: We distinguish ourselves by handling the complex AI models (Wan2.1, Hunyuan, etc) and Docker containers automatically behind the scenes. You just click "Start".
 
+The app wraps our open-source [Python Client](https://github.com/besch/openfork_client), ensuring you run the exact same verified code as the rest of the network.
+
 ---
 
 ## For Developers
