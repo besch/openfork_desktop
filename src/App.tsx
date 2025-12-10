@@ -8,6 +8,7 @@ import { Auth } from "@/components/Auth";
 import { Profile } from "@/components/Profile";
 import { Chart } from "@/components/Chart";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
+import { Settings as SettingsComponent } from "@/components/Settings";
 import {
   LayoutDashboard,
   Terminal,
@@ -15,6 +16,7 @@ import {
   User,
   Loader2,
   BarChart as BarChartIcon,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -77,7 +79,7 @@ function App() {
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
-      <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="min-h-screen bg-background p-4 md:p-8" key={forceRefreshKey}>
         <div className="max-w-7xl mx-auto">
           <header className="flex items-center justify-between mb-8 p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-white/10 shadow-lg">
             <div className="flex items-center gap-4">
@@ -123,6 +125,10 @@ function App() {
                 <User className="mr-2" size={16} />
                 Profile
               </TabsTrigger>
+              <TabsTrigger value="settings">
+                <SettingsIcon className="mr-2" size={16} />
+                Settings
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="dashboard">
@@ -136,6 +142,9 @@ function App() {
             </TabsContent>
             <TabsContent value="profile">
               <Profile />
+            </TabsContent>
+            <TabsContent value="settings">
+              <SettingsComponent />
             </TabsContent>
           </Tabs>
         </div>

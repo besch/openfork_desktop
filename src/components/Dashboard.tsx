@@ -177,6 +177,7 @@ export const Dashboard = memo(() => {
     setJobPolicy,
     loadPersistentSettings,
     savePersistentSettings,
+    dockerProgress,
   } = useClientStore();
   const [service, setService] = useState("auto");
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
@@ -259,6 +260,27 @@ export const Dashboard = memo(() => {
           </Button>
         </div>
       </header>
+
+      {/* Docker Download Progress Indicator */}
+      {dockerProgress && (status === "starting" || status === "running") && (
+        <Card className="bg-card/50 backdrop-blur-sm border-white/10 animate-in fade-in slide-in-from-top-4 duration-300">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Loader className="h-4 w-4 animate-spin text-primary shrink-0" />
+              <div className="flex flex-col gap-1 w-full min-w-0">
+                 <div className="flex justify-between items-center text-sm">
+                    <span className="font-medium text-foreground truncate">
+                      {dockerProgress.status} {dockerProgress.id ? `(${dockerProgress.id})` : ''}
+                    </span>
+                    <span className="text-muted-foreground whitespace-nowrap ml-2">
+                      {dockerProgress.progress || ''}
+                    </span>
+                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <AnimatePresence>
         {isSettingsOpen && (

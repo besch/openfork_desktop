@@ -1,4 +1,11 @@
-import type { LogEntry, DGNClientStatus, Profile, Project } from "./types";
+import type {
+  LogEntry,
+  DGNClientStatus,
+  Profile,
+  Project,
+  DockerProgress,
+  DockerResources,
+} from "./types";
 import type { Session, AuthError } from "@supabase/supabase-js";
 
 declare global {
@@ -12,6 +19,15 @@ declare global {
       stopClient: () => void;
       onLog: (callback: (log: LogEntry) => void) => void;
       onStatusChange: (callback: (status: DGNClientStatus) => void) => void;
+      onProgress: (callback: (progress: DockerProgress) => void) => void;
+      onResources: (callback: (resources: DockerResources) => void) => void;
+      listResources: () => void;
+      cleanup: (
+        removeImages: boolean,
+        removeContainers: boolean,
+        containerIds?: string[],
+        imageIds?: string[]
+      ) => void;
       loginWithGoogle: () => void;
       logout: () => void;
       onSession: (callback: (session: Session | null) => void) => void;

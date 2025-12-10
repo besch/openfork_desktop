@@ -23,6 +23,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("openfork_client:status", (_event, value) =>
       callback(value)
     ),
+  onProgress: (callback) =>
+    ipcRenderer.on("openfork_client:progress", (_event, value) =>
+      callback(value)
+    ),
+  onResources: (callback) =>
+    ipcRenderer.on("openfork_client:resources", (_event, value) =>
+      callback(value)
+    ),
+
+  // Cleanup
+  listResources: () => ipcRenderer.send("openfork_client:list-resources"),
+  cleanup: (removeImages, removeContainers, containerIds, imageIds) =>
+    ipcRenderer.send(
+      "openfork_client:cleanup",
+      removeImages,
+      removeContainers,
+      containerIds,
+      imageIds
+    ),
 
   // Authentication
   loginWithGoogle: () => ipcRenderer.invoke("auth:google-login"),

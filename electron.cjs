@@ -239,6 +239,23 @@ ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
 });
 
+ipcMain.on(
+  "openfork_client:cleanup",
+  (event, removeImages, removeContainers, containerIds, imageIds) => {
+    if (pythonManager)
+      pythonManager.cleanup(
+        removeImages,
+        removeContainers,
+        containerIds,
+        imageIds
+      );
+  }
+);
+
+ipcMain.on("openfork_client:list-resources", () => {
+  if (pythonManager) pythonManager.listResources();
+});
+
 ipcMain.on("window:set-closable", (event, closable) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setClosable(closable);

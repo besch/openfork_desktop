@@ -189,6 +189,16 @@ class PythonProcessManager {
               }
             })();
             return; // Handled
+          } else if (message.type === "docker_progress") {
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send("openfork_client:progress", message);
+            }
+            return; // Handled
+          } else if (message.type === "docker_resources") {
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send("openfork_client:resources", message);
+            }
+            return; // Handled
           }
         } catch (e) {
           // Not a JSON message, treat as regular log
@@ -252,6 +262,58 @@ class PythonProcessManager {
     } catch (err) {
       console.error(`Error spawning Python process: ${err}`);
       this.mainWindow.webContents.send("openfork_client:status", "error");
+    }
+  }
+
+  cleanup(removeImages, removeContainers, containerIds = [], imageIds = []) {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.error(
+        "Cannot send cleanup command: Python process not running or stdin not writable."
+      );
+      // If process isn't running, we might need to start it in a temporary mode to clean up?
+      // Or just return error for now. 
+      // User likely wants to clean up while app is running or idle.
+      // If not running, maybe we can spawn it with a specific flag?
+      // For now, assume it must be running (the user can start it).
+      return; 
+    }
+
+    const command = {
+      type: "CLEANUP",
+      payload: {
+        remove_images: removeImages,
+        remove_containers: removeContainers,
+        container_ids: containerIds,
+        image_ids: imageIds
+      },
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Successfully sent cleanup command to Python process.");
+    } catch (error) {
+      console.error("Error writing to Python process stdin:", error);
+    }
+  }
+
+  listResources() {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.error(
+        "Cannot send list resources command: Python process not running or stdin not writable."
+      );
+      return; 
+    }
+
+    const command = {
+      type: "LIST_RESOURCES",
+      payload: {},
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Successfully sent list resources command to Python process.");
+    } catch (error) {
+      console.error("Error writing to Python process stdin:", error);
     }
   }
 

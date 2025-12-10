@@ -60,3 +60,31 @@ export interface Project {
 }
 
 export type JobPolicy = "all" | "mine" | "project" | "users";
+
+export interface DockerProgress {
+  type: "docker_progress";
+  status: string;
+  progress?: string;
+  id?: string;
+  progressDetail?: { current?: number; total?: number; [key: string]: unknown };
+}
+
+export interface DockerContainer {
+  id: string;
+  name: string;
+  status: string;
+  image: string;
+}
+
+export interface DockerImage {
+  id: string;
+  tags: string[];
+  size: number;
+  created: string;
+}
+
+export interface DockerResources {
+  type: "docker_resources";
+  containers: DockerContainer[];
+  images: DockerImage[];
+}

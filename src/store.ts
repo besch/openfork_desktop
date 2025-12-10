@@ -6,6 +6,7 @@ import type {
   JobStats,
   Project,
   JobPolicy,
+  DockerProgress,
 } from "./types";
 import { supabase } from "./supabase";
 
@@ -24,11 +25,13 @@ interface DGNClientState {
   isLoading: boolean;
   jobPolicy: JobPolicy;
   allowedIds: string;
+  dockerProgress: DockerProgress | null;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
   setStats: (stats: JobStats) => void;
   setProviderId: (id: string | null) => void;
   clearLogs: () => void;
+  setDockerProgress: (progress: DockerProgress | null) => void;
   setSession: (session: Session | null) => Promise<void>;
   fetchStats: () => Promise<void>;
   fetchServices: () => Promise<void>;
@@ -57,7 +60,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   isLoading: true,
   jobPolicy: "mine",
   allowedIds: "",
-  setStatus: (status) => set({ status }),
+  dockerProgress: null,
+  setStatus: (status) => set({ status, dockerProgress: null }),
   addLog: (log) => {
     const newLog: LogEntry = {
       ...log,
@@ -70,6 +74,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setStats: (stats) => set({ stats }),
   setProviderId: (id) => set({ providerId: id }),
   clearLogs: () => set({ logs: [] }),
+  setDockerProgress: (progress) => set({ dockerProgress: progress }),
   setIsLoading: (loading) => set({ isLoading: loading }),
   setJobPolicy: (policy) => set({ jobPolicy: policy }),
   setSelectedProjects: (projects) => set({ selectedProjects: projects }),
@@ -342,6 +347,8 @@ function initializeIpcListeners() {
   });
 
   window.electronAPI.onLog(addLog);
+
+  window.electronAPI.onProgress(useClientStore.getState().setDockerProgress);
 
   window.electronAPI.onSession(async (session) => {
     await setSession(session);
