@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCw, Trash2, Box, Image as ImageIcon } from "lucide-react";
 import type { DockerResources } from "@/types";
+import { useClientStore } from "@/store";
 
 export function Storage() {
+  const status = useClientStore((state) => state.status);
   const [resources, setResources] = useState<DockerResources | null>(null);
   const [selectedContainers, setSelectedContainers] = useState<Set<string>>(new Set());
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
@@ -15,11 +17,17 @@ export function Storage() {
       setResources(data);
       setIsLoading(false);
     });
-    
-    fetchResources();
   }, []);
 
+  useEffect(() => {
+    if (status === "running") {
+      fetchResources();
+    }
+  }, [status]);
+
   const fetchResources = () => {
+    if (status !== "running") return;
+    
     setIsLoading(true);
     window.electronAPI.listResources();
     
@@ -80,6 +88,23 @@ export function Storage() {
       }
   };
 
+  if (status !== "running" && status !== "starting") {
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8 space-y-4">
+        <div className="p-4 rounded-full bg-muted/20">
+          <Box className="h-12 w-12 text-muted-foreground opacity-50" />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-xl font-semibold">Client Stopped</h3>
+          <p className="text-muted-foreground max-w-sm mx-auto">
+            The DGN Client must be running to manage Docker resources. 
+            Please start the client from the Dashboard.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <Card className="bg-card/50 backdrop-blur-sm border-white/10">
@@ -88,7 +113,7 @@ export function Storage() {
             <CardTitle>Docker Resources</CardTitle>
             <CardDescription>Manage and clean up Docker containers and images.</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchResources} disabled={isLoading}>
+          <Button variant="outline" size="sm" onClick={fetchResources} disabled={isLoading || status !== "running"}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>

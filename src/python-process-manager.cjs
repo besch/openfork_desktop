@@ -152,6 +152,7 @@ class PythonProcessManager {
         cwd: cwd,
         stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
+        shell: !app.isPackaged && process.platform === "win32",
       });
 
       this.mainWindow.webContents.send("openfork_client:status", "starting");
