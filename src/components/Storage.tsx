@@ -1,13 +1,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { RefreshCw, Trash2, Box, Image as ImageIcon } from "lucide-react";
 import type { DockerResources } from "@/types";
 
-export function Settings() {
-  const [removeImages, setRemoveImages] = useState(false);
-  const [removeContainers, setRemoveContainers] = useState(false);
+export function Storage() {
   const [resources, setResources] = useState<DockerResources | null>(null);
   const [selectedContainers, setSelectedContainers] = useState<Set<string>>(new Set());
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
@@ -25,6 +22,14 @@ export function Settings() {
   const fetchResources = () => {
     setIsLoading(true);
     window.electronAPI.listResources();
+    
+    // Safety timeout
+    setTimeout(() => {
+      setIsLoading(current => {
+          if (current) console.warn("Resource fetch timed out");
+          return false;
+      });
+    }, 5000);
   };
 
   const toggleContainer = (id: string, checked: boolean) => {
@@ -41,28 +46,38 @@ export function Settings() {
     setSelectedImages(newSelected);
   };
 
-  const handleCleanup = () => {
-    const hasGlobal = removeImages || removeContainers;
-    const hasSelection = selectedContainers.size > 0 || selectedImages.size > 0;
-
-    if (!hasGlobal && !hasSelection) {
+  const handleCleanupSelected = () => {
+    if (selectedContainers.size === 0 && selectedImages.size === 0) {
       alert("Please select at least one item to clean up.");
       return;
     }
 
-    if (confirm("Are you sure you want to remove the selected resources? This action cannot be undone.")) {
+    if (confirm(`Are you sure you want to remove ${selectedContainers.size} containers and ${selectedImages.size} images? This action cannot be undone.`)) {
       window.electronAPI.cleanup(
-        removeImages, 
-        removeContainers, 
+        false, 
+        false, 
         Array.from(selectedContainers), 
         Array.from(selectedImages)
       );
       alert("Cleanup started. Check logs for details.");
-      // Clear selections and refresh after a delay?
       setSelectedContainers(new Set());
       setSelectedImages(new Set());
       setTimeout(fetchResources, 2000);
     }
+  };
+
+  const handleBulkCleanup = (type: 'containers' | 'images') => {
+      const isContainers = type === 'containers';
+      const label = isContainers ? 'ALL OpenFork Containers' : 'ALL OpenFork Images';
+      if (confirm(`Are you sure you want to remove ${label}? This will delete ALL resources of this type created by OpenFork and cannot be undone.`)) {
+          window.electronAPI.cleanup(
+              !isContainers, // removeImages (if type is images, this is TRUE)
+              isContainers,  // removeContainers
+              [], []
+          );
+          alert("Cleanup started. Check logs for details.");
+          setTimeout(fetchResources, 2000);
+      }
   };
 
   return (
@@ -79,28 +94,18 @@ export function Settings() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Global Controls */}
-          <div className="flex flex-col gap-4 p-4 rounded-lg bg-muted/20 border border-white/5">
-             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Bulk Actions</h3>
-             <div className="flex items-center space-x-2">
-                <Switch
-                  id="all-containers"
-                  checked={removeContainers}
-                  onCheckedChange={setRemoveContainers}
-                />
-                <label htmlFor="all-containers" className="text-sm font-medium">
-                  Remove All OpenFork Containers
-                </label>
-             </div>
-             <div className="flex items-center space-x-2">
-                <Switch
-                  id="all-images"
-                  checked={removeImages}
-                  onCheckedChange={setRemoveImages}
-                />
-                <label htmlFor="all-images" className="text-sm font-medium">
-                  Remove All OpenFork Images
-                </label>
+          {/* Bulk Actions */}
+          <div className="flex flex-col gap-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+             <h3 className="font-semibold text-sm text-destructive uppercase tracking-wider">Destructive Zone</h3>
+             <div className="flex flex-col sm:flex-row gap-4">
+                <Button variant="destructive" className="flex-1" onClick={() => handleBulkCleanup('containers')}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete All Containers
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={() => handleBulkCleanup('images')}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete All Images
+                </Button>
              </div>
           </div>
 
@@ -122,7 +127,7 @@ export function Settings() {
                     <div className="text-sm text-muted-foreground text-center py-8">No containers found</div>
                 ) : (
                     resources.containers.map(container => (
-                        <div key={container.id} className={`flex flex-col gap-2 p-3 rounded-md border text-sm transition-colors ${selectedContainers.has(container.id) || removeContainers ? 'bg-destructive/10 border-destructive/20' : 'bg-background/40 border-white/5'}`}>
+                        <div key={container.id} className={`flex flex-col gap-2 p-3 rounded-md border text-sm transition-colors ${selectedContainers.has(container.id) ? 'bg-primary/10 border-primary/20' : 'bg-background/40 border-white/5'}`}>
                            <div className="flex items-start justify-between gap-2">
                                <div className="flex flex-col gap-0.5 overflow-hidden">
                                    <span className="font-medium truncate" title={container.name}>{container.name}</span>
@@ -131,8 +136,7 @@ export function Settings() {
                                <input 
                                  type="checkbox"
                                  className="mt-1 h-4 w-4 rounded border-gray-300 bg-background text-primary focus:ring-2 focus:ring-primary"
-                                 checked={removeContainers || selectedContainers.has(container.id)}
-                                 disabled={removeContainers}
+                                 checked={selectedContainers.has(container.id)}
                                  onChange={(e) => toggleContainer(container.id, e.target.checked)}
                                />
                            </div>
@@ -164,7 +168,7 @@ export function Settings() {
                     <div className="text-sm text-muted-foreground text-center py-8">No images found</div>
                 ) : (
                     resources.images.map(image => (
-                        <div key={image.id} className={`flex flex-col gap-2 p-3 rounded-md border text-sm transition-colors ${selectedImages.has(image.id) || removeImages ? 'bg-destructive/10 border-destructive/20' : 'bg-background/40 border-white/5'}`}>
+                        <div key={image.id} className={`flex flex-col gap-2 p-3 rounded-md border text-sm transition-colors ${selectedImages.has(image.id) ? 'bg-primary/10 border-primary/20' : 'bg-background/40 border-white/5'}`}>
                            <div className="flex items-start justify-between gap-2">
                                <div className="flex flex-col gap-0.5 overflow-hidden">
                                    <span className="font-medium truncate" title={image.tags[0]}>{image.tags[0] || '<none>'}</span>
@@ -173,8 +177,7 @@ export function Settings() {
                                <input 
                                  type="checkbox"
                                  className="mt-1 h-4 w-4 rounded border-gray-300 bg-background text-primary focus:ring-2 focus:ring-primary"
-                                 checked={removeImages || selectedImages.has(image.id)}
-                                 disabled={removeImages}
+                                 checked={selectedImages.has(image.id)}
                                  onChange={(e) => toggleImage(image.id, e.target.checked)}
                                />
                            </div>
@@ -190,11 +193,11 @@ export function Settings() {
           </div>
 
           <Button 
-            variant="destructive" 
+            variant="secondary" 
             size="lg"
             className="w-full mt-4"
-            onClick={handleCleanup}
-            disabled={(!removeImages && !removeContainers && selectedContainers.size === 0 && selectedImages.size === 0)}
+            onClick={handleCleanupSelected}
+            disabled={(selectedContainers.size === 0 && selectedImages.size === 0)}
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Clean Up Selected Resources

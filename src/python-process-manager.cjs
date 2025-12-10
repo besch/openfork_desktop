@@ -129,11 +129,26 @@ class PythonProcessManager {
     }
 
     console.log(`Starting Python backend for '${service}' service...`);
-    const cwd = app.isPackaged ? pythonExecutableDir : dgnClientRootDir;
+    let command;
+    let finalArgs = [...args];
+    let cwd;
+
+    if (app.isPackaged) {
+      command = this.getPythonExecutablePath();
+      cwd = path.dirname(command);
+    } else {
+      // Run from source in dev mode
+      command = process.platform === "win32" ? "python" : "python3";
+      const scriptPath = path.resolve(__dirname, "../../client/cli.py");
+      finalArgs.unshift(scriptPath);
+      cwd = path.dirname(scriptPath);
+      console.log("Running Python from source:", scriptPath);
+    }
+
     console.log(`Using CWD: ${cwd}`);
 
     try {
-      this.pythonProcess = spawn(pythonExecutablePath, args, {
+      this.pythonProcess = spawn(command, finalArgs, {
         cwd: cwd,
         stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr
         env: { ...process.env, PYTHONUNBUFFERED: "1" },

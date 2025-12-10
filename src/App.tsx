@@ -8,7 +8,7 @@ import { Auth } from "@/components/Auth";
 import { Profile } from "@/components/Profile";
 import { Chart } from "@/components/Chart";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
-import { Settings as SettingsComponent } from "@/components/Settings";
+import { Storage } from "@/components/Storage";
 import {
   LayoutDashboard,
   Terminal,
@@ -125,9 +125,9 @@ function App() {
                 <User className="mr-2" size={16} />
                 Profile
               </TabsTrigger>
-              <TabsTrigger value="settings">
+              <TabsTrigger value="storage">
                 <SettingsIcon className="mr-2" size={16} />
-                Settings
+                Storage
               </TabsTrigger>
             </TabsList>
 
@@ -143,8 +143,8 @@ function App() {
             <TabsContent value="profile">
               <Profile />
             </TabsContent>
-            <TabsContent value="settings">
-              <SettingsComponent />
+            <TabsContent value="storage">
+              <Storage />
             </TabsContent>
           </Tabs>
         </div>
