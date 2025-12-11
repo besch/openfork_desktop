@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 function App() {
   const { status, session, isLoading, setSession } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [forceRefreshKey, setForceRefreshKey] = useState(0);
+  const [, setForceRefreshKey] = useState(0);
 
   const handleLogout = () => {
     window.electronAPI.logout();
