@@ -24,6 +24,8 @@ interface DGNClientState {
   isLoading: boolean;
   jobPolicy: JobPolicy;
   allowedIds: string;
+  comfyuiInstallDir: string;
+  comfyuiUrl: string;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
   setStats: (stats: JobStats) => void;
@@ -39,6 +41,8 @@ interface DGNClientState {
   setIsLoading: (loading: boolean) => void;
   setSubscriptionPolicy: (policy: JobPolicy, ids: string) => Promise<void>;
   setJobPolicy: (policy: JobPolicy) => void;
+  setComfyuiInstallDir: (dir: string) => void;
+  setComfyuiUrl: (url: string) => void;
   loadPersistentSettings: () => Promise<void>;
   savePersistentSettings: () => Promise<void>;
 }
@@ -57,6 +61,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   isLoading: true,
   jobPolicy: "mine",
   allowedIds: "",
+  comfyuiInstallDir: "",
+  comfyuiUrl: "http://127.0.0.1:8188",
   setStatus: (status) => set({ status }),
   addLog: (log) => {
     const newLog: LogEntry = {
@@ -73,6 +79,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setIsLoading: (loading) => set({ isLoading: loading }),
   setJobPolicy: (policy) => set({ jobPolicy: policy }),
   setSelectedProjects: (projects) => set({ selectedProjects: projects }),
+  setComfyuiInstallDir: (dir) => set({ comfyuiInstallDir: dir }),
+  setComfyuiUrl: (url) => set({ comfyuiUrl: url }),
   setSubscriptionPolicy: async (policy, ids) => {
     await get().unsubscribeFromJobChanges();
     set({ jobPolicy: policy, allowedIds: ids });
@@ -308,6 +316,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
         set({
           jobPolicy: validatedJobPolicy,
+          comfyuiInstallDir: settings.comfyuiInstallDir || "",
+          comfyuiUrl: settings.comfyuiUrl || "http://127.0.0.1:8188",
         });
         console.log("Loaded persistent settings:", settings);
       }
@@ -317,11 +327,13 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   },
   savePersistentSettings: async () => {
     try {
-      const { jobPolicy } = get();
+      const { jobPolicy, comfyuiInstallDir, comfyuiUrl } = get();
       await window.electronAPI.saveSettings({
         jobPolicy,
+        comfyuiInstallDir,
+        comfyuiUrl,
       });
-      console.log("Saved persistent settings:", { jobPolicy });
+      console.log("Saved persistent settings:", { jobPolicy, comfyuiInstallDir, comfyuiUrl });
     } catch (error) {
       console.error("Error saving persistent settings:", error);
     }

@@ -232,8 +232,8 @@ ipcMain.handle(
   }
 );
 
-ipcMain.on("openfork_client:start", (event, service, policy, allowedIds) => {
-  if (pythonManager) pythonManager.start(service, policy, allowedIds);
+ipcMain.on("openfork_client:start", (event, service, policy, allowedIds, comfyuiSettings) => {
+  if (pythonManager) pythonManager.start(service, policy, allowedIds, comfyuiSettings);
 });
 ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
@@ -415,6 +415,62 @@ ipcMain.handle("fetch:config", async () => {
     console.error("Error fetching config:", error);
     return {};
   }
+});
+
+ipcMain.handle("comfyui:auto-detect", async () => {
+  const fs = require("fs");
+  
+  // Common ComfyUI installation paths on Windows
+  const commonPaths = [
+    "C:\\ComfyUI_windows_portable\\ComfyUI",
+    "D:\\ComfyUI_windows_portable\\ComfyUI",
+    "E:\\ComfyUI_windows_portable\\ComfyUI",
+    "C:\\ComfyUI_windows_portable",
+    "D:\\ComfyUI_windows_portable",
+    "C:\\ComfyUI",
+    "D:\\ComfyUI",
+    path.join(require("os").homedir(), "ComfyUI"),
+    path.join(require("os").homedir(), "ComfyUI_windows_portable", "ComfyUI"),
+  ];
+  
+  let detectedPath = null;
+  
+  for (const testPath of commonPaths) {
+    // Check for main.py or comfyui folder structure
+    const mainPyPath = path.join(testPath, "main.py");
+    const comfyFolderPath = path.join(testPath, "comfy");
+    
+    if (fs.existsSync(mainPyPath) || fs.existsSync(comfyFolderPath)) {
+      detectedPath = testPath;
+      console.log(`Auto-detected ComfyUI at: ${detectedPath}`);
+      break;
+    }
+  }
+  
+  // Check if ComfyUI is running at default URL
+  let isRunning = false;
+  try {
+    const http = require("http");
+    await new Promise((resolve, reject) => {
+      const req = http.get("http://127.0.0.1:8188/system_stats", { timeout: 2000 }, (res) => {
+        isRunning = res.statusCode === 200;
+        resolve();
+      });
+      req.on("error", () => resolve());
+      req.on("timeout", () => {
+        req.destroy();
+        resolve();
+      });
+    });
+  } catch (e) {
+    // ComfyUI not running
+  }
+  
+  return {
+    installDir: detectedPath,
+    url: "http://127.0.0.1:8188",
+    isRunning,
+  };
 });
 
 ipcMain.handle("search:general", async (event, query) => {

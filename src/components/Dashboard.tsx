@@ -177,6 +177,10 @@ export const Dashboard = memo(() => {
     setJobPolicy,
     loadPersistentSettings,
     savePersistentSettings,
+    comfyuiInstallDir,
+    comfyuiUrl,
+    setComfyuiInstallDir,
+    setComfyuiUrl,
   } = useClientStore();
   const [service, setService] = useState("auto");
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
@@ -188,10 +192,10 @@ export const Dashboard = memo(() => {
     loadPersistentSettings();
   }, [loadPersistentSettings]);
 
-  // Save settings whenever job policy changes
+  // Save settings whenever job policy or ComfyUI settings change
   useEffect(() => {
     savePersistentSettings();
-  }, [jobPolicy, savePersistentSettings]);
+  }, [jobPolicy, comfyuiInstallDir, comfyuiUrl, savePersistentSettings]);
 
   // Use the job policy from the store instead of local state
   const jobPolicyState = jobPolicy;
@@ -218,12 +222,16 @@ export const Dashboard = memo(() => {
       if (isDisabled) return;
 
       if (checked) {
-        window.electronAPI.startClient(service, jobPolicy, allowedIds);
+        const comfyuiSettings = {
+          installDir: comfyuiInstallDir || undefined,
+          url: comfyuiUrl || undefined,
+        };
+        window.electronAPI.startClient(service, jobPolicy, allowedIds, comfyuiSettings);
       } else {
         window.electronAPI.stopClient();
       }
     },
-    [isDisabled, service, jobPolicy, allowedIds]
+    [isDisabled, service, jobPolicy, allowedIds, comfyuiInstallDir, comfyuiUrl]
   );
 
   const handleJobPolicyChange = (policy: JobPolicy) => {
@@ -302,6 +310,72 @@ export const Dashboard = memo(() => {
                   onSelectedUsersChange={setSelectedUsers}
                   disabled={isRunning || isDisabled}
                 />
+                
+                {/* ComfyUI Settings */}
+                <div className="border-t border-white/10 pt-6 mt-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-medium text-muted-foreground">ComfyUI Integration</h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const result = await window.electronAPI.autoDetectComfyUI();
+                          
+                          if (result.installDir) {
+                            setComfyuiInstallDir(result.installDir);
+                          }
+                          setComfyuiUrl(result.url);
+                          
+                          // Show feedback
+                          if (result.installDir) {
+                            console.log(`ComfyUI detected at: ${result.installDir}, running: ${result.isRunning}`);
+                          } else {
+                            console.log("ComfyUI installation not found in common locations");
+                          }
+                        } catch (error) {
+                          console.error("Auto-detect failed:", error);
+                        }
+                      }}
+                      disabled={isRunning || isDisabled}
+                    >
+                      Auto-Detect
+                    </Button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center">
+                      <span className="w-48 shrink-0 pr-4 text-right text-sm text-muted-foreground">
+                        Install Directory:
+                      </span>
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="text"
+                          value={comfyuiInstallDir}
+                          onChange={(e) => setComfyuiInstallDir(e.target.value)}
+                          placeholder="e.g., D:\ComfyUI_windows_portable\ComfyUI"
+                          className="flex-1 px-3 py-2 rounded-md bg-background/50 border border-input text-sm"
+                          disabled={isRunning || isDisabled}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="w-48 shrink-0 pr-4 text-right text-sm text-muted-foreground">
+                        ComfyUI URL:
+                      </span>
+                      <input
+                        type="text"
+                        value={comfyuiUrl}
+                        onChange={(e) => setComfyuiUrl(e.target.value)}
+                        placeholder="http://127.0.0.1:8188"
+                        className="flex-1 px-3 py-2 rounded-md bg-background/50 border border-input text-sm"
+                        disabled={isRunning || isDisabled}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-48 pl-4">
+                      Set these to enable local ComfyUI integration. Leave blank to skip.
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.section>

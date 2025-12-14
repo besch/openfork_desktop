@@ -1,13 +1,19 @@
 import type { LogEntry, DGNClientStatus, Profile, Project } from "./types";
 import type { Session, AuthError } from "@supabase/supabase-js";
 
+interface ComfyUISettings {
+  installDir?: string;
+  url?: string;
+}
+
 declare global {
   interface Window {
     electronAPI: {
       startClient: (
         service: string,
         policy: string,
-        allowedIds: string
+        allowedIds: string,
+        comfyuiSettings?: ComfyUISettings
       ) => void;
       stopClient: () => void;
       onLog: (callback: (log: LogEntry) => void) => void;
@@ -45,11 +51,20 @@ declare global {
       loadSettings: () => Promise<{
         jobPolicy?: string;
         theme?: string;
+        comfyuiInstallDir?: string;
+        comfyuiUrl?: string;
       } | null>;
       saveSettings: (settings: {
         jobPolicy: string;
         theme?: string;
+        comfyuiInstallDir?: string;
+        comfyuiUrl?: string;
       }) => Promise<void>;
+      autoDetectComfyUI: () => Promise<{
+        installDir: string | null;
+        url: string;
+        isRunning: boolean;
+      }>;
     };
   }
 }

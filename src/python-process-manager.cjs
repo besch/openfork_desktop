@@ -69,7 +69,7 @@ class PythonProcessManager {
     this.authSubscription = subscription;
   }
 
-  async start(service, policy, allowedIds) {
+  async start(service, policy, allowedIds, comfyuiSettings = {}) {
     if (!service) {
       console.error("Service type must be provided to start the DGN client.");
       this.mainWindow.webContents.send("openfork_client:log", {
@@ -126,6 +126,16 @@ class PythonProcessManager {
       allowedIds.length > 0
     ) {
       args.push("--allowed-targets", allowedIds.join(","));
+    }
+
+    // Add ComfyUI settings if provided
+    if (comfyuiSettings.installDir) {
+      args.push("--comfyui-install-dir", comfyuiSettings.installDir);
+      console.log(`Using ComfyUI installation directory: ${comfyuiSettings.installDir}`);
+    }
+    if (comfyuiSettings.url) {
+      args.push("--comfyui-url", comfyuiSettings.url);
+      console.log(`Using ComfyUI URL: ${comfyuiSettings.url}`);
     }
 
     console.log(`Starting Python backend for '${service}' service...`);
