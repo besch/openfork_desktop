@@ -1,13 +1,6 @@
 import React, { useState, useCallback, memo, useMemo, useEffect } from "react";
 import { useClientStore } from "@/store";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CheckCircle,
@@ -171,7 +164,6 @@ export const Dashboard = memo(() => {
   const {
     status,
     stats,
-    services,
     jobPolicy,
     setSubscriptionPolicy,
     setJobPolicy,
@@ -182,7 +174,7 @@ export const Dashboard = memo(() => {
     setComfyuiInstallDir,
     setComfyuiUrl,
   } = useClientStore();
-  const [service, setService] = useState("auto");
+  const service = "auto"; // Always use 'auto' mode with GenericComfyWorkflowProcessor
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -280,27 +272,6 @@ export const Dashboard = memo(() => {
           >
             <Card className="bg-card/50 backdrop-blur-sm border-white/10">
               <CardContent className="p-6 space-y-6">
-                <div className="flex items-center">
-                  <span className="w-48 shrink-0 pr-4 text-right text-sm text-muted-foreground">
-                    Workflows:
-                  </span>
-                  <Select
-                    value={service}
-                    onValueChange={setService}
-                    disabled={isRunning || isDisabled}
-                  >
-                    <SelectTrigger className="w-full bg-background/50">
-                      <SelectValue placeholder="Workflows" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {services.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
                 <JobPolicySettings
                   jobPolicy={jobPolicyState}
                   onJobPolicyChange={handleJobPolicyChange}
