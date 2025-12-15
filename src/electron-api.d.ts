@@ -2,8 +2,7 @@ import type { LogEntry, DGNClientStatus, Profile, Project } from "./types";
 import type { Session, AuthError } from "@supabase/supabase-js";
 
 interface ComfyUISettings {
-  installDir?: string;
-  url?: string;
+  dockerImage?: string;
 }
 
 declare global {
@@ -51,20 +50,13 @@ declare global {
       loadSettings: () => Promise<{
         jobPolicy?: string;
         theme?: string;
-        comfyuiInstallDir?: string;
-        comfyuiUrl?: string;
+        dockerImage?: string;
       } | null>;
       saveSettings: (settings: {
         jobPolicy: string;
         theme?: string;
-        comfyuiInstallDir?: string;
-        comfyuiUrl?: string;
+        dockerImage?: string;
       }) => Promise<void>;
-      autoDetectComfyUI: () => Promise<{
-        installDir: string | null;
-        url: string;
-        isRunning: boolean;
-      }>;
     };
   }
 }

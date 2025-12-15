@@ -128,14 +128,10 @@ class PythonProcessManager {
       args.push("--allowed-targets", allowedIds.join(","));
     }
 
-    // Add ComfyUI settings if provided
-    if (comfyuiSettings.installDir) {
-      args.push("--comfyui-install-dir", comfyuiSettings.installDir);
-      console.log(`Using ComfyUI installation directory: ${comfyuiSettings.installDir}`);
-    }
-    if (comfyuiSettings.url) {
-      args.push("--comfyui-url", comfyuiSettings.url);
-      console.log(`Using ComfyUI URL: ${comfyuiSettings.url}`);
+    // Add Docker image setting if provided
+    if (comfyuiSettings.dockerImage) {
+      args.push("--docker-image", comfyuiSettings.dockerImage);
+      console.log(`Using Docker image: ${comfyuiSettings.dockerImage}`);
     }
 
     console.log(`Starting Python backend for '${service}' service...`);
