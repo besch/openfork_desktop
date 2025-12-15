@@ -190,6 +190,48 @@ class PythonProcessManager {
             })();
             return; // Handled
           }
+
+          // Handle Docker pull progress messages
+          if (message.type === "DOCKER_PULL_PROGRESS") {
+            this.mainWindow.webContents.send(
+              "openfork_client:docker-progress",
+              message.payload
+            );
+            return; // Don't log these to avoid spam
+          }
+
+          if (message.type === "DOCKER_PULL_START") {
+            this.mainWindow.webContents.send(
+              "openfork_client:docker-progress",
+              { ...message.payload, status: "Starting", progress: 0 }
+            );
+            // Log a single line for the start event
+            this.mainWindow.webContents.send("openfork_client:log", {
+              type: "stdout",
+              message: `Downloading Docker image: ${message.payload.image}`,
+            });
+            return;
+          }
+
+          if (message.type === "DOCKER_PULL_COMPLETE") {
+            this.mainWindow.webContents.send(
+              "openfork_client:docker-progress",
+              { ...message.payload, status: "Complete", progress: 100 }
+            );
+            // Log a single line for the completion event
+            this.mainWindow.webContents.send("openfork_client:log", {
+              type: "stdout",
+              message: `Docker image ready: ${message.payload.image}`,
+            });
+            // Clear the progress display after a short delay
+            setTimeout(() => {
+              this.mainWindow.webContents.send(
+                "openfork_client:docker-progress",
+                null
+              );
+            }, 1500);
+            return;
+          }
         } catch (e) {
           // Not a JSON message, treat as regular log
         }

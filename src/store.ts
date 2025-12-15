@@ -6,6 +6,7 @@ import type {
   JobStats,
   Project,
   JobPolicy,
+  DockerPullProgress,
 } from "./types";
 import { supabase } from "./supabase";
 
@@ -24,6 +25,8 @@ interface DGNClientState {
   isLoading: boolean;
   jobPolicy: JobPolicy;
   allowedIds: string;
+  dockerPullProgress: DockerPullProgress | null;
+  setDockerPullProgress: (progress: DockerPullProgress | null) => void;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
   setStats: (stats: JobStats) => void;
@@ -57,6 +60,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   isLoading: true,
   jobPolicy: "mine",
   allowedIds: "",
+  dockerPullProgress: null,
+  setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
   setStatus: (status) => set({ status }),
   addLog: (log) => {
     const newLog: LogEntry = {
@@ -329,7 +334,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 }));
 
 function initializeIpcListeners() {
-  const { setStatus, addLog, setSession, setIsLoading } =
+  const { setStatus, addLog, setSession, setIsLoading, setDockerPullProgress } =
     useClientStore.getState();
 
   window.electronAPI.onStatusChange((status) => {
@@ -342,6 +347,8 @@ function initializeIpcListeners() {
   });
 
   window.electronAPI.onLog(addLog);
+
+  window.electronAPI.onDockerProgress(setDockerPullProgress);
 
   window.electronAPI.onSession(async (session) => {
     await setSession(session);

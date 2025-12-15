@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("openfork_client:status", (_event, value) =>
       callback(value)
     ),
+  onDockerProgress: (callback) =>
+    ipcRenderer.on("openfork_client:docker-progress", (_event, value) =>
+      callback(value)
+    ),
 
   // Authentication
   loginWithGoogle: () => ipcRenderer.invoke("auth:google-login"),

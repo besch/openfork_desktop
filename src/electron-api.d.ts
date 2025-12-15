@@ -1,4 +1,4 @@
-import type { LogEntry, DGNClientStatus, Profile, Project } from "./types";
+import type { LogEntry, DGNClientStatus, Profile, Project, DockerPullProgress } from "./types";
 import type { Session, AuthError } from "@supabase/supabase-js";
 
 declare global {
@@ -12,6 +12,9 @@ declare global {
       stopClient: () => void;
       onLog: (callback: (log: LogEntry) => void) => void;
       onStatusChange: (callback: (status: DGNClientStatus) => void) => void;
+      onDockerProgress: (
+        callback: (progress: DockerPullProgress | null) => void
+      ) => void;
       loginWithGoogle: () => void;
       logout: () => void;
       onSession: (callback: (session: Session | null) => void) => void;
@@ -28,6 +31,7 @@ declare global {
         channel:
           | "openfork_client:log"
           | "openfork_client:status"
+          | "openfork_client:docker-progress"
           | "auth:session"
           | "auth:callback"
       ) => void;

@@ -60,3 +60,9 @@ export interface Project {
 }
 
 export type JobPolicy = "all" | "mine" | "project" | "users";
+
+export interface DockerPullProgress {
+  image: string;
+  progress: number;
+  status: string;
+}
