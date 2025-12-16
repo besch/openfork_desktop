@@ -65,4 +65,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // General Search
   searchGeneral: (query) => ipcRenderer.invoke("search:general", query),
+
+  // Docker Management
+  listDockerImages: () => ipcRenderer.invoke("docker:list-images"),
+  listDockerContainers: () => ipcRenderer.invoke("docker:list-containers"),
+  removeDockerImage: (imageId) => ipcRenderer.invoke("docker:remove-image", imageId),
+  removeAllDockerImages: () => ipcRenderer.invoke("docker:remove-all-images"),
+  stopContainer: (containerId) => ipcRenderer.invoke("docker:stop-container", containerId),
+  stopAllContainers: () => ipcRenderer.invoke("docker:stop-all-containers"),
+  cleanupDocker: () => ipcRenderer.invoke("docker:cleanup-all"),
 });
+

@@ -19,7 +19,6 @@ import {
   Play,
   Pause,
   Settings,
-  Download,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobPolicySettings } from "./JobPolicySettings";
@@ -59,9 +58,6 @@ const StatCard = memo(
 
 export const StatusIndicator = memo(() => {
   const status = useClientStore((state) => state.status);
-  const dockerPullProgress = useClientStore(
-    (state) => state.dockerPullProgress
-  );
 
   const statusConfig = {
     running: {
@@ -92,40 +88,6 @@ export const StatusIndicator = memo(() => {
   };
 
   const { text, className, icon } = statusConfig[status];
-
-  // Show Docker download progress if available
-  if (dockerPullProgress && status === "starting") {
-    const progress = dockerPullProgress.progress;
-    const imageName = dockerPullProgress.image.split("/").pop() || "image";
-
-    return (
-      <div className="flex flex-col gap-2">
-        <div
-          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold border text-blue-400 border-blue-400/20 bg-blue-400/10`}
-        >
-          <Download size={16} className="animate-pulse" />
-          <span>Downloading Image</span>
-        </div>
-        <div className="flex items-center gap-3 ml-2">
-          <div className="relative w-48 h-2 bg-muted/30 rounded-full overflow-hidden">
-            <motion.div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
-          </div>
-          <span className="text-xs text-muted-foreground font-medium tabular-nums">
-            {progress}%
-          </span>
-        </div>
-        <span className="text-xs text-muted-foreground/70 ml-2 truncate max-w-[200px]" title={dockerPullProgress.image}>
-          {imageName}
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div

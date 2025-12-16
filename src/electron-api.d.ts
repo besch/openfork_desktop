@@ -54,6 +54,41 @@ declare global {
         jobPolicy: string;
         theme?: string;
       }) => Promise<void>;
+      // Docker Management
+      listDockerImages: () => Promise<{
+        success: boolean;
+        data?: DockerImage[];
+        error?: string;
+      }>;
+      listDockerContainers: () => Promise<{
+        success: boolean;
+        data?: DockerContainer[];
+        error?: string;
+      }>;
+      removeDockerImage: (imageId: string) => Promise<{
+        success: boolean;
+        error?: string;
+      }>;
+      removeAllDockerImages: () => Promise<{
+        success: boolean;
+        removedCount?: number;
+        error?: string;
+      }>;
+      stopContainer: (containerId: string) => Promise<{
+        success: boolean;
+        error?: string;
+      }>;
+      stopAllContainers: () => Promise<{
+        success: boolean;
+        stoppedCount?: number;
+        error?: string;
+      }>;
+      cleanupDocker: () => Promise<{
+        success: boolean;
+        stoppedCount?: number;
+        removedCount?: number;
+        error?: string;
+      }>;
     };
   }
 }

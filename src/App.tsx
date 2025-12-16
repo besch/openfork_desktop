@@ -8,6 +8,7 @@ import { Auth } from "@/components/Auth";
 import { Profile } from "@/components/Profile";
 import { Chart } from "@/components/Chart";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
+import { DockerManagement } from "@/components/DockerManagement";
 import {
   LayoutDashboard,
   Terminal,
@@ -15,6 +16,7 @@ import {
   User,
   Loader2,
   BarChart as BarChartIcon,
+  Container,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -123,6 +125,10 @@ function App() {
                 <User className="mr-2" size={16} />
                 Profile
               </TabsTrigger>
+              <TabsTrigger value="docker">
+                <Container className="mr-2" size={16} />
+                Docker
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="dashboard">
@@ -136,6 +142,9 @@ function App() {
             </TabsContent>
             <TabsContent value="profile">
               <Profile />
+            </TabsContent>
+            <TabsContent value="docker">
+              <DockerManagement />
             </TabsContent>
           </Tabs>
         </div>

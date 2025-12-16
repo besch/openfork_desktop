@@ -460,3 +460,195 @@ ipcMain.handle("search:general", async (event, query) => {
     return [];
   }
 });
+
+// --- DOCKER MANAGEMENT ---
+const { execSync, exec } = require("child_process");
+
+function execDockerCommand(command) {
+  return new Promise((resolve, reject) => {
+    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Docker command error: ${error.message}`);
+        reject(error);
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
+}
+
+ipcMain.handle("docker:list-images", async () => {
+  try {
+    const output = await execDockerCommand(
+      'docker images --format "{{json .}}" --filter "reference=*openfork*" --filter "reference=*comfyui*" --filter "reference=*diffrhythm*" --filter "reference=*ollama*"'
+    );
+    if (!output) return { success: true, data: [] };
+    
+    const images = output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const img = JSON.parse(line);
+        return {
+          id: img.ID,
+          repository: img.Repository,
+          tag: img.Tag,
+          size: img.Size,
+          created: img.CreatedAt || img.CreatedSince,
+        };
+      });
+    return { success: true, data: images };
+  } catch (error) {
+    console.error("Failed to list Docker images:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("docker:list-containers", async () => {
+  try {
+    const output = await execDockerCommand(
+      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"'
+    );
+    if (!output) return { success: true, data: [] };
+    
+    const containers = output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const container = JSON.parse(line);
+        return {
+          id: container.ID,
+          name: container.Names,
+          image: container.Image,
+          status: container.Status,
+          state: container.State,
+          created: container.CreatedAt,
+        };
+      });
+    return { success: true, data: containers };
+  } catch (error) {
+    console.error("Failed to list Docker containers:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("docker:remove-image", async (event, imageId) => {
+  try {
+    await execDockerCommand(`docker rmi -f ${imageId}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`Failed to remove Docker image ${imageId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("docker:remove-all-images", async () => {
+  try {
+    // First, get all OpenFork-related images
+    const listOutput = await execDockerCommand(
+      'docker images --format "{{.ID}}" --filter "reference=*openfork*" --filter "reference=*comfyui*" --filter "reference=*diffrhythm*" --filter "reference=*ollama*"'
+    );
+    if (!listOutput) return { success: true, removedCount: 0 };
+    
+    const imageIds = listOutput.split("\n").filter(Boolean);
+    for (const id of imageIds) {
+      await execDockerCommand(`docker rmi -f ${id}`);
+    }
+    return { success: true, removedCount: imageIds.length };
+  } catch (error) {
+    console.error("Failed to remove all Docker images:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("docker:stop-container", async (event, containerId) => {
+  try {
+    await execDockerCommand(`docker stop ${containerId}`);
+    await execDockerCommand(`docker rm -f ${containerId}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`Failed to stop container ${containerId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("docker:stop-all-containers", async () => {
+  try {
+    const listOutput = await execDockerCommand(
+      'docker ps -a --format "{{.ID}}" --filter "name=dgn-client"'
+    );
+    if (!listOutput) return { success: true, stoppedCount: 0 };
+    
+    const containerIds = listOutput.split("\n").filter(Boolean);
+    for (const id of containerIds) {
+      try {
+        await execDockerCommand(`docker stop ${id}`);
+        await execDockerCommand(`docker rm -f ${id}`);
+      } catch (e) {
+        console.warn(`Failed to stop/remove container ${id}:`, e.message);
+      }
+    }
+    return { success: true, stoppedCount: containerIds.length };
+  } catch (error) {
+    console.error("Failed to stop all containers:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("docker:cleanup-all", async () => {
+  try {
+    // Stop all containers first
+    const containerResult = await new Promise((resolve) => {
+      ipcMain.emit("docker:stop-all-containers");
+      resolve({ success: true });
+    });
+    
+    // Get container IDs
+    let stoppedCount = 0;
+    try {
+      const containerOutput = await execDockerCommand(
+        'docker ps -a --format "{{.ID}}" --filter "name=dgn-client"'
+      );
+      if (containerOutput) {
+        const containerIds = containerOutput.split("\n").filter(Boolean);
+        for (const id of containerIds) {
+          try {
+            await execDockerCommand(`docker stop ${id}`);
+            await execDockerCommand(`docker rm -f ${id}`);
+            stoppedCount++;
+          } catch (e) {
+            console.warn(`Failed to stop/remove container ${id}:`, e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Error stopping containers:", e.message);
+    }
+    
+    // Remove all images
+    let removedCount = 0;
+    try {
+      const imageOutput = await execDockerCommand(
+        'docker images --format "{{.ID}}" --filter "reference=*openfork*" --filter "reference=*comfyui*" --filter "reference=*diffrhythm*" --filter "reference=*ollama*"'
+      );
+      if (imageOutput) {
+        const imageIds = imageOutput.split("\n").filter(Boolean);
+        for (const id of imageIds) {
+          try {
+            await execDockerCommand(`docker rmi -f ${id}`);
+            removedCount++;
+          } catch (e) {
+            console.warn(`Failed to remove image ${id}:`, e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Error removing images:", e.message);
+    }
+    
+    return { success: true, stoppedCount, removedCount };
+  } catch (error) {
+    console.error("Failed to cleanup Docker:", error);
+    return { success: false, error: error.message };
+  }
+});
