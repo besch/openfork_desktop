@@ -656,22 +656,42 @@ ipcMain.handle("docker:cleanup-all", async () => {
 // --- DEPENDENCY DETECTION ---
 
 ipcMain.handle("deps:check-docker", async () => {
+  // Use a separate exec that doesn't log errors (cleaner output)
+  const checkCommand = (cmd) => {
+    return new Promise((resolve) => {
+      exec(cmd, { timeout: 3000 }, (error, stdout) => {
+        if (error) {
+          resolve({ success: false, error: error.message });
+        } else {
+          resolve({ success: true, output: stdout.trim() });
+        }
+      });
+    });
+  };
+
   try {
     // Check if Docker CLI is available
-    await execDockerCommand("docker --version");
-    try {
-      // Check if Docker daemon is running
-      await execDockerCommand("docker info");
+    const versionResult = await checkCommand("docker --version");
+    if (!versionResult.success) {
+      console.log("Docker CLI not found");
+      return { installed: false, running: false };
+    }
+
+    // Check if Docker daemon is running and responsive
+    const infoResult = await checkCommand("docker info");
+    if (infoResult.success) {
+      console.log("Docker is installed and running");
       return { installed: true, running: true };
-    } catch {
-      // Docker installed but daemon not running
+    } else {
+      console.log("Docker is installed but daemon not running:", infoResult.error);
       return { installed: true, running: false };
     }
-  } catch {
-    // Docker not installed
+  } catch (err) {
+    console.error("Unexpected error checking Docker:", err);
     return { installed: false, running: false };
   }
 });
+
 
 ipcMain.handle("deps:check-nvidia", async () => {
   try {

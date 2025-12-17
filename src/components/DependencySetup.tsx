@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,12 +15,12 @@ import type { DependencyStatus } from "@/types";
 
 interface DependencySetupProps {
   onReady: () => void;
-  onSkip: () => void;
+  initialStatus: DependencyStatus;
 }
 
-export function DependencySetup({ onReady, onSkip }: DependencySetupProps) {
-  const [status, setStatus] = useState<DependencyStatus | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
+export function DependencySetup({ onReady, initialStatus }: DependencySetupProps) {
+  const [status, setStatus] = useState<DependencyStatus>(initialStatus);
+  const [isChecking, setIsChecking] = useState(false);
 
   const checkDependencies = useCallback(async () => {
     setIsChecking(true);
@@ -39,7 +39,7 @@ export function DependencySetup({ onReady, onSkip }: DependencySetupProps) {
       setStatus(depStatus);
 
       if (depStatus.allReady) {
-        setTimeout(() => onReady(), 500);
+        setTimeout(() => onReady(), 300);
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error);
@@ -48,27 +48,9 @@ export function DependencySetup({ onReady, onSkip }: DependencySetupProps) {
     }
   }, [onReady]);
 
-  useEffect(() => {
-    checkDependencies();
-  }, [checkDependencies]);
-
   const handleInstallDocker = () => {
     window.electronAPI.openDockerDownload();
   };
-
-  if (isChecking && !status) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-background">
-        <div className="relative">
-          <Loader2 className="h-16 w-16 animate-spin text-primary" />
-          <div className="absolute inset-0 h-16 w-16 animate-ping bg-primary/20 rounded-full" />
-        </div>
-        <p className="mt-4 text-muted-foreground animate-pulse">
-          Checking system requirements...
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">
@@ -183,17 +165,6 @@ export function DependencySetup({ onReady, onSkip }: DependencySetupProps) {
             )}
             {isChecking ? "Checking..." : "Retry"}
           </Button>
-
-          {!status?.allReady && (
-            <Button
-              onClick={onSkip}
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Continue anyway (advanced users)
-            </Button>
-          )}
         </div>
       </div>
     </div>

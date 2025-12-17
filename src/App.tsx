@@ -27,7 +27,6 @@ function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [, setForceRefreshKey] = useState(0);
   const [checkingDeps, setCheckingDeps] = useState(true);
-  const [depsSkipped, setDepsSkipped] = useState(false);
 
   const handleLogout = () => {
     window.electronAPI.logout();
@@ -109,12 +108,12 @@ function App() {
     );
   }
 
-  // Show dependency setup if Docker is not ready and user hasn't skipped
-  if (!depsSkipped && dependencyStatus && !dependencyStatus.allReady) {
+  // Show dependency setup if Docker is not ready
+  if (dependencyStatus && !dependencyStatus.allReady) {
     return (
       <DependencySetup
-        onReady={() => setDepsSkipped(true)}
-        onSkip={() => setDepsSkipped(true)}
+        onReady={() => setDependencyStatus({ ...dependencyStatus, allReady: true })}
+        initialStatus={dependencyStatus}
       />
     );
   }
