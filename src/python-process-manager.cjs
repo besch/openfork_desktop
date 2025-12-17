@@ -13,6 +13,11 @@ class PythonProcessManager {
     this.userDataPath = userDataPath;
     this.authSubscription = null;
 
+    // Auth refresh debouncing
+    this._lastRefreshAttempt = 0;
+    this._refreshInProgress = false;
+    this._refreshCooldownMs = 3000; // 3 seconds cooldown
+
     this._listenForTokenRefresh();
   }
 
@@ -46,6 +51,26 @@ class PythonProcessManager {
     try {
       this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
       console.log("Successfully sent token update command to Python process.");
+    } catch (error) {
+      console.error("Error writing to Python process stdin:", error);
+    }
+  }
+
+  _sendAuthFailedPermanentlyToPython() {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.error(
+        "Cannot send auth failed command: Python process not running or stdin not writable."
+      );
+      return;
+    }
+
+    const command = {
+      type: "AUTH_FAILED_PERMANENTLY",
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Sent AUTH_FAILED_PERMANENTLY command to Python process.");
     } catch (error) {
       console.error("Error writing to Python process stdin:", error);
     }
@@ -146,46 +171,66 @@ class PythonProcessManager {
         try {
           const message = JSON.parse(log);
           if (message.status === "AUTH_EXPIRED") {
+            // Debounce: Skip if a refresh attempt happened recently or is in progress
+            const now = Date.now();
+            if (this._refreshInProgress) {
+              console.log("Token refresh already in progress, skipping duplicate request.");
+              return;
+            }
+            if (now - this._lastRefreshAttempt < this._refreshCooldownMs) {
+              console.log("Token refresh request debounced (within cooldown period).");
+              return;
+            }
+
+            this._refreshInProgress = true;
+            this._lastRefreshAttempt = now;
+
             console.warn(
               "Python reported auth expired. Attempting to refresh and recover."
             );
             (async () => {
-              // Force a refresh since the client reported the current token is invalid
-              const { data: freshData, error: refreshError } =
-                await this.supabase.auth.refreshSession();
+              try {
+                // Force a refresh since the client reported the current token is invalid
+                const { data: freshData, error: refreshError } =
+                  await this.supabase.auth.refreshSession();
 
-              if (refreshError || !freshData.session) {
-                console.error(
-                  "Could not recover session. Forcing logout.",
-                  refreshError?.message
-                );
-                await this.stop();
-                await this.supabase.auth.signOut();
-
-                // Notify the renderer process about the auth failure
-                if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-                  this.mainWindow.webContents.send("auth:session", null);
-                  this.mainWindow.webContents.send("openfork_client:log", {
-                    type: "stderr",
-                    message: "Authentication failed. Please log in again.",
-                  });
-                }
-              } else {
-                console.log(
-                  "Recovered session via refresh. Pushing new tokens to Python."
-                );
-                this._sendTokensToPython(
-                  freshData.session.access_token,
-                  freshData.session.refresh_token
-                );
-
-                // Notify renderer that tokens were refreshed successfully
-                if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-                  this.mainWindow.webContents.send(
-                    "auth:session",
-                    freshData.session
+                if (refreshError || !freshData.session) {
+                  console.error(
+                    "Could not recover session. Notifying Python and forcing logout.",
+                    refreshError?.message
                   );
+                  
+                  // Tell Python that auth has permanently failed
+                  this._sendAuthFailedPermanentlyToPython();
+
+                  // Notify the renderer process about the auth failure
+                  if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                    this.mainWindow.webContents.send("auth:session", null);
+                    this.mainWindow.webContents.send("auth:force-logout");
+                    this.mainWindow.webContents.send("openfork_client:log", {
+                      type: "stderr",
+                      message: "Authentication failed. Please log in again.",
+                    });
+                  }
+                } else {
+                  console.log(
+                    "Recovered session via refresh. Pushing new tokens to Python."
+                  );
+                  this._sendTokensToPython(
+                    freshData.session.access_token,
+                    freshData.session.refresh_token
+                  );
+
+                  // Notify renderer that tokens were refreshed successfully
+                  if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                    this.mainWindow.webContents.send(
+                      "auth:session",
+                      freshData.session
+                    );
+                  }
                 }
+              } finally {
+                this._refreshInProgress = false;
               }
             })();
             return; // Handled

@@ -49,6 +49,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Force refresh handling
   onForceRefresh: (callback) =>
     ipcRenderer.on("auth:force-refresh", () => callback()),
+  
+  // Force logout handling (permanent auth failure)
+  onForceLogout: (callback) =>
+    ipcRenderer.on("auth:force-logout", () => callback()),
 
   // Session management
   getSession: () => ipcRenderer.invoke("get-session"),
