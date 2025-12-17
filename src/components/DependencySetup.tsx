@@ -124,7 +124,7 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
           <Card className={`border transition-colors ${
             status?.nvidia.available
               ? "border-green-500/30 bg-green-500/5"
-              : "border-muted bg-muted/5"
+              : "border-yellow-500/30 bg-yellow-500/5"
           }`}>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-3 text-lg">
@@ -133,19 +133,32 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
                 {status?.nvidia.available ? (
                   <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-muted-foreground ml-auto" />
+                  <AlertCircle className="h-5 w-5 text-yellow-500 ml-auto" />
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               {status?.nvidia.available ? (
                 <p className="text-sm text-green-400">
                   ✓ {status.nvidia.gpu} detected
                 </p>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  No NVIDIA GPU detected. CPU-only mode may be slower.
-                </p>
+                <>
+                  <p className="text-sm text-yellow-400">
+                    No NVIDIA GPU detected
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    An NVIDIA GPU is recommended for faster AI processing. If you have one, install the latest drivers.
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open("https://www.nvidia.com/download/index.aspx", "_blank")}
+                    className="w-full mt-2"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download NVIDIA Drivers
+                  </Button>
+                </>
               )}
             </CardContent>
           </Card>
