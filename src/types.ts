@@ -83,3 +83,19 @@ export interface DockerContainer {
   state: string;
   created: string;
 }
+
+export interface DockerStatus {
+  installed: boolean;
+  running: boolean;
+}
+
+export interface NvidiaStatus {
+  available: boolean;
+  gpu: string | null;
+}
+
+export interface DependencyStatus {
+  docker: DockerStatus;
+  nvidia: NvidiaStatus;
+  allReady: boolean;
+}

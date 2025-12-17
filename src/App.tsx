@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useClientStore } from "./store";
 import type { Session } from "@supabase/supabase-js";
+import type { DependencyStatus } from "./types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
 import { LogViewer } from "@/components/LogViewer";
@@ -9,6 +10,7 @@ import { Profile } from "@/components/Profile";
 import { Chart } from "@/components/Chart";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
 import { DockerManagement } from "@/components/DockerManagement";
+import { DependencySetup } from "@/components/DependencySetup";
 import {
   LayoutDashboard,
   Terminal,
@@ -21,13 +23,47 @@ import {
 import { Button } from "@/components/ui/button";
 
 function App() {
-  const { status, session, isLoading, setSession } = useClientStore();
+  const { status, session, isLoading, setSession, dependencyStatus, setDependencyStatus } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [, setForceRefreshKey] = useState(0);
+  const [checkingDeps, setCheckingDeps] = useState(true);
+  const [depsSkipped, setDepsSkipped] = useState(false);
 
   const handleLogout = () => {
     window.electronAPI.logout();
   };
+
+  // Check dependencies on startup
+  useEffect(() => {
+    const checkDependencies = async () => {
+      try {
+        const [dockerResult, nvidiaResult] = await Promise.all([
+          window.electronAPI.checkDocker(),
+          window.electronAPI.checkNvidia(),
+        ]);
+
+        const status: DependencyStatus = {
+          docker: dockerResult,
+          nvidia: nvidiaResult,
+          allReady: dockerResult.installed && dockerResult.running,
+        };
+
+        setDependencyStatus(status);
+      } catch (error) {
+        console.error("Failed to check dependencies:", error);
+        // Allow continuing even if check fails
+        setDependencyStatus({
+          docker: { installed: false, running: false },
+          nvidia: { available: false, gpu: null },
+          allReady: false,
+        });
+      } finally {
+        setCheckingDeps(false);
+      }
+    };
+
+    checkDependencies();
+  }, [setDependencyStatus]);
 
   // Handle force refresh from main process
   useEffect(() => {
@@ -57,6 +93,31 @@ function App() {
       // No cleanup needed for simple force refresh listener
     };
   }, [setSession]);
+
+  // Show loading while checking dependencies
+  if (checkingDeps) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <div className="relative">
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+          <div className="absolute inset-0 h-16 w-16 animate-ping bg-primary/20 rounded-full" />
+        </div>
+        <p className="mt-4 text-muted-foreground animate-pulse">
+          Checking system requirements...
+        </p>
+      </div>
+    );
+  }
+
+  // Show dependency setup if Docker is not ready and user hasn't skipped
+  if (!depsSkipped && dependencyStatus && !dependencyStatus.allReady) {
+    return (
+      <DependencySetup
+        onReady={() => setDepsSkipped(true)}
+        onSkip={() => setDepsSkipped(true)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -154,3 +215,4 @@ function App() {
 }
 
 export default App;
+

@@ -74,5 +74,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   stopContainer: (containerId) => ipcRenderer.invoke("docker:stop-container", containerId),
   stopAllContainers: () => ipcRenderer.invoke("docker:stop-all-containers"),
   cleanupDocker: () => ipcRenderer.invoke("docker:cleanup-all"),
+
+  // Dependency Detection
+  checkDocker: () => ipcRenderer.invoke("deps:check-docker"),
+  checkNvidia: () => ipcRenderer.invoke("deps:check-nvidia"),
+  openDockerDownload: () => ipcRenderer.invoke("deps:open-docker-download"),
 });
 

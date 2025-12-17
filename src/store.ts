@@ -7,6 +7,7 @@ import type {
   Project,
   JobPolicy,
   DockerPullProgress,
+  DependencyStatus,
 } from "./types";
 import { supabase } from "./supabase";
 
@@ -26,7 +27,9 @@ interface DGNClientState {
   jobPolicy: JobPolicy;
   allowedIds: string;
   dockerPullProgress: DockerPullProgress | null;
+  dependencyStatus: DependencyStatus | null;
   setDockerPullProgress: (progress: DockerPullProgress | null) => void;
+  setDependencyStatus: (status: DependencyStatus | null) => void;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
   setStats: (stats: JobStats) => void;
@@ -61,7 +64,9 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   jobPolicy: "mine",
   allowedIds: "",
   dockerPullProgress: null,
+  dependencyStatus: null,
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
+  setDependencyStatus: (status) => set({ dependencyStatus: status }),
   setStatus: (status) => set({ status }),
   addLog: (log) => {
     const newLog: LogEntry = {

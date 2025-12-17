@@ -89,6 +89,10 @@ declare global {
         removedCount?: number;
         error?: string;
       }>;
+      // Dependency Detection
+      checkDocker: () => Promise<{ installed: boolean; running: boolean }>;
+      checkNvidia: () => Promise<{ available: boolean; gpu: string | null }>;
+      openDockerDownload: () => Promise<{ success: boolean }>;
     };
   }
 }

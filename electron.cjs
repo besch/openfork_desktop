@@ -652,3 +652,52 @@ ipcMain.handle("docker:cleanup-all", async () => {
     return { success: false, error: error.message };
   }
 });
+
+// --- DEPENDENCY DETECTION ---
+
+ipcMain.handle("deps:check-docker", async () => {
+  try {
+    // Check if Docker CLI is available
+    await execDockerCommand("docker --version");
+    try {
+      // Check if Docker daemon is running
+      await execDockerCommand("docker info");
+      return { installed: true, running: true };
+    } catch {
+      // Docker installed but daemon not running
+      return { installed: true, running: false };
+    }
+  } catch {
+    // Docker not installed
+    return { installed: false, running: false };
+  }
+});
+
+ipcMain.handle("deps:check-nvidia", async () => {
+  try {
+    const output = await new Promise((resolve, reject) => {
+      exec(
+        "nvidia-smi --query-gpu=name --format=csv,noheader",
+        { timeout: 10000 },
+        (error, stdout) => {
+          if (error) reject(error);
+          else resolve(stdout);
+        }
+      );
+    });
+    return { available: true, gpu: output.toString().trim().split("\n")[0] };
+  } catch {
+    return { available: false, gpu: null };
+  }
+});
+
+ipcMain.handle("deps:open-docker-download", () => {
+  const urls = {
+    win32: "https://www.docker.com/products/docker-desktop/",
+    darwin: "https://www.docker.com/products/docker-desktop/",
+    linux: "https://docs.docker.com/engine/install/",
+  };
+  const url = urls[process.platform] || urls.linux;
+  shell.openExternal(url);
+  return { success: true };
+});
