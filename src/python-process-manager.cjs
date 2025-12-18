@@ -18,8 +18,14 @@ class PythonProcessManager {
     this._refreshInProgress = false;
     this._refreshCooldownMs = 3000; // 3 seconds cooldown
 
+    // Restart settings (stored when start() is called)
+    this._lastService = null;
+    this._lastPolicy = null;
+    this._lastAllowedIds = null;
+
     this._listenForTokenRefresh();
   }
+
 
   getPythonExecutablePath() {
     const exeName = process.platform === "win32" ? "client.exe" : "client";
@@ -120,6 +126,11 @@ class PythonProcessManager {
       });
       return;
     }
+
+    // Store settings for restart capability
+    this._lastService = service;
+    this._lastPolicy = policy;
+    this._lastAllowedIds = allowedIds;
 
     const currentSession = data.session;
 
@@ -235,6 +246,24 @@ class PythonProcessManager {
             })();
             return; // Handled
           }
+
+          // Handle provider expiration (cleaned up by stale provider cron)
+          if (message.status === "PROVIDER_EXPIRED") {
+            console.warn(
+              "Python reported provider registration expired. Restarting client..."
+            );
+            // Log to UI
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send("openfork_client:log", {
+                type: "stdout",
+                message: "Provider registration expired. Restarting client...",
+              });
+            }
+            // Restart the client with the same settings
+            this._triggerRestart();
+            return; // Handled
+          }
+
 
           // Handle Docker pull progress messages
           if (message.type === "DOCKER_PULL_PROGRESS") {
@@ -380,6 +409,28 @@ class PythonProcessManager {
       }, 8000);
     });
   }
+
+  async _triggerRestart() {
+    console.log("Triggering Python client restart due to provider expiration...");
+    
+    if (!this._lastService) {
+      console.error("Cannot restart: no previous settings stored.");
+      return;
+    }
+
+    // Stop the current process first
+    await this.stop();
+
+    // Small delay to ensure clean shutdown
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Start with the same settings
+    console.log(
+      `Restarting Python client with service: ${this._lastService}, policy: ${this._lastPolicy}`
+    );
+    await this.start(this._lastService, this._lastPolicy, this._lastAllowedIds);
+  }
 }
 
 module.exports = { PythonProcessManager };
+
