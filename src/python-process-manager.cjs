@@ -1,4 +1,4 @@
-const { spawn } = require("child_process");
+const { spawn, exec } = require("child_process");
 const path = require("path");
 const { app } = require("electron");
 const http = require("http");
@@ -22,10 +22,50 @@ class PythonProcessManager {
     this._lastService = null;
     this._lastPolicy = null;
     this._lastAllowedIds = null;
+    
+    // Cleanup synchronization
+    this._cleanupPromise = null;
 
     this._listenForTokenRefresh();
   }
 
+
+  async cleanupRogueProcesses() {
+    // If a cleanup is already in progress, return the existing promise
+    if (this._cleanupPromise) {
+      return this._cleanupPromise;
+    }
+
+    this._cleanupPromise = new Promise((resolve) => {
+      const isWin = process.platform === "win32";
+      if (!isWin) {
+         this._cleanupPromise = null;
+         resolve();
+         return;
+      }
+      
+      console.log("Cleaning up potential rogue client processes...");
+      
+      // Use PowerShell to find processes by our unique command line marker
+      // This is more reliable than name matching or generic flags
+      const marker = "openfork_dgn_client_v1_marker";
+      const psCommand = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
+      
+      exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, (error, stdout, stderr) => {
+          if (error) {
+              // It's not really an error if no processes were found to kill
+              // console.warn("Cleanup warning (may be empty):", error.message);
+          }
+          // Small delay to let OS release locks
+          setTimeout(() => {
+              this._cleanupPromise = null;
+              resolve();
+          }, 500);
+      });
+    });
+
+    return this._cleanupPromise;
+  }
 
   getPythonExecutablePath() {
     const exeName = process.platform === "win32" ? "client.exe" : "client";
@@ -115,6 +155,14 @@ class PythonProcessManager {
       return;
     }
 
+    // Wait for any pending cleanup to complete before starting
+    if (this._cleanupPromise) {
+      await this._cleanupPromise;
+    }
+
+    // Ensure no rogue processes are running before we start a fresh one
+    await this.cleanupRogueProcesses();
+
     const { data, error: sessionError } = await this.supabase.auth.getSession();
     if (sessionError || !data.session) {
       console.error("Could not get session:", sessionError?.message);
@@ -154,6 +202,8 @@ class PythonProcessManager {
       this.userDataPath,
       "--accept-policy",
       policy,
+      "--process-marker",
+      "openfork_dgn_client_v1_marker",
     ];
 
     if (
@@ -358,6 +408,9 @@ class PythonProcessManager {
         console.log(`Python process exited with code ${code}`);
         this.mainWindow.webContents.send("openfork_client:status", "stopped");
         this.pythonProcess = null;
+        
+        // Auto-cleanup zombies on exit
+        this.cleanupRogueProcesses();
       });
 
       this.pythonProcess.on("error", (err) => {

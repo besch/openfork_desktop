@@ -10,6 +10,7 @@ declare global {
         allowedIds: string
       ) => void;
       stopClient: () => void;
+      cleanupProcesses: () => Promise<{ success: boolean; error?: string }>;
       onLog: (callback: (log: LogEntry) => void) => void;
       onStatusChange: (callback: (status: DGNClientStatus) => void) => void;
       onDockerProgress: (

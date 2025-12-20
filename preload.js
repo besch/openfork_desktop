@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     console.log("Preload: Sending openfork_client:stop IPC message.");
     ipcRenderer.send("openfork_client:stop");
   },
+  cleanupProcesses: () => {
+    console.log("Preload: Sending openfork_client:cleanup IPC message.");
+    return ipcRenderer.invoke("openfork_client:cleanup");
+  },
 
   // DGN Client listeners
   onLog: (callback) =>

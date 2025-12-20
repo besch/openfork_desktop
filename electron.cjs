@@ -270,6 +270,19 @@ ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
 });
 
+ipcMain.handle("openfork_client:cleanup", async () => {
+  if (pythonManager) {
+    try {
+      await pythonManager.stop();
+      await pythonManager.cleanupRogueProcesses();
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+  return { success: false, error: "Manager not initialized" };
+});
+
 ipcMain.on("window:set-closable", (event, closable) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setClosable(closable);
