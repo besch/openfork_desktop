@@ -10,7 +10,7 @@ export function Auth() {
     <div className="flex flex-col items-center justify-center h-screen bg-background p-4">
       <div className="w-full max-w-md">
         <Card className="bg-card/50 backdrop-blur-sm border-white/10 shadow-2xl hover:shadow-3xl transition-all duration-300">
-          <CardHeader className="text-center pb-6">
+          <CardHeader className="text-center py-6">
             <img
               src="./logo.png"
               alt="OpenFork Logo"
