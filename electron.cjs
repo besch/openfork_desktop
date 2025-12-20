@@ -6,6 +6,7 @@ if (app.isPackaged) {
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
 const { PythonProcessManager } = require("./src/python-process-manager.cjs");
+const { autoUpdater } = require("electron-updater");
 
 // --- PROTOCOL & INITIALIZATION ---
 
@@ -130,8 +131,38 @@ function createWindow() {
     },
   });
 
+  // --- AUTO UPDATER ---
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update:available", info);
+    }
+  });
+
+  autoUpdater.on("download-progress", (progressObj) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update:progress", progressObj);
+    }
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update:downloaded", info);
+    }
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("AutoUpdater error:", err);
+  });
+
+  // Check for updates once the window is ready
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error("Failed to check for updates:", err);
+    });
   });
 
   mainWindow.webContents.on("did-finish-load", async () => {
@@ -720,4 +751,13 @@ ipcMain.handle("deps:open-docker-download", () => {
   const url = urls[process.platform] || urls.linux;
   shell.openExternal(url);
   return { success: true };
+});
+
+// --- UPDATE HANDLERS ---
+ipcMain.handle("update:download", () => {
+  autoUpdater.downloadUpdate();
+});
+
+ipcMain.handle("update:install", () => {
+  autoUpdater.quitAndInstall();
 });

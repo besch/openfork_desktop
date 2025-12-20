@@ -11,6 +11,7 @@ import { Chart } from "@/components/Chart";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
 import { DockerManagement } from "@/components/DockerManagement";
 import { DependencySetup } from "@/components/DependencySetup";
+import { UpdateNotification } from "@/components/UpdateNotification";
 import {
   LayoutDashboard,
   Terminal,
@@ -209,6 +210,7 @@ function App() {
           </Tabs>
         </div>
       </div>
+      <UpdateNotification />
     </>
   );
 }

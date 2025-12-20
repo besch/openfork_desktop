@@ -36,6 +36,7 @@
     "cmdk": "^1.1.1",
     "dotenv": "^17.2.3",
     "electron-store": "^10.1.0",
+    "electron-updater": "^6.6.2",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.539.0",
     "react": "^19.1.1",
@@ -67,6 +68,9 @@
     "appId": "com.openfork.openfork_client",
     "productName": "Openfork Client",
     "artifactName": "${productName}-${os}-${arch}.${ext}",
+    "publish": {
+      "provider": "github"
+    },
     "files": [
       "dist/**/*",
       "electron.cjs",

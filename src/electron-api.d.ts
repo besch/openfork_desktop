@@ -93,6 +93,13 @@ declare global {
       checkDocker: () => Promise<{ installed: boolean; running: boolean }>;
       checkNvidia: () => Promise<{ available: boolean; gpu: string | null }>;
       openDockerDownload: () => Promise<{ success: boolean }>;
+      
+      // Auto Update
+      onUpdateAvailable: (callback: (info: any) => void) => void;
+      onUpdateProgress: (callback: (progress: any) => void) => void;
+      onUpdateDownloaded: (callback: (info: any) => void) => void;
+      downloadUpdate: () => void;
+      installUpdate: () => void;
     };
   }
 }

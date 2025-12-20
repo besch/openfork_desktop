@@ -83,5 +83,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkDocker: () => ipcRenderer.invoke("deps:check-docker"),
   checkNvidia: () => ipcRenderer.invoke("deps:check-nvidia"),
   openDockerDownload: () => ipcRenderer.invoke("deps:open-docker-download"),
+  
+  // Auto Updater
+  onUpdateAvailable: (callback) => 
+    ipcRenderer.on("update:available", (_event, value) => callback(value)),
+  onUpdateProgress: (callback) =>
+    ipcRenderer.on("update:progress", (_event, value) => callback(value)),
+  onUpdateDownloaded: (callback) =>
+    ipcRenderer.on("update:downloaded", (_event, value) => callback(value)),
+  downloadUpdate: () => ipcRenderer.invoke("update:download"),
+  installUpdate: () => ipcRenderer.invoke("update:install"),
 });
 
