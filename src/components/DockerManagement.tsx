@@ -372,10 +372,10 @@ export const DockerManagement = memo(() => {
                   </div>
                   <div className="flex items-center gap-3 ml-4">
                     <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
+                      className={`px-2 py-1 rounded-md text-xs font-medium transition-all duration-300 shadow-lg ${
                         container.state === "running"
-                          ? "bg-primary/20 text-primary border border-primary/30"
-                          : "bg-muted text-muted-foreground"
+                          ? "bg-primary text-primary-foreground border border-primary shadow-primary/20"
+                          : "bg-muted text-muted-foreground border border-white/5"
                       }`}
                     >
                       {container.status}
