@@ -178,10 +178,6 @@ function App() {
                 <BarChartIcon className="mr-2" size={16} />
                 Chart
               </TabsTrigger>
-              <TabsTrigger value="logs">
-                <Terminal className="mr-2" size={16} />
-                Logs
-              </TabsTrigger>
               <TabsTrigger value="profile">
                 <User className="mr-2" size={16} />
                 Profile
@@ -189,6 +185,10 @@ function App() {
               <TabsTrigger value="docker">
                 <Container className="mr-2" size={16} />
                 Docker
+              </TabsTrigger>
+              <TabsTrigger value="logs">
+                <Terminal className="mr-2" size={16} />
+                Logs
               </TabsTrigger>
             </TabsList>
 

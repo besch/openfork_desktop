@@ -283,9 +283,9 @@ export const DockerManagement = memo(() => {
 
       {/* Download Progress Card */}
       {isDownloading && (
-        <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border-blue-400/30 shadow-lg shadow-blue-500/10">
+        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm border-primary/30 shadow-lg shadow-primary/10">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-blue-400">
+            <CardTitle className="flex items-center justify-between text-primary">
               <div className="flex items-center gap-2">
                 <Download className="h-5 w-5 animate-pulse" />
                 <span>Downloading Docker Image</span>
@@ -305,7 +305,7 @@ export const DockerManagement = memo(() => {
               <div className="flex-1">
                 <div className="relative h-3 bg-muted/30 rounded-full overflow-hidden">
                   <motion.div
-                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 rounded-full"
+                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary-hover to-primary rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${dockerPullProgress?.progress || 0}%` }}
                     transition={{ duration: 0.3, ease: "easeOut" }}
@@ -313,7 +313,7 @@ export const DockerManagement = memo(() => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
                 </div>
               </div>
-              <span className="text-lg font-bold text-blue-400 tabular-nums min-w-[4ch]">
+              <span className="text-lg font-bold text-primary tabular-nums min-w-[4ch]">
                 {dockerPullProgress?.progress || 0}%
               </span>
             </div>
@@ -321,7 +321,7 @@ export const DockerManagement = memo(() => {
               <span className="text-muted-foreground truncate max-w-[300px]" title={dockerPullProgress?.image}>
                 {dockerPullProgress?.image}
               </span>
-              <span className="text-blue-400/70">
+              <span className="text-primary/70">
                 {dockerPullProgress?.status || "Downloading..."}
               </span>
             </div>
@@ -333,7 +333,7 @@ export const DockerManagement = memo(() => {
       <Card className="bg-card/50 backdrop-blur-sm border-white/10">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Container className="h-5 w-5" />
+            <Container className="h-5 w-5 text-primary" />
             Containers ({containers.length})
           </CardTitle>
           {containers.length > 0 && (
@@ -362,7 +362,7 @@ export const DockerManagement = memo(() => {
               {containers.map((container) => (
                 <div
                   key={container.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-white/5 hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{container.name}</p>
@@ -374,7 +374,7 @@ export const DockerManagement = memo(() => {
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${
                         container.state === "running"
-                          ? "bg-green-500/20 text-green-400 border border-green-400/30"
+                          ? "bg-primary/20 text-primary border border-primary/30"
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
@@ -404,7 +404,7 @@ export const DockerManagement = memo(() => {
       <Card className="bg-card/50 backdrop-blur-sm border-white/10">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <HardDrive className="h-5 w-5" />
+            <HardDrive className="h-5 w-5 text-primary" />
             Images ({images.length})
           </CardTitle>
           {images.length > 0 && (
@@ -433,7 +433,7 @@ export const DockerManagement = memo(() => {
               {images.map((image) => (
                 <div
                   key={image.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-white/5 hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">
