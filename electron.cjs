@@ -524,7 +524,7 @@ function execDockerCommand(command) {
 ipcMain.handle("docker:list-images", async () => {
   try {
     const output = await execDockerCommand(
-      'docker images --format "{{json .}}" --filter "reference=*openfork*" --filter "reference=*comfyui*" --filter "reference=*diffrhythm*" --filter "reference=*ollama*"'
+      'docker images --format "{{json .}}"'
     );
     if (!output) return { success: true, data: [] };
     
@@ -540,6 +540,11 @@ ipcMain.handle("docker:list-images", async () => {
           size: img.Size,
           created: img.CreatedAt || img.CreatedSince,
         };
+      })
+      // Double-check each image contains "openfork"
+      .filter((img) => {
+        const fullName = `${img.repository}:${img.tag}`.toLowerCase();
+        return fullName.includes("openfork");
       });
     return { success: true, data: images };
   } catch (error) {
@@ -578,6 +583,14 @@ ipcMain.handle("docker:list-containers", async () => {
 
 ipcMain.handle("docker:remove-image", async (event, imageId) => {
   try {
+    // Validate image contains "openfork" before removal
+    const imageInfo = await execDockerCommand(
+      `docker images --format "{{.Repository}}:{{.Tag}}" --filter "id=${imageId}"`
+    );
+    if (!imageInfo || !imageInfo.toLowerCase().includes("openfork")) {
+      console.warn(`Image ${imageId} does not contain "openfork", skipping removal`);
+      return { success: false, error: "Only OpenFork images can be removed" };
+    }
     await execDockerCommand(`docker rmi -f ${imageId}`);
     return { success: true };
   } catch (error) {
@@ -588,17 +601,27 @@ ipcMain.handle("docker:remove-image", async (event, imageId) => {
 
 ipcMain.handle("docker:remove-all-images", async () => {
   try {
-    // First, get all OpenFork-related images
+    // Get all images with openfork in the name
     const listOutput = await execDockerCommand(
-      'docker images --format "{{.ID}}" --filter "reference=*openfork*" --filter "reference=*comfyui*" --filter "reference=*diffrhythm*" --filter "reference=*ollama*"'
+      'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"'
     );
     if (!listOutput) return { success: true, removedCount: 0 };
     
-    const imageIds = listOutput.split("\n").filter(Boolean);
-    for (const id of imageIds) {
-      await execDockerCommand(`docker rmi -f ${id}`);
+    const lines = listOutput.split("\n").filter(Boolean);
+    let removedCount = 0;
+    for (const line of lines) {
+      const [id, fullName] = line.split("|");
+      // Double-check each image contains "openfork"
+      if (fullName && fullName.toLowerCase().includes("openfork")) {
+        try {
+          await execDockerCommand(`docker rmi -f ${id}`);
+          removedCount++;
+        } catch (e) {
+          console.warn(`Failed to remove image ${id}:`, e.message);
+        }
+      }
     }
-    return { success: true, removedCount: imageIds.length };
+    return { success: true, removedCount };
   } catch (error) {
     console.error("Failed to remove all Docker images:", error);
     return { success: false, error: error.message };
@@ -669,20 +692,24 @@ ipcMain.handle("docker:cleanup-all", async () => {
       console.warn("Error stopping containers:", e.message);
     }
     
-    // Remove all images
+    // Remove all openfork images
     let removedCount = 0;
     try {
       const imageOutput = await execDockerCommand(
-        'docker images --format "{{.ID}}" --filter "reference=*openfork*" --filter "reference=*comfyui*" --filter "reference=*diffrhythm*" --filter "reference=*ollama*"'
+        'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"'
       );
       if (imageOutput) {
-        const imageIds = imageOutput.split("\n").filter(Boolean);
-        for (const id of imageIds) {
-          try {
-            await execDockerCommand(`docker rmi -f ${id}`);
-            removedCount++;
-          } catch (e) {
-            console.warn(`Failed to remove image ${id}:`, e.message);
+        const lines = imageOutput.split("\n").filter(Boolean);
+        for (const line of lines) {
+          const [id, fullName] = line.split("|");
+          // Only remove images containing "openfork"
+          if (fullName && fullName.toLowerCase().includes("openfork")) {
+            try {
+              await execDockerCommand(`docker rmi -f ${id}`);
+              removedCount++;
+            } catch (e) {
+              console.warn(`Failed to remove image ${id}:`, e.message);
+            }
           }
         }
       }
