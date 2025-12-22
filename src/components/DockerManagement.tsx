@@ -1,16 +1,7 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
   Trash2,
   X,
@@ -18,7 +9,6 @@ import {
   Loader2,
   HardDrive,
   Container,
-  AlertTriangle,
   Download,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -100,7 +90,7 @@ export const DockerManagement = memo(() => {
   const handleRemoveImage = async (imageId: string, imageName: string) => {
     showConfirmDialog(
       "Remove Docker Image",
-      `Are you sure you want to remove "${imageName}"? This may require re-downloading (10-20GB+) if you need it again.`,
+      `Are you sure you want to remove "${imageName}"?`,
       async () => {
         setActionLoading(`remove-${imageId}`);
         try {
@@ -220,33 +210,15 @@ export const DockerManagement = memo(() => {
 
   return (
     <div className="space-y-6">
-      <AlertDialog
-        open={confirmDialog.isOpen}
-        onOpenChange={(open: boolean) =>
-          setConfirmDialog((prev) => ({ ...prev, isOpen: open }))
-        }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              {confirmDialog.title}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmDialog.description}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDialog.onConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Confirm
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmationDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmButtonText="Confirm"
+        cancelButtonText="Cancel"
+      />
 
       {error && (
         <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-lg p-4">
