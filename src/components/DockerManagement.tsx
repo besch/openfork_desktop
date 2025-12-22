@@ -13,14 +13,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Trash2,
-  Square,
+  X,
   RefreshCw,
   Loader2,
   HardDrive,
   Container,
   AlertTriangle,
   Download,
-  X,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
@@ -339,7 +338,7 @@ export const DockerManagement = memo(() => {
           </CardTitle>
           {containers.length > 0 && (
             <Button
-              variant="outline"
+              variant="destructive"
               size="sm"
               onClick={handleStopAllContainers}
               disabled={actionLoading !== null}
@@ -347,7 +346,7 @@ export const DockerManagement = memo(() => {
               {actionLoading === "stop-all" ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Square className="h-4 w-4 mr-2" />
+                <X className="h-4 w-4 mr-2" />
               )}
               Stop All
             </Button>
@@ -382,16 +381,15 @@ export const DockerManagement = memo(() => {
                       {container.status}
                     </span>
                     <Button
-                      variant="ghost"
+                      variant="destructive"
                       size="sm"
                       onClick={() => handleStopContainer(container.id, container.name)}
                       disabled={actionLoading !== null}
-                      className="hover:bg-destructive/10 hover:text-destructive"
                     >
                       {actionLoading === `stop-${container.id}` ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Square className="h-4 w-4" />
+                        <X className="h-4 w-4" />
                       )}
                     </Button>
                   </div>
