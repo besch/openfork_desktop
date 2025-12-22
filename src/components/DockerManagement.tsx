@@ -409,7 +409,7 @@ export const DockerManagement = memo(() => {
           </CardTitle>
           {images.length > 0 && (
             <Button
-              variant="outline"
+              variant="destructive"
               size="sm"
               onClick={handleRemoveAllImages}
               disabled={actionLoading !== null}
@@ -449,13 +449,12 @@ export const DockerManagement = memo(() => {
                     </p>
                   </div>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="sm"
                     onClick={() =>
                       handleRemoveImage(image.id, `${image.repository}:${image.tag}`)
                     }
                     disabled={actionLoading !== null}
-                    className="ml-4 hover:bg-destructive/10 hover:text-destructive"
                   >
                     {actionLoading === `remove-${image.id}` ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
