@@ -292,10 +292,9 @@ export const DockerManagement = memo(() => {
                 <span>Downloading Docker Image</span>
               </div>
               <Button
-                variant="ghost"
+                variant="destructive"
                 size="sm"
                 onClick={handleCancelDownload}
-                className="text-blue-400 hover:text-destructive hover:bg-destructive/10"
               >
                 <X className="h-4 w-4 mr-1" />
                 Cancel
