@@ -1,5 +1,22 @@
-import type { LogEntry, DGNClientStatus, Profile, Project, DockerPullProgress } from "./types";
+import type { LogEntry, DGNClientStatus, Profile, Project, DockerPullProgress, ScheduleConfig, ScheduleStatus } from "./types";
 import type { Session, AuthError } from "@supabase/supabase-js";
+
+interface DockerImage {
+  id: string;
+  repository: string;
+  tag: string;
+  size: string;
+  created: string;
+}
+
+interface DockerContainer {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  state: string;
+  created: string;
+}
 
 declare global {
   interface Window {
@@ -35,6 +52,7 @@ declare global {
           | "openfork_client:docker-progress"
           | "auth:session"
           | "auth:callback"
+          | "schedule:status"
       ) => void;
       // New search methods
       searchUsers: (
@@ -96,11 +114,20 @@ declare global {
       openDockerDownload: () => Promise<{ success: boolean }>;
       
       // Auto Update
-      onUpdateAvailable: (callback: (info: any) => void) => void;
-      onUpdateProgress: (callback: (progress: any) => void) => void;
-      onUpdateDownloaded: (callback: (info: any) => void) => void;
+      onUpdateAvailable: (callback: (info: unknown) => void) => void;
+      onUpdateProgress: (callback: (progress: unknown) => void) => void;
+      onUpdateDownloaded: (callback: (info: unknown) => void) => void;
       downloadUpdate: () => void;
       installUpdate: () => void;
+      
+      // Schedule Management
+      getScheduleConfig: () => Promise<ScheduleConfig>;
+      setScheduleConfig: (config: ScheduleConfig) => Promise<{ success: boolean; error?: string }>;
+      getScheduleStatus: () => Promise<ScheduleStatus>;
+      getSchedulePresets: () => Promise<Record<string, Partial<ScheduleConfig>>>;
+      getSystemIdleTime: () => Promise<number>;
+      onScheduleStatus: (callback: (status: ScheduleStatus) => void) => void;
     };
   }
 }
+

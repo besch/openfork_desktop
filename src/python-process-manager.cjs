@@ -29,6 +29,9 @@ class PythonProcessManager {
     this._listenForTokenRefresh();
   }
 
+  isRunning() {
+    return this.pythonProcess !== null;
+  }
 
   async cleanupRogueProcesses() {
     // If a cleanup is already in progress, return the existing promise

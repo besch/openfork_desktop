@@ -6,6 +6,7 @@ if (app.isPackaged) {
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
 const { PythonProcessManager } = require("./src/python-process-manager.cjs");
+const { ScheduleManager, SCHEDULE_PRESETS } = require("./src/schedule-manager.cjs");
 const { autoUpdater } = require("electron-updater");
 
 // --- PROTOCOL & INITIALIZATION ---
@@ -42,6 +43,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 let mainWindow;
 let session = null;
 let pythonManager;
+let scheduleManager;
 
 // Listen for auth events to keep the session fresh
 supabase.auth.onAuthStateChange((event, newSession) => {
@@ -181,6 +183,14 @@ function createWindow() {
     userDataPath,
   });
 
+  // Instantiate the schedule manager
+  scheduleManager = new ScheduleManager({
+    pythonManager,
+    store,
+    mainWindow,
+  });
+  scheduleManager.loadConfig(); // Load saved schedule on startup
+
   // Intercept the close event
   mainWindow.on("close", (event) => {
     if (pythonManager && !pythonManager.isQuitting) {
@@ -315,6 +325,40 @@ ipcMain.handle("save-settings", async (event, settings) => {
     console.error("Error saving settings:", error);
     return { success: false, error: error.message };
   }
+});
+
+// --- SCHEDULE MANAGER IPC HANDLERS ---
+
+ipcMain.handle("schedule:get-config", () => {
+  return store.get("autoScheduleConfig") || { mode: "manual", schedules: [] };
+});
+
+ipcMain.handle("schedule:set-config", (event, config) => {
+  try {
+    if (scheduleManager) {
+      scheduleManager.updateConfig(config);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error("Error setting schedule config:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("schedule:get-status", () => {
+  if (scheduleManager) {
+    return scheduleManager.getStatus();
+  }
+  return { mode: "manual", isActive: false, message: "Schedule manager not initialized" };
+});
+
+ipcMain.handle("schedule:get-presets", () => {
+  return SCHEDULE_PRESETS;
+});
+
+ipcMain.handle("schedule:get-idle-time", () => {
+  const { powerMonitor } = require("electron");
+  return powerMonitor.getSystemIdleTime();
 });
 
 ipcMain.handle("search:users", async (event, term) => {

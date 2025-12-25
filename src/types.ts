@@ -99,3 +99,27 @@ export interface DependencyStatus {
   nvidia: NvidiaStatus;
   allReady: boolean;
 }
+
+// Schedule Types
+export interface ScheduleSlot {
+  startTime: string;
+  endTime: string;
+  days: string[];
+}
+
+export interface ScheduleConfig {
+  mode: "manual" | "scheduled" | "idle";
+  schedules: ScheduleSlot[];
+  idleThresholdMinutes?: number;
+  idleOnlyDuringSchedule?: boolean;
+  pauseOnBattery?: boolean;
+}
+
+export interface ScheduleStatus {
+  mode: string;
+  isActive: boolean;
+  isRunning?: boolean;
+  message: string;
+  schedules?: ScheduleSlot[];
+}
+

@@ -97,5 +97,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update:downloaded", (_event, value) => callback(value)),
   downloadUpdate: () => ipcRenderer.invoke("update:download"),
   installUpdate: () => ipcRenderer.invoke("update:install"),
+
+  // Settings persistence
+  loadSettings: () => ipcRenderer.invoke("load-settings"),
+  saveSettings: (settings) => ipcRenderer.invoke("save-settings", settings),
+
+  // Schedule Management
+  getScheduleConfig: () => ipcRenderer.invoke("schedule:get-config"),
+  setScheduleConfig: (config) => ipcRenderer.invoke("schedule:set-config", config),
+  getScheduleStatus: () => ipcRenderer.invoke("schedule:get-status"),
+  getSchedulePresets: () => ipcRenderer.invoke("schedule:get-presets"),
+  getSystemIdleTime: () => ipcRenderer.invoke("schedule:get-idle-time"),
+  onScheduleStatus: (callback) =>
+    ipcRenderer.on("schedule:status", (_event, value) => callback(value)),
 });
 
