@@ -100,7 +100,7 @@ export const AutoScheduleSettings = memo(() => {
           value={config.mode}
           onValueChange={(value: ScheduleMode) => saveConfig({ ...config, mode: value })}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
