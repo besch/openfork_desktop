@@ -83,9 +83,14 @@ class PythonProcessManager {
 
   _sendTokensToPython(accessToken, refreshToken) {
     if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
-      console.error(
-        "Cannot send tokens: Python process not running or stdin not writable."
-      );
+      if (this.pythonProcess) {
+        console.error(
+          "Cannot send tokens: Python process stdin not writable."
+        );
+      } else {
+        // Just a debug message if process isn't even supposed to be running
+        console.log("Token update skipped: Python process not running.");
+      }
       return;
     }
 
