@@ -230,7 +230,7 @@ export const DockerManagement = memo(() => {
         <div className="flex items-center gap-4">
           <h2 className="text-2xl font-bold">Docker Management</h2>
           <Button
-            variant="outline"
+            variant="primary"
             size="sm"
             onClick={fetchData}
             disabled={loading}
@@ -306,7 +306,7 @@ export const DockerManagement = memo(() => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Container className="h-5 w-5 text-primary" />
-            Containers ({containers.length})
+            Running Containers ({containers.length})
           </CardTitle>
           {containers.length > 0 && (
             <Button
@@ -377,7 +377,7 @@ export const DockerManagement = memo(() => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <HardDrive className="h-5 w-5 text-primary" />
-            Images ({images.length})
+            Dcoker Images ({images.length})
           </CardTitle>
           {images.length > 0 && (
             <Button
