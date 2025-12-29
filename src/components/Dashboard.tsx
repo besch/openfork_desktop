@@ -180,11 +180,6 @@ export const Dashboard = memo(() => {
     loadPersistentSettings();
   }, [loadPersistentSettings]);
 
-  // Save settings whenever job policy changes
-  useEffect(() => {
-    savePersistentSettings();
-  }, [jobPolicy, savePersistentSettings]);
-
   // Use the job policy from the store instead of local state
   const jobPolicyState = jobPolicy;
 
@@ -220,6 +215,7 @@ export const Dashboard = memo(() => {
 
   const handleJobPolicyChange = (policy: JobPolicy) => {
     setJobPolicy(policy);
+    savePersistentSettings();
   };
 
   const isProcessingAndRunning = status === "running" && stats.processing > 0;

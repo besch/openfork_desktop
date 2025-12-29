@@ -319,7 +319,6 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         set({
           jobPolicy: validatedJobPolicy,
         });
-        console.log("Loaded persistent settings:", settings);
       }
     } catch (error) {
       console.error("Error loading persistent settings:", error);
@@ -331,7 +330,6 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       await window.electronAPI.saveSettings({
         jobPolicy,
       });
-      console.log("Saved persistent settings:", { jobPolicy });
     } catch (error) {
       console.error("Error saving persistent settings:", error);
     }

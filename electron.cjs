@@ -308,7 +308,6 @@ ipcMain.handle("get-session", async () => {
 ipcMain.handle("load-settings", async () => {
   try {
     const settings = store.get("appSettings") || {};
-    console.log("Loaded settings from store:", settings);
     return settings;
   } catch (error) {
     console.error("Error loading settings:", error);
@@ -318,7 +317,6 @@ ipcMain.handle("load-settings", async () => {
 
 ipcMain.handle("save-settings", async (event, settings) => {
   try {
-    console.log("Saving settings to store:", settings);
     store.set("appSettings", settings);
     return { success: true };
   } catch (error) {
@@ -795,7 +793,6 @@ ipcMain.handle("deps:check-docker", async () => {
     // Check if Docker daemon is running and responsive
     const infoResult = await checkCommand("docker info");
     if (infoResult.success) {
-      console.log("Docker is installed and running");
       return { installed: true, running: true };
     } else {
       console.log("Docker is installed but daemon not running:", infoResult.error);
