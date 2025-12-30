@@ -13,14 +13,15 @@ const process = require("process");
 // --- ENABLE BUILT-IN AI (Gemini Nano) ---
 // Note: Requires Electron 32+ (Chrome 128+)
 // We enable several feature variants to cover all implementations across Chromium versions
-app.commandLine.appendSwitch("enable-features", "OptimizationGuideOnDeviceModel,PromptAPIForGeminiNano,PromptAPIGeminiNano,SummarizationAPI,LanguageModelAPI,GeminiNanoAPI,ExperimentalBuiltInAI,ModelExecutionCapability,OnDeviceModelService");
-app.commandLine.appendSwitch("enable-blink-features", "PromptAPI");
+app.commandLine.appendSwitch("enable-features", "OptimizationGuideOnDeviceModel,PromptAPIForGeminiNano,PromptAPIGeminiNano,SummarizationAPI,LanguageModelAPI,GeminiNanoAPI,ExperimentalBuiltInAI,ModelExecutionCapability,OnDeviceModelService,WriterAPI,RewriterAPI");
+app.commandLine.appendSwitch("enable-blink-features", "PromptAPI,SummarizationAPI,LanguageModelAPI,WriterAPI,RewriterAPI");
 app.commandLine.appendSwitch("enable-experimental-web-platform-features");
 // Bypass hardware checks and enable debug info
 app.commandLine.appendSwitch("optimization-guide-on-device-model-show-debug-info");
-app.commandLine.appendSwitch("optimization-guide-on-device-model-show-debug-info"); // Duplicate is harmless but sometimes required for certain builds
 app.commandLine.appendSwitch("enable-optimization-guide-on-device-model");
-// Note: We removed the empty model path switch as it might cause initialization failures
+// Force enable even without full download immediately (will trigger download)
+app.commandLine.appendSwitch("install-optimization-guide-on-device-model");
+
 
 // --- PROTOCOL & INITIALIZATION ---
 
@@ -138,11 +139,11 @@ function createWindow() {
     show: false,
     backgroundColor: "#111827",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
-      devTools: false,
+      devTools: true,
     },
   });
 
