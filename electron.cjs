@@ -8,6 +8,16 @@ const { createClient } = require("@supabase/supabase-js");
 const { PythonProcessManager } = require("./src/python-process-manager.cjs");
 const { ScheduleManager, SCHEDULE_PRESETS } = require("./src/schedule-manager.cjs");
 const { autoUpdater } = require("electron-updater");
+const process = require("process");
+
+// --- ENABLE BUILT-IN AI (Gemini Nano) ---
+// Note: Requires Electron 32+ (Chrome 128+)
+// We enable several feature variants to cover different Chrome versions/implementations
+app.commandLine.appendSwitch("enable-features", "OptimizationGuideOnDeviceModel,PromptAPIForGeminiNano,PromptAPIGeminiNano,SummarizationAPI,LanguageModelAPI");
+app.commandLine.appendSwitch("enable-experimental-web-platform-features");
+// Bypass hardware checks
+app.commandLine.appendSwitch("optimization-guide-on-device-model-show-debug-info");
+app.commandLine.appendSwitch("optimization-guide-on-device-model-path"); // Triggers model download if missing
 
 // --- PROTOCOL & INITIALIZATION ---
 
