@@ -143,7 +143,6 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
-      devTools: true,
     },
   });
 
@@ -651,12 +650,18 @@ ipcMain.handle("docker:list-containers", async () => {
 
 ipcMain.handle("docker:remove-image", async (event, imageId) => {
   try {
-    // Validate image contains "openfork" before removal
-    const imageInfo = await execDockerCommand(
-      `docker images --format "{{.Repository}}:{{.Tag}}" --filter "id=${imageId}"`
+    // Get all images to verify the ID against our OpenFork filter
+    const listOutput = await execDockerCommand(
+      'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"'
     );
-    if (!imageInfo || !imageInfo.toLowerCase().includes("openfork")) {
-      console.warn(`Image ${imageId} does not contain "openfork", skipping removal`);
+    const lines = listOutput.split("\n").filter(Boolean);
+    const isAllowed = lines.some(line => {
+      const [id, fullName] = line.split("|");
+      return (id === imageId || id.startsWith(imageId)) && fullName.toLowerCase().includes("openfork");
+    });
+
+    if (!isAllowed) {
+      console.warn(`Image ${imageId} validation failed, skipping removal`);
       return { success: false, error: "Only OpenFork images can be removed" };
     }
     await execDockerCommand(`docker rmi -f ${imageId}`);

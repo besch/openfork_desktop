@@ -83,7 +83,10 @@ export const DockerManagement = memo(() => {
       isOpen: true,
       title,
       description,
-      onConfirm,
+      onConfirm: () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        onConfirm();
+      },
     });
   };
 
@@ -377,7 +380,7 @@ export const DockerManagement = memo(() => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <HardDrive className="h-5 w-5 text-primary" />
-            Dcoker Images ({images.length})
+            Docker Images ({images.length})
           </CardTitle>
           {images.length > 0 && (
             <Button
