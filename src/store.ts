@@ -95,11 +95,11 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
     if (isSameUser && session) {
       // Just update the tokens without resetting subscriptions
+      supabase.realtime.setAuth(session.access_token);
       await supabase.auth.setSession({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
       });
-      supabase.realtime.setAuth(session.access_token);
       set({ session });
       // Refresh stats to ensure we're in sync, in case any requests failed during token expiry
       get().fetchStats();
@@ -111,11 +111,11 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
     // Update the Supabase client and the store's state.
     if (session) {
+      supabase.realtime.setAuth(session.access_token);
       await supabase.auth.setSession({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
       });
-      supabase.realtime.setAuth(session.access_token);
     } else {
       await supabase.auth.signOut({ scope: "local" });
       supabase.realtime.setAuth(null);
@@ -206,12 +206,13 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       return;
     }
 
+    const instanceId = Math.random().toString(36).substring(2, 9);
     let channelName: string;
     let postgresChangesOptions: any;
 
     switch (jobPolicy) {
       case "mine":
-        channelName = `dgn-jobs-user-changes:${session.user.id}`;
+        channelName = `dgn-jobs-user-changes:${session.user.id}:${instanceId}`;
         postgresChangesOptions = {
           event: "*",
           schema: "public",
@@ -223,7 +224,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         channelName = `dgn-jobs-project-changes:${allowedIds
           .split(",")
           .sort()
-          .join(",")}`;
+          .join(",")}:${instanceId}`;
         postgresChangesOptions = {
           event: "*",
           schema: "public",
@@ -235,7 +236,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         channelName = `dgn-jobs-users-changes:${allowedIds
           .split(",")
           .sort()
-          .join(",")}`;
+          .join(",")}:${instanceId}`;
         postgresChangesOptions = {
           event: "*",
           schema: "public",
@@ -244,7 +245,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         };
         break;
       case "all":
-        channelName = "dgn-jobs-all-changes";
+        channelName = `dgn-jobs-all-changes:${instanceId}`;
         postgresChangesOptions = {
           event: "*",
           schema: "public",
@@ -280,8 +281,11 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
             // Force a session refresh
             window.electronAPI
               .getSession()
-              .then((currentSession: Session | null) => {
-                if (!currentSession) {
+              .then(async (currentSession: Session | null) => {
+                if (currentSession) {
+                  console.log("Recovered session, resubscribing...");
+                  await get().setSession(currentSession);
+                } else {
                   console.error(
                     "No valid session available, unsubscribing from job changes"
                   );
