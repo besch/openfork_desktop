@@ -110,5 +110,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSystemIdleTime: () => ipcRenderer.invoke("schedule:get-idle-time"),
   onScheduleStatus: (callback) =>
     ipcRenderer.on("schedule:status", (_event, value) => callback(value)),
+  
+  // Versions and Environment
+  getProcessInfo: () => ipcRenderer.invoke("get-process-info"),
 });
 

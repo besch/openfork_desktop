@@ -12,12 +12,15 @@ const process = require("process");
 
 // --- ENABLE BUILT-IN AI (Gemini Nano) ---
 // Note: Requires Electron 32+ (Chrome 128+)
-// We enable several feature variants to cover different Chrome versions/implementations
-app.commandLine.appendSwitch("enable-features", "OptimizationGuideOnDeviceModel,PromptAPIForGeminiNano,PromptAPIGeminiNano,SummarizationAPI,LanguageModelAPI");
+// We enable several feature variants to cover all implementations across Chromium versions
+app.commandLine.appendSwitch("enable-features", "OptimizationGuideOnDeviceModel,PromptAPIForGeminiNano,PromptAPIGeminiNano,SummarizationAPI,LanguageModelAPI,GeminiNanoAPI,ExperimentalBuiltInAI,ModelExecutionCapability,OnDeviceModelService");
+app.commandLine.appendSwitch("enable-blink-features", "PromptAPI");
 app.commandLine.appendSwitch("enable-experimental-web-platform-features");
-// Bypass hardware checks
+// Bypass hardware checks and enable debug info
 app.commandLine.appendSwitch("optimization-guide-on-device-model-show-debug-info");
-app.commandLine.appendSwitch("optimization-guide-on-device-model-path"); // Triggers model download if missing
+app.commandLine.appendSwitch("optimization-guide-on-device-model-show-debug-info"); // Duplicate is harmless but sometimes required for certain builds
+app.commandLine.appendSwitch("enable-optimization-guide-on-device-model");
+// Note: We removed the empty model path switch as it might cause initialization failures
 
 // --- PROTOCOL & INITIALIZATION ---
 
@@ -310,6 +313,18 @@ ipcMain.on("window:set-closable", (event, closable) => {
 });
 
 ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
+ipcMain.handle("get-process-info", () => {
+  return {
+    chrome: process.versions.chrome,
+    electron: process.versions.electron,
+    node: process.versions.node,
+    v8: process.versions.v8,
+    arch: process.arch,
+    platform: process.platform,
+    argv: process.argv,
+    isPackaged: app.isPackaged,
+  };
+});
 ipcMain.handle("get-session", async () => {
   return session;
 });
