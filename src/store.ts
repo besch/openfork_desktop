@@ -1,3 +1,4 @@
+/// <reference path="./electron.d.ts" />
 import { create } from "zustand";
 import type { Session, RealtimeChannel } from "@supabase/supabase-js";
 import type {
@@ -13,6 +14,12 @@ import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
 
+// Simplified project type for search results
+interface SearchProject {
+  id: string;
+  title: string;
+}
+
 interface DGNClientState {
   status: DGNClientStatus;
   logs: LogEntry[];
@@ -21,7 +28,7 @@ interface DGNClientState {
   session: Session | null;
   jobSubscription: RealtimeChannel | null;
   services: Array<{ value: string; label: string }>;
-  projects: Project[];
+  projects: SearchProject[];
   selectedProjects: Project[];
   isLoading: boolean;
   jobPolicy: JobPolicy;
@@ -266,7 +273,24 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         if (status === "SUBSCRIBED") {
           // Fetch initial stats once subscribed.
           fetchStats();
+          console.log(`store.ts: Successfully subscribed to ${channelName}`);
         }
+        
+        // Handle channel errors (connection lost, timeout, etc.)
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`store.ts: Channel ${status} on ${channelName}, attempting reconnection...`);
+          
+          // Unsubscribe and resubscribe after a delay
+          setTimeout(async () => {
+            const { session: currentSession } = get();
+            if (currentSession) {
+              console.log("store.ts: Resubscribing to job changes after channel error...");
+              await get().unsubscribeFromJobChanges();
+              get().subscribeToJobChanges();
+            }
+          }, 3000); // Wait 3 seconds before reconnecting
+        }
+        
         if (err) {
           console.error(`store.ts: Subscription error on ${channelName}:`, err);
           // If subscription fails due to auth issues, attempt to recover
@@ -344,51 +368,91 @@ function initializeIpcListeners() {
   const { setStatus, addLog, setSession, setIsLoading, setDockerPullProgress } =
     useClientStore.getState();
 
-  window.electronAPI.onStatusChange((status) => {
-    setStatus(status);
-    if (status === "stopping") {
-      window.electronAPI.setWindowClosable(false);
-    } else {
-      window.electronAPI.setWindowClosable(true);
-    }
-  });
+  // Store cleanup functions from listener registrations
+  const cleanupFns: (() => void)[] = [];
 
-  window.electronAPI.onLog(addLog);
-
-  window.electronAPI.onDockerProgress(setDockerPullProgress);
-
-  window.electronAPI.onSession(async (session) => {
-    await setSession(session);
-    setIsLoading(false);
-  });
-
-  window.electronAPI.onAuthCallback(async (url) => {
-    const hashPart = url.split("#")[1];
-    if (!hashPart) return;
-
-    const params = new URLSearchParams(hashPart);
-    const accessToken = params.get("access_token");
-    const refreshToken = params.get("refresh_token");
-
-    if (accessToken && refreshToken) {
-      const { session: newSession, error } =
-        await window.electronAPI.setSessionFromTokens(
-          accessToken,
-          refreshToken
-        );
-
-      if (error) {
-        console.error(
-          "Error persisting session in main process:",
-          error.message
-        );
-        return;
+  cleanupFns.push(
+    window.electronAPI.onStatusChange((status) => {
+      setStatus(status);
+      if (status === "stopping") {
+        window.electronAPI.setWindowClosable(false);
+      } else {
+        window.electronAPI.setWindowClosable(true);
       }
-      if (newSession) {
-        await setSession(newSession);
+    })
+  );
+
+  cleanupFns.push(window.electronAPI.onLog(addLog));
+
+  cleanupFns.push(window.electronAPI.onDockerProgress(setDockerPullProgress));
+
+  cleanupFns.push(
+    window.electronAPI.onSession(async (session) => {
+      await setSession(session);
+      setIsLoading(false);
+    })
+  );
+
+  cleanupFns.push(
+    window.electronAPI.onAuthCallback(async (url) => {
+      const hashPart = url.split("#")[1];
+      if (!hashPart) return;
+
+      const params = new URLSearchParams(hashPart);
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        const { session: newSession, error } =
+          await window.electronAPI.setSessionFromTokens(
+            accessToken,
+            refreshToken
+          );
+
+        if (error) {
+          console.error(
+            "Error persisting session in main process:",
+            error.message
+          );
+          return;
+        }
+        if (newSession) {
+          await setSession(newSession);
+        }
       }
-    }
-  });
+    })
+  );
+
+  // Handle force refresh from main process (token was refreshed)
+  cleanupFns.push(
+    window.electronAPI.onForceRefresh(async () => {
+      console.log("store.ts: Force refresh requested by main process");
+      const currentSession = await window.electronAPI.getSession();
+      if (currentSession) {
+        // Update tokens and resubscribe to ensure realtime is fresh
+        await setSession(currentSession);
+        console.log("store.ts: Session refreshed, realtime reconnected");
+      }
+    })
+  );
+
+  // Handle force logout from main process (auth permanently failed)
+  cleanupFns.push(
+    window.electronAPI.onForceLogout(async () => {
+      console.warn("store.ts: Force logout requested by main process");
+      await setSession(null);
+    })
+  );
+
+  // Return cleanup function for all listeners
+  return () => {
+    cleanupFns.forEach((cleanup) => cleanup());
+  };
 }
 
-initializeIpcListeners();
+// Initialize listeners and store cleanup function
+const cleanupListeners = initializeIpcListeners();
+
+// Export cleanup for potential use in tests or hot reload scenarios
+export { cleanupListeners };
+

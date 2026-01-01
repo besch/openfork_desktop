@@ -45,8 +45,8 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
     const search = async () => {
       setIsLoading(true);
       const result = await window.electronAPI.searchUsers(debouncedSearchTerm);
-      if (result && result.success) {
-        setSearchResults(result.data);
+      if (result && result.success && result.data) {
+        setSearchResults(result.data as Profile[]);
       } else {
         setSearchResults([]);
       }

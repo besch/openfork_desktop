@@ -48,8 +48,8 @@ export const ProjectSelection: React.FC<ProjectSelectionProps> = ({
       const result = await window.electronAPI.searchProjects(
         debouncedSearchTerm
       );
-      if (result && result.success) {
-        setSearchResults(result.data);
+      if (result && result.success && result.data) {
+        setSearchResults(result.data as Project[]);
       } else {
         setSearchResults([]);
       }

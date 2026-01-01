@@ -58,6 +58,7 @@ let mainWindow;
 let session = null;
 let pythonManager;
 let scheduleManager;
+let isQuittingApp = false; // App-level flag to prevent before-quit race condition
 
 // Listen for auth events to keep the session fresh
 supabase.auth.onAuthStateChange((event, newSession) => {
@@ -243,10 +244,20 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async (event) => {
-  if (!pythonManager || pythonManager.isQuitting) return;
+  // If we're already in the quitting process, let it proceed
+  if (isQuittingApp) {
+    // Don't prevent quit on re-entry - this allows the app to actually quit
+    return;
+  }
+  
+  // If there's no python manager or it's not running, let quit proceed
+  if (!pythonManager || !pythonManager.isRunning()) {
+    return;
+  }
 
   console.log("Electron: before-quit event triggered.");
   event.preventDefault(); // Prevent the app from quitting immediately
+  isQuittingApp = true;
   pythonManager.isQuitting = true;
 
   await pythonManager.stop();

@@ -1,5 +1,19 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Helper to create listener with cleanup function
+const createListener = (channel, callback) => {
+  const handler = (_event, value) => callback(value);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+};
+
+// Helper for listeners without value
+const createVoidListener = (channel, callback) => {
+  const handler = () => callback();
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+};
+
 contextBridge.exposeInMainWorld("electronAPI", {
   // Orchestrator API URL
   getOrchestratorApiUrl: () => ipcRenderer.invoke("get-orchestrator-api-url"),
@@ -20,25 +34,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return ipcRenderer.invoke("openfork_client:cleanup");
   },
 
-  // DGN Client listeners
-  onLog: (callback) =>
-    ipcRenderer.on("openfork_client:log", (_event, value) => callback(value)),
-  onStatusChange: (callback) =>
-    ipcRenderer.on("openfork_client:status", (_event, value) =>
-      callback(value)
-    ),
-  onDockerProgress: (callback) =>
-    ipcRenderer.on("openfork_client:docker-progress", (_event, value) =>
-      callback(value)
-    ),
+  // DGN Client listeners - now return cleanup functions
+  onLog: (callback) => createListener("openfork_client:log", callback),
+  onStatusChange: (callback) => createListener("openfork_client:status", callback),
+  onDockerProgress: (callback) => createListener("openfork_client:docker-progress", callback),
 
   // Authentication
   loginWithGoogle: () => ipcRenderer.invoke("auth:google-login"),
   logout: () => ipcRenderer.invoke("auth:logout"),
-  onSession: (callback) =>
-    ipcRenderer.on("auth:session", (_event, value) => callback(value)),
-  onAuthCallback: (callback) =>
-    ipcRenderer.on("auth:callback", (_event, value) => callback(value)),
+  onSession: (callback) => createListener("auth:session", callback),
+  onAuthCallback: (callback) => createListener("auth:callback", callback),
   setSessionFromTokens: (accessToken, refreshToken) =>
     ipcRenderer.invoke(
       "auth:set-session-from-tokens",
@@ -51,12 +56,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("window:set-closable", closable),
 
   // Force refresh handling
-  onForceRefresh: (callback) =>
-    ipcRenderer.on("auth:force-refresh", () => callback()),
+  onForceRefresh: (callback) => createVoidListener("auth:force-refresh", callback),
   
   // Force logout handling (permanent auth failure)
-  onForceLogout: (callback) =>
-    ipcRenderer.on("auth:force-logout", () => callback()),
+  onForceLogout: (callback) => createVoidListener("auth:force-logout", callback),
 
   // Session management
   getSession: () => ipcRenderer.invoke("get-session"),
@@ -88,13 +91,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkNvidia: () => ipcRenderer.invoke("deps:check-nvidia"),
   openDockerDownload: () => ipcRenderer.invoke("deps:open-docker-download"),
   
-  // Auto Updater
-  onUpdateAvailable: (callback) => 
-    ipcRenderer.on("update:available", (_event, value) => callback(value)),
-  onUpdateProgress: (callback) =>
-    ipcRenderer.on("update:progress", (_event, value) => callback(value)),
-  onUpdateDownloaded: (callback) =>
-    ipcRenderer.on("update:downloaded", (_event, value) => callback(value)),
+  // Auto Updater - now return cleanup functions
+  onUpdateAvailable: (callback) => createListener("update:available", callback),
+  onUpdateProgress: (callback) => createListener("update:progress", callback),
+  onUpdateDownloaded: (callback) => createListener("update:downloaded", callback),
   downloadUpdate: () => ipcRenderer.invoke("update:download"),
   installUpdate: () => ipcRenderer.invoke("update:install"),
 
@@ -108,8 +108,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getScheduleStatus: () => ipcRenderer.invoke("schedule:get-status"),
   getSchedulePresets: () => ipcRenderer.invoke("schedule:get-presets"),
   getSystemIdleTime: () => ipcRenderer.invoke("schedule:get-idle-time"),
-  onScheduleStatus: (callback) =>
-    ipcRenderer.on("schedule:status", (_event, value) => callback(value)),
+  onScheduleStatus: (callback) => createListener("schedule:status", callback),
   
   // Versions and Environment
   getProcessInfo: () => ipcRenderer.invoke("get-process-info"),
