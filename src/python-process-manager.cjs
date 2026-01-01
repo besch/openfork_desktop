@@ -441,11 +441,17 @@ class PythonProcessManager {
 
       this.mainWindow.webContents.send("openfork_client:status", "stopping");
 
-      this.pythonProcess.once("close", () => {
-        console.log("Python process confirmed closed.");
+      let resolved = false;
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        console.log("Python process stopped. Setting status to 'stopped'.");
         this.pythonProcess = null;
+        this.mainWindow.webContents.send("openfork_client:status", "stopped");
         resolve();
-      });
+      };
+
+      this.pythonProcess.once("close", cleanup);
 
       // Gracefully shutdown via HTTP endpoint
       const request = http.get(
@@ -461,11 +467,20 @@ class PythonProcessManager {
         if (this.pythonProcess) this.pythonProcess.kill("SIGTERM");
       });
 
-      // Failsafe timeout
+      // Failsafe timeout - force kill and cleanup
       setTimeout(() => {
-        if (this.pythonProcess) {
+        if (!resolved && this.pythonProcess) {
           console.warn("Python process did not exit gracefully, forcing kill.");
           this.pythonProcess.kill("SIGKILL");
+          
+          // On Windows, SIGKILL may not trigger 'close' event reliably
+          // Force cleanup after a short delay
+          setTimeout(() => {
+            if (!resolved) {
+              console.warn("Force cleanup after SIGKILL.");
+              cleanup();
+            }
+          }, 1000);
         }
       }, 8000);
     });
