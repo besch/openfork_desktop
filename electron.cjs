@@ -249,6 +249,12 @@ app.on("before-quit", async (event) => {
     // Don't prevent quit on re-entry - this allows the app to actually quit
     return;
   }
+
+  // Set quitting flags immediately to allow windows to close
+  isQuittingApp = true;
+  if (pythonManager) {
+    pythonManager.isQuitting = true;
+  }
   
   // If there's no python manager or it's not running, let quit proceed
   if (!pythonManager || !pythonManager.isRunning()) {
@@ -257,8 +263,6 @@ app.on("before-quit", async (event) => {
 
   console.log("Electron: before-quit event triggered.");
   event.preventDefault(); // Prevent the app from quitting immediately
-  isQuittingApp = true;
-  pythonManager.isQuitting = true;
 
   await pythonManager.stop();
 
