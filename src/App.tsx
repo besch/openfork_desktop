@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { useClientStore } from "./store";
 import type { Session } from "@supabase/supabase-js";
 import type { DependencyStatus } from "./types";
@@ -20,8 +20,40 @@ import {
   Loader2,
   BarChart as BarChartIcon,
   Container,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// Docker tab trigger with activity indicator
+const DockerTabTrigger = memo(() => {
+  const dockerPullProgress = useClientStore((state) => state.dockerPullProgress);
+  const status = useClientStore((state) => state.status);
+  const stats = useClientStore((state) => state.stats);
+
+  const isDownloading = dockerPullProgress !== null && (status === "starting" || status === "running");
+  const isProcessing = status === "running" && stats.processing > 0;
+  const hasActivity = isDownloading || isProcessing;
+
+  return (
+    <TabsTrigger value="docker" className="relative">
+      {isDownloading ? (
+        <Download className="mr-2 animate-bounce text-primary" size={16} />
+      ) : isProcessing ? (
+        <Container className="mr-2 animate-pulse text-primary" size={16} />
+      ) : (
+        <Container className="mr-2" size={16} />
+      )}
+      Docker
+      {hasActivity && (
+        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDownloading ? 'bg-yellow-400' : 'bg-primary'}`} />
+          <span className={`relative inline-flex rounded-full h-3 w-3 ${isDownloading ? 'bg-yellow-500' : 'bg-primary'}`} />
+        </span>
+      )}
+    </TabsTrigger>
+  );
+});
+
 
 function App() {
   const { status, session, isLoading, setSession, dependencyStatus, setDependencyStatus } = useClientStore();
@@ -182,10 +214,7 @@ function App() {
                 <User className="mr-2" size={16} />
                 Profile
               </TabsTrigger>
-              <TabsTrigger value="docker">
-                <Container className="mr-2" size={16} />
-                Docker
-              </TabsTrigger>
+              <DockerTabTrigger />
               <TabsTrigger value="logs">
                 <Terminal className="mr-2" size={16} />
                 Logs
