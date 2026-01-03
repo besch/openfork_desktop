@@ -12,6 +12,7 @@ import { ShutdownOverlay } from "@/components/ShutdownOverlay";
 import { DockerManagement } from "@/components/DockerManagement";
 import { DependencySetup } from "@/components/DependencySetup";
 import { UpdateNotification } from "@/components/UpdateNotification";
+import { JobHistory } from "@/components/JobHistory";
 import {
   LayoutDashboard,
   Terminal,
@@ -21,6 +22,7 @@ import {
   BarChart as BarChartIcon,
   Container,
   Download,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -215,6 +217,10 @@ function App() {
                 Profile
               </TabsTrigger>
               <DockerTabTrigger />
+              <TabsTrigger value="history">
+                <History className="mr-2" size={16} />
+                History
+              </TabsTrigger>
               <TabsTrigger value="logs">
                 <Terminal className="mr-2" size={16} />
                 Logs
@@ -235,6 +241,9 @@ function App() {
             </TabsContent>
             <TabsContent value="docker">
               <DockerManagement />
+            </TabsContent>
+            <TabsContent value="history">
+              <JobHistory />
             </TabsContent>
           </Tabs>
         </div>
