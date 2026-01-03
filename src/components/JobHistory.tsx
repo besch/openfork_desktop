@@ -147,7 +147,23 @@ export const JobHistory = memo(() => {
     setError(null);
 
     try {
-      // Fetch jobs processed by this user's provider (across all sessions)
+      // Fetch jobs processed by providers owned by this user
+      // First get jobs where the provider belongs to this user
+      const { data: providerData } = await supabase
+        .from("dgn_providers")
+        .select("id")
+        .eq("user_id", session.user.id);
+
+      const providerIds = providerData?.map(p => p.id) || [];
+      
+      if (providerIds.length === 0) {
+        // No providers registered, show empty state
+        setJobs([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch jobs processed by any of the user's providers
       const { data, error: fetchError } = await supabase
         .from("dgn_jobs")
         .select(`
@@ -161,20 +177,36 @@ export const JobHistory = memo(() => {
           generation_started_at,
           generation_completed_at,
           duration_seconds,
-          user:profiles!dgn_jobs_user_id_fkey(username, avatar_url)
+          user_id
         `)
-        .or(`provider_id.eq.${providerId},status.in.(completed,failed)`)
-        .eq("provider_id", providerId || "00000000-0000-0000-0000-000000000000")
+        .in("provider_id", providerIds)
+        .in("status", ["completed", "failed", "processing"])
         .order("updated_at", { ascending: false })
         .limit(50);
 
       if (fetchError) throw fetchError;
 
-      // Type assertion for the joined data
-      const typedJobs = (data || []).map(job => ({
+      // Fetch user profiles for the jobs
+      const userIds = [...new Set((data || []).map(j => j.user_id).filter(Boolean))];
+      let profileMap: Record<string, { username: string; avatar_url: string | null }> = {};
+      
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url")
+          .in("id", userIds);
+        
+        profileMap = (profiles || []).reduce((acc, p) => {
+          acc[p.id] = { username: p.username, avatar_url: p.avatar_url };
+          return acc;
+        }, {} as typeof profileMap);
+      }
+
+      // Merge profile data into jobs
+      const typedJobs: ProcessedJob[] = (data || []).map(job => ({
         ...job,
-        user: Array.isArray(job.user) ? job.user[0] : job.user
-      })) as ProcessedJob[];
+        user: job.user_id ? profileMap[job.user_id] || null : null
+      }));
 
       setJobs(typedJobs);
     } catch (err) {
@@ -183,7 +215,7 @@ export const JobHistory = memo(() => {
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.id, providerId]);
+  }, [session?.user?.id]);
 
   // Initial fetch
   useEffect(() => {
