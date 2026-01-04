@@ -171,6 +171,13 @@ function createWindow() {
 
   autoUpdater.on("error", (err) => {
     console.error("AutoUpdater error:", err);
+    // USABILITY: Notify renderer of update errors so users can be informed
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update:error", { 
+        message: err.message || "Update failed",
+        code: err.code || "UNKNOWN_ERROR"
+      });
+    }
   });
 
   // Check for updates once the window is ready
@@ -590,6 +597,28 @@ ipcMain.handle("search:general", async (event, query) => {
 // --- DOCKER MANAGEMENT ---
 const { execSync, exec } = require("child_process");
 
+// SECURITY: Validate Docker ID format to prevent command injection
+// Docker IDs are hex strings (12 or 64 chars for short/full format)
+function isValidDockerId(id) {
+  if (typeof id !== "string" || !id) return false;
+  // Docker IDs are hex strings, allow short (12) or full (64) format
+  // Also allow image names like "beschiak/openfork-wan22:latest"
+  const dockerIdPattern = /^[a-f0-9]{12,64}$/i;
+  const imageNamePattern = /^[a-z0-9][a-z0-9._\/-]*:[a-z0-9._-]+$/i;
+  return dockerIdPattern.test(id) || imageNamePattern.test(id);
+}
+
+// SECURITY: Escape shell argument to prevent injection
+function escapeShellArg(arg) {
+  if (!arg) return '""';
+  // On Windows, use double quotes and escape internal quotes
+  // On Unix, single quotes are safer
+  if (process.platform === "win32") {
+    return `"${arg.replace(/"/g, '\\"')}"`;
+  }
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
 function execDockerCommand(command) {
   return new Promise((resolve, reject) => {
     exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
@@ -665,6 +694,12 @@ ipcMain.handle("docker:list-containers", async () => {
 
 ipcMain.handle("docker:remove-image", async (event, imageId) => {
   try {
+    // SECURITY: Validate Docker ID format before use
+    if (!isValidDockerId(imageId)) {
+      console.warn(`Invalid Docker ID format: ${imageId}`);
+      return { success: false, error: "Invalid Docker ID format" };
+    }
+    
     // Get all images to verify the ID against our OpenFork filter
     const listOutput = await execDockerCommand(
       'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"'
@@ -679,7 +714,7 @@ ipcMain.handle("docker:remove-image", async (event, imageId) => {
       console.warn(`Image ${imageId} validation failed, skipping removal`);
       return { success: false, error: "Only OpenFork images can be removed" };
     }
-    await execDockerCommand(`docker rmi -f ${imageId}`);
+    await execDockerCommand(`docker rmi -f ${escapeShellArg(imageId)}`);
     return { success: true };
   } catch (error) {
     console.error(`Failed to remove Docker image ${imageId}:`, error);
@@ -700,9 +735,9 @@ ipcMain.handle("docker:remove-all-images", async () => {
     for (const line of lines) {
       const [id, fullName] = line.split("|");
       // Double-check each image contains "openfork"
-      if (fullName && fullName.toLowerCase().includes("openfork")) {
+      if (fullName && fullName.toLowerCase().includes("openfork") && isValidDockerId(id)) {
         try {
-          await execDockerCommand(`docker rmi -f ${id}`);
+          await execDockerCommand(`docker rmi -f ${escapeShellArg(id)}`);
           removedCount++;
         } catch (e) {
           console.warn(`Failed to remove image ${id}:`, e.message);
@@ -718,8 +753,13 @@ ipcMain.handle("docker:remove-all-images", async () => {
 
 ipcMain.handle("docker:stop-container", async (event, containerId) => {
   try {
-    await execDockerCommand(`docker stop ${containerId}`);
-    await execDockerCommand(`docker rm -f ${containerId}`);
+    // SECURITY: Validate Docker ID format before use
+    if (!isValidDockerId(containerId)) {
+      console.warn(`Invalid Docker container ID format: ${containerId}`);
+      return { success: false, error: "Invalid container ID format" };
+    }
+    await execDockerCommand(`docker stop ${escapeShellArg(containerId)}`);
+    await execDockerCommand(`docker rm -f ${escapeShellArg(containerId)}`);
     return { success: true };
   } catch (error) {
     console.error(`Failed to stop container ${containerId}:`, error);
@@ -736,9 +776,11 @@ ipcMain.handle("docker:stop-all-containers", async () => {
     
     const containerIds = listOutput.split("\n").filter(Boolean);
     for (const id of containerIds) {
+      // SECURITY: Validate each container ID
+      if (!isValidDockerId(id)) continue;
       try {
-        await execDockerCommand(`docker stop ${id}`);
-        await execDockerCommand(`docker rm -f ${id}`);
+        await execDockerCommand(`docker stop ${escapeShellArg(id)}`);
+        await execDockerCommand(`docker rm -f ${escapeShellArg(id)}`);
       } catch (e) {
         console.warn(`Failed to stop/remove container ${id}:`, e.message);
       }
