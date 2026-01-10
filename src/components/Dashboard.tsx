@@ -171,6 +171,9 @@ export const Dashboard = memo(() => {
     loadPersistentSettings,
     savePersistentSettings,
   } = useClientStore();
+  // Subscribe to jobState for local status
+  const jobState = useClientStore((state) => state.jobState);
+  
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -218,7 +221,7 @@ export const Dashboard = memo(() => {
     savePersistentSettings();
   };
 
-  const isProcessingAndRunning = status === "running" && stats.processing > 0;
+  const isProcessingAndRunning = status === "running" && jobState.status === "processing";
 
   return (
     <div className="space-y-6">
@@ -287,7 +290,7 @@ export const Dashboard = memo(() => {
         />
         <StatCard
           title="In Progress"
-          value={stats.processing}
+          value={isProcessingAndRunning ? 1 : 0}
           icon={
             <Loader
               size={20}

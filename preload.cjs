@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onLog: (callback) => createListener("openfork_client:log", callback),
   onStatusChange: (callback) => createListener("openfork_client:status", callback),
   onDockerProgress: (callback) => createListener("openfork_client:docker-progress", callback),
+  onJobStatus: (callback) => createListener("openfork_client:job-status", callback),
 
   // Authentication
   loginWithGoogle: () => ipcRenderer.invoke("auth:google-login"),

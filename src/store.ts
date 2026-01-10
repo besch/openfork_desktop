@@ -35,6 +35,11 @@ interface DGNClientState {
   allowedIds: string;
   dockerPullProgress: DockerPullProgress | null;
   dependencyStatus: DependencyStatus | null;
+  jobState: {
+    status: "idle" | "processing";
+    jobId: string | null;
+    type: string | null;
+  };
   setDockerPullProgress: (progress: DockerPullProgress | null) => void;
   setDependencyStatus: (status: DependencyStatus | null) => void;
   setStatus: (status: DGNClientStatus) => void;
@@ -54,6 +59,11 @@ interface DGNClientState {
   setJobPolicy: (policy: JobPolicy) => void;
   loadPersistentSettings: () => Promise<void>;
   savePersistentSettings: () => Promise<void>;
+  setJobState: (state: {
+    status: "idle" | "processing";
+    jobId: string | null;
+    type: string | null;
+  }) => void;
 }
 
 export const useClientStore = create<DGNClientState>((set, get) => ({
@@ -72,8 +82,10 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   allowedIds: "",
   dockerPullProgress: null,
   dependencyStatus: null,
+  jobState: { status: "idle", jobId: null, type: null },
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
   setDependencyStatus: (status) => set({ dependencyStatus: status }),
+  setJobState: (state) => set({ jobState: state }),
   setStatus: (status) => set({ status }),
   addLog: (log) => {
     const newLog: LogEntry = {
@@ -365,7 +377,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 }));
 
 function initializeIpcListeners() {
-  const { setStatus, addLog, setSession, setIsLoading, setDockerPullProgress } =
+  const { setStatus, addLog, setSession, setIsLoading, setDockerPullProgress, setJobState } =
     useClientStore.getState();
 
   // Store cleanup functions from listener registrations
@@ -444,6 +456,27 @@ function initializeIpcListeners() {
     })
   );
 
+  // Listen for job status updates from backend
+  cleanupFns.push(
+    window.electronAPI.onJobStatus((payload: any) => {
+      if (payload.type === "JOB_START") {
+        setJobState({
+          status: "processing",
+          jobId: payload.id,
+          type: payload.workflow_type
+        });
+      } else if (payload.type === "JOB_COMPLETE" || payload.type === "JOB_FAILED") {
+        setJobState({
+          status: "idle",
+          jobId: null,
+          type: null
+        });
+        // Refresh stats to ensure counts are accurate
+        useClientStore.getState().fetchStats();
+      }
+    })
+  );
+
   // Return cleanup function for all listeners
   return () => {
     cleanupFns.forEach((cleanup) => cleanup());
@@ -455,4 +488,3 @@ const cleanupListeners = initializeIpcListeners();
 
 // Export cleanup for potential use in tests or hot reload scenarios
 export { cleanupListeners };
-

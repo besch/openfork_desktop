@@ -364,6 +364,32 @@ class PythonProcessManager {
             }, 1500);
             return;
           }
+
+          // Handle Job Status messages (Start/Complete/Failed)
+          if (["JOB_START", "JOB_COMPLETE", "JOB_FAILED"].includes(message.type)) {
+            this.mainWindow.webContents.send(
+              "openfork_client:job-status",
+              { type: message.type, ...message.payload }
+            );
+            // Also log to console for visibility
+            if (message.type === "JOB_START") {
+               this.mainWindow.webContents.send("openfork_client:log", {
+                 type: "stdout",
+                 message: `Starting job ${message.payload.id} (${message.payload.workflow_type})...`
+               });
+            } else if (message.type === "JOB_COMPLETE") {
+               this.mainWindow.webContents.send("openfork_client:log", {
+                 type: "stdout",
+                 message: `Job ${message.payload.id} completed successfully.`
+               });
+            } else if (message.type === "JOB_FAILED") {
+               this.mainWindow.webContents.send("openfork_client:log", {
+                 type: "stderr",
+                 message: `Job ${message.payload.id} failed: ${message.payload.error}`
+               });
+            }
+            return;
+          }
         } catch (e) {
           // Not a JSON message, treat as regular log
         }
