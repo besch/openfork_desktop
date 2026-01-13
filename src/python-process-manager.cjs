@@ -387,12 +387,26 @@ class PythonProcessManager {
                  type: "stderr",
                  message: `Job ${message.payload.id} failed: ${message.payload.error}`
                });
-            }
-            return;
-          }
-        } catch (e) {
-          // Not a JSON message, treat as regular log
-        }
+             }
+             return;
+           }
+
+           // Handle disk space errors
+           if (message.type === "DISK_SPACE_ERROR") {
+             this.mainWindow.webContents.send(
+               "openfork_client:disk-space-error",
+               message.payload
+             );
+             // Also log to console
+             this.mainWindow.webContents.send("openfork_client:log", {
+               type: "stderr",
+               message: message.payload.message
+             });
+             return;
+           }
+         } catch (e) {
+           // Not a JSON message, treat as regular log
+         }
 
         // Handle legacy/plain text logs
         if (log.startsWith("DGN_CLIENT_SHUTDOWN_SERVER_PORT:")) {

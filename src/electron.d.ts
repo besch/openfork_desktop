@@ -88,10 +88,16 @@ interface ElectronAPI {
   stopClient: () => void;
   cleanupProcesses: () => Promise<{ success: boolean; error?: string }>;
 
-  // DGN Client listeners - return cleanup functions
   onLog: (callback: (log: Omit<LogEntry, "timestamp">) => void) => CleanupFn;
   onStatusChange: (callback: (status: DGNClientStatus) => void) => CleanupFn;
   onDockerProgress: (callback: (progress: DockerPullProgress | null) => void) => CleanupFn;
+  onJobStatus: (callback: (payload: any) => void) => CleanupFn;
+  onDiskSpaceError: (callback: (data: {
+    image_name: string;
+    required_gb: number;
+    available_gb: number;
+    message: string;
+  }) => void) => CleanupFn;
 
   // Authentication
   loginWithGoogle: () => Promise<void>;
@@ -134,6 +140,16 @@ interface ElectronAPI {
   stopContainer: (containerId: string) => Promise<DockerOperationResult>;
   stopAllContainers: () => Promise<DockerOperationResult>;
   cleanupDocker: () => Promise<DockerOperationResult>;
+  getDiskSpace: () => Promise<{
+    success: boolean;
+    error?: string;
+    data: {
+      total_gb: string;
+      used_gb: string;
+      free_gb: string;
+      path: string;
+    };
+  }>;
 
   // Dependency Detection
   checkDocker: () => Promise<DockerStatus>;

@@ -10,6 +10,7 @@ import {
   HardDrive,
   Container,
   Download,
+  AlertTriangle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
@@ -34,6 +35,18 @@ export const DockerManagement = memo(() => {
     description: "",
     onConfirm: () => {},
   });
+  const [diskSpaceError, setDiskSpaceError] = useState<{
+    image_name: string;
+    required_gb: number;
+    available_gb: number;
+    message: string;
+  } | null>(null);
+  const [diskSpace, setDiskSpace] = useState<{
+    total_gb: string;
+    used_gb: string;
+    free_gb: string;
+    path: string;
+  } | null>(null);
 
   const dockerPullProgress = useClientStore((state) => state.dockerPullProgress);
   const status = useClientStore((state) => state.status);
@@ -73,6 +86,25 @@ export const DockerManagement = memo(() => {
       fetchData();
     }
   }, [dockerPullProgress, status, fetchData]);
+
+  // Handle disk space errors
+  useEffect(() => {
+    const cleanup = window.electronAPI.onDiskSpaceError((data) => {
+      setDiskSpaceError(data);
+    });
+    return cleanup;
+  }, []);
+
+  // Fetch disk space info on mount and after cleanup operations
+  useEffect(() => {
+    const fetchDiskSpace = async () => {
+      const result = await window.electronAPI.getDiskSpace();
+      if (result.success) {
+        setDiskSpace(result.data);
+      }
+    };
+    fetchDiskSpace();
+  }, []);
 
   const showConfirmDialog = (
     title: string,
@@ -229,6 +261,45 @@ export const DockerManagement = memo(() => {
         </div>
       )}
 
+      {/* Disk Space Error Alert */}
+      {diskSpaceError && (
+        <Card className="bg-destructive/10 border-destructive/30">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <h3 className="font-semibold text-destructive flex items-center gap-2">
+                  Insufficient Disk Space
+                </h3>
+                <div className="text-sm space-y-1">
+                  <p>Cannot download <span className="font-mono font-medium">{diskSpaceError.image_name}</span></p>
+                  <p>
+                    <span className="text-destructive/80">Need:</span>{" "}
+                    <span className="font-semibold">{diskSpaceError.required_gb} GB</span>
+                    {" "}<span className="text-muted-foreground">(including 5 GB safety buffer)</span>
+                  </p>
+                  <p>
+                    <span className="text-destructive/80">Available:</span>{" "}
+                    <span className="font-semibold">{diskSpaceError.available_gb} GB</span>
+                  </p>
+                </div>
+                <p className="text-sm text-muted-foreground pt-2">
+                  Please free up disk space and try again.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDiskSpaceError(null)}
+                className="ml-auto"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h2 className="text-2xl font-bold">Docker Management</h2>
@@ -242,18 +313,33 @@ export const DockerManagement = memo(() => {
             Refresh
           </Button>
         </div>
-        <Button
-          variant="destructive"
-          onClick={handleCleanupAll}
-          disabled={actionLoading !== null || (images.length === 0 && containers.length === 0)}
-        >
-          {actionLoading === "cleanup-all" ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Trash2 className="h-4 w-4 mr-2" />
+        <div className="flex items-center gap-3">
+          {diskSpace && (
+            <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+              diskSpaceError 
+                ? 'bg-destructive/10 border border-destructive/20'  
+                : 'bg-muted/30 border border-white/10'
+              }`}
+            >
+              <HardDrive className={`h-4 w-4 ${diskSpaceError ? 'text-destructive' : 'text-muted-foreground'}`} />
+              <span className={`text-sm font-medium ${diskSpaceError ? 'text-destructive' : 'text-foreground'}`}>
+                {diskSpace.free_gb} GB / {diskSpace.total_gb} GB
+              </span>
+            </div>
           )}
-          Clean Everything
-        </Button>
+          <Button
+            variant="destructive"
+            onClick={handleCleanupAll}
+            disabled={actionLoading !== null || (images.length === 0 && containers.length === 0)}
+          >
+            {actionLoading === "cleanup-all" ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4 mr-2" />
+            )}
+            Clean Everything
+          </Button>
+        </div>
       </header>
 
       {/* Download Progress Card */}

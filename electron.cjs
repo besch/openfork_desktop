@@ -854,6 +854,78 @@ ipcMain.handle("docker:cleanup-all", async () => {
   }
 });
 
+// Get disk space information
+ipcMain.handle("docker:get-disk-space", async () => {
+  try {
+    let totalBytes, freeBytes, usedBytes, diskPath;
+    
+    if (process.platform === "win32") {
+      // Windows: Use PowerShell to get disk info for C: drive
+      const psCommand = "Get-PSDrive C | Select-Object @{Name='Total';Expression={$_.Used+$_.Free}}, Free, Used | ConvertTo-Json";
+      
+      const output = await new Promise((resolve, reject) => {
+        exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, { timeout: 5000 }, (error, stdout, stderr) => {
+          if (error) {
+            console.error("PowerShell disk space check error:", error.message);
+            reject(error);
+            return;
+          }
+          resolve(stdout.trim());
+        });
+      });
+      
+      const diskInfo = JSON.parse(output);
+      totalBytes = diskInfo.Total;
+      freeBytes = diskInfo.Free;
+      usedBytes = diskInfo.Used;
+      diskPath = "C:\\";
+    } else {
+      // Linux/macOS: Use df command
+      const dfOutput = await new Promise((resolve, reject) => {
+        exec("df -k /", { timeout: 5000 }, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve(stdout.trim());
+        });
+      });
+      
+      // Parse df output (skip header, get second line)
+      const lines = dfOutput.split("\n");
+      if (lines.length < 2) throw new Error("Invalid df output");
+      
+      const parts = lines[1].split(/\s+/);
+      // df -k gives: Filesystem 1K-blocks Used Available Use% Mounted
+      const totalKB = parseInt(parts[1]);
+      const usedKB = parseInt(parts[2]);
+      const availableKB = parseInt(parts[3]);
+      
+      totalBytes = totalKB * 1024;
+      usedBytes = usedKB * 1024;
+      freeBytes = availableKB * 1024;
+      diskPath = "/";
+    }
+    
+    return {
+      success: true,
+      data: {
+        total_gb: (totalBytes / (1024 ** 3)).toFixed(1),
+        used_gb: (usedBytes / (1024 ** 3)).toFixed(1),
+        free_gb: (freeBytes / (1024 ** 3)).toFixed(1),
+        path: diskPath
+      }
+    };
+  } catch (error) {
+    console.error("Failed to get disk space:", error);
+    return {
+      success: false,
+      error: error.message,
+      data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "" }
+    };
+  }
+});
+
 // --- DEPENDENCY DETECTION ---
 
 ipcMain.handle("deps:check-docker", async () => {

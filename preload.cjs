@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onStatusChange: (callback) => createListener("openfork_client:status", callback),
   onDockerProgress: (callback) => createListener("openfork_client:docker-progress", callback),
   onJobStatus: (callback) => createListener("openfork_client:job-status", callback),
+  onDiskSpaceError: (callback) => createListener("openfork_client:disk-space-error", callback),
 
   // Authentication
   loginWithGoogle: () => ipcRenderer.invoke("auth:google-login"),
@@ -86,6 +87,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   stopContainer: (containerId) => ipcRenderer.invoke("docker:stop-container", containerId),
   stopAllContainers: () => ipcRenderer.invoke("docker:stop-all-containers"),
   cleanupDocker: () => ipcRenderer.invoke("docker:cleanup-all"),
+  getDiskSpace: () => ipcRenderer.invoke("docker:get-disk-space"),
 
   // Dependency Detection
   checkDocker: () => ipcRenderer.invoke("deps:check-docker"),
