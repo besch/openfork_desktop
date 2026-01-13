@@ -382,9 +382,6 @@ export const DockerManagement = memo(() => {
               <span className="text-muted-foreground truncate max-w-[300px]" title={dockerPullProgress?.image}>
                 {dockerPullProgress?.image}
               </span>
-              <span className="text-primary/70">
-                {dockerPullProgress?.status || "Downloading..."}
-              </span>
             </div>
           </CardContent>
         </Card>
