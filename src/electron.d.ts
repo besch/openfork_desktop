@@ -117,6 +117,11 @@ interface ElectronAPI {
 
   // Session management
   getSession: () => Promise<Session | null>;
+  
+  // Convex Auth Token
+  getConvexToken: () => Promise<string | null>;
+  setConvexToken: (token: string) => Promise<{ success: boolean }>;
+  onConvexToken: (callback: (token: string) => void) => CleanupFn;
 
   // Utility to remove listeners
   removeAllListeners: (channel: string) => void;

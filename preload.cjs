@@ -65,6 +65,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Session management
   getSession: () => ipcRenderer.invoke("get-session"),
+  
+  // Convex Auth Token
+  getConvexToken: () => ipcRenderer.invoke("get-convex-token"),
+  setConvexToken: (token) => ipcRenderer.invoke("auth:set-convex-token", token),
+  onConvexToken: (callback) => createListener("auth:convex-token", callback),
 
   // Utility to remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),

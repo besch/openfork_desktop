@@ -56,6 +56,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 let mainWindow;
 let session = null;
+let convexToken = null; // Convex auth token from website login
 let pythonManager;
 let scheduleManager;
 let isQuittingApp = false; // App-level flag to prevent before-quit race condition
@@ -103,12 +104,45 @@ async function logout() {
     console.error("Error logging out:", error.message);
   }
   session = null;
+  convexToken = null;
+  store.delete("convexAuthToken");
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("auth:session", null);
   }
 }
 
 function handleAuthCallback(url) {
+  console.log("Received auth callback URL:", url);
+  
+  // Parse the URL to extract tokens
+  try {
+    const urlObj = new URL(url);
+    const hash = urlObj.hash.substring(1); // Remove the #
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get("access_token");
+    
+    if (accessToken) {
+      console.log("Received Convex auth token");
+      convexToken = accessToken;
+      store.set("convexAuthToken", accessToken);
+      
+      // Create a session-like object for compatibility
+      session = {
+        access_token: accessToken,
+        user: { id: "convex-user" }, // Will be populated when we fetch user info
+      };
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("auth:session", session);
+        mainWindow.webContents.send("auth:convex-token", accessToken);
+      }
+      return;
+    }
+  } catch (e) {
+    console.error("Failed to parse auth callback URL:", e);
+  }
+  
+  // Fallback to original behavior for Supabase tokens
   if (mainWindow) {
     mainWindow.webContents.send("auth:callback", url);
   }
@@ -189,6 +223,23 @@ function createWindow() {
   });
 
   mainWindow.webContents.on("did-finish-load", async () => {
+    // First check for stored Convex token
+    const storedConvexToken = store.get("convexAuthToken");
+    if (storedConvexToken) {
+      console.log("Found stored Convex token");
+      convexToken = storedConvexToken;
+      session = {
+        access_token: storedConvexToken,
+        user: { id: "convex-user" },
+      };
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("auth:session", session);
+        mainWindow.webContents.send("auth:convex-token", storedConvexToken);
+      }
+      return;
+    }
+    
+    // Fallback to Supabase session
     const { data } = await supabase.auth.getSession();
     session = data.session;
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -349,6 +400,24 @@ ipcMain.handle("get-process-info", () => {
 });
 ipcMain.handle("get-session", async () => {
   return session;
+});
+
+ipcMain.handle("get-convex-token", async () => {
+  return convexToken || store.get("convexAuthToken") || null;
+});
+
+ipcMain.handle("auth:set-convex-token", async (event, token) => {
+  convexToken = token;
+  store.set("convexAuthToken", token);
+  session = {
+    access_token: token,
+    user: { id: "convex-user" },
+  };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:session", session);
+    mainWindow.webContents.send("auth:convex-token", token);
+  }
+  return { success: true };
 });
 
 // Add persistence handlers for job policy settings
