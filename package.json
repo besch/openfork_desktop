@@ -8,6 +8,8 @@
   "main": "electron.cjs",
   "scripts": {
     "dev": "vite",
+    "dev:all": "concurrently -k \"npm run dev\" \"wait-on tcp:5173 && npm run start\"",
+    "setup:dev": "node scripts/setup-dev.cjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -48,6 +50,8 @@
     "zustand": "^5.0.7"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0",
     "@eslint/js": "^9.32.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.1.9",

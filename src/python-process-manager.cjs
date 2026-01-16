@@ -1,5 +1,6 @@
 const { spawn, exec } = require("child_process");
 const path = require("path");
+const fs = require("fs");
 const { app } = require("electron");
 const http = require("http");
 
@@ -70,15 +71,46 @@ class PythonProcessManager {
     return this._cleanupPromise;
   }
 
-  getPythonExecutablePath() {
-    const exeName = process.platform === "win32" ? "client.exe" : "client";
+  getPythonCommand() {
+    const isWin = process.platform === "win32";
+    
+    // In production, always use the bundled executable
     if (app.isPackaged) {
-      // For production, the executable is packaged into the resources directory.
-      return path.join(process.resourcesPath, "bin", exeName);
-    } else {
-      // For development, assume the executable is in a 'bin' directory inside the 'desktop' project.
-      return path.join(__dirname, "..", "bin", exeName);
+      const exeName = isWin ? "client.exe" : "client";
+      return {
+        command: path.join(process.resourcesPath, "bin", exeName),
+        args: []
+      };
     }
+    
+    // In development, detect if we can run from source
+    // We expect the structure: root/desktop/src/python-process-manager.cjs
+    // So root is ../../
+    const rootDir = path.resolve(__dirname, "..", "..");
+    const clientDir = path.join(rootDir, "client");
+    
+    const venvPython = isWin 
+      ? path.join(clientDir, "venv", "Scripts", "python.exe")
+      : path.join(clientDir, "venv", "bin", "python");
+
+    if (fs.existsSync(venvPython)) {
+      // Logic: Run "venv/python.exe client/dgn_client.py"
+      console.log(`Dev mode: Found Python venv at ${venvPython}, running from source.`);
+      return {
+        command: venvPython,
+        args: [path.join(clientDir, "dgn_client.py")]
+      };
+    }
+    
+    // Fallback: Look for compiled executable in desktop/bin
+    const exeName = isWin ? "client.exe" : "client";
+    const binPath = path.join(__dirname, "..", "bin", exeName);
+    
+    console.log("Dev mode: Python venv not found, falling back to compiled executable.");
+    return {
+      command: binPath,
+      args: []
+    };
   }
 
   _sendTokensToPython(accessToken, refreshToken) {
@@ -190,14 +222,14 @@ class PythonProcessManager {
 
     const currentSession = data.session;
 
-    const pythonExecutablePath = this.getPythonExecutablePath();
-    const pythonExecutableDir = path.dirname(pythonExecutablePath);
+    const { command, args: initialArgs } = this.getPythonCommand();
 
     const dgnClientRootDir = app.isPackaged
-      ? pythonExecutableDir
+      ? path.dirname(command)
       : path.join(__dirname, "..", "..", "client");
 
     const args = [
+      ...initialArgs,
       "--access-token",
       currentSession.access_token,
       "--refresh-token",
@@ -223,11 +255,11 @@ class PythonProcessManager {
     }
 
     console.log(`Starting Python backend for '${service}' service...`);
-    const cwd = app.isPackaged ? pythonExecutableDir : dgnClientRootDir;
+    const cwd = app.isPackaged ? path.dirname(command) : dgnClientRootDir;
     console.log(`Using CWD: ${cwd}`);
 
     try {
-      this.pythonProcess = spawn(pythonExecutablePath, args, {
+      this.pythonProcess = spawn(command, args, {
         cwd: cwd,
         stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr
         env: { ...process.env, PYTHONUNBUFFERED: "1" },

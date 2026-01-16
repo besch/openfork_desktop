@@ -26,15 +26,19 @@ This directory contains the source code for the Electron-based desktop applicati
 *   **Python**: Underlying logic (managed as a subprocess).
 *   **Docker**: Used to isolate and execute AI models.
 
-### Setup
+### Setup (Developer Mode)
 
-1.  **Prerequisites**: Node.js, Python 3.10+, Docker Desktop.
-2.  **Install**:
+**Prerequisites**: Node.js v18+, Python 3.10+, Git, Docker Desktop.
+
+**One-Click Setup**:
+1.  Run the initialization script (installs deps & creates Python venv):
     ```bash
     cd desktop
-    npm install
+    npm run setup:dev
     ```
-3.  **Run**:
+2.  Start the full stack (UI + Electron + Python Client from source):
     ```bash
-    npm run dev
+    npm run dev:all
     ```
+
+**Note**: This runs the Python client directly from source (`../client/dgn_client.py`), so you don't need to rebuild executables to test changes. The application will automatically detect the virtual environment created by `setup:dev`.
