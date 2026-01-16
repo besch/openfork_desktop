@@ -84,22 +84,21 @@ class PythonProcessManager {
     }
     
     // In development, detect if we can run from source
-    // We expect the structure: root/desktop/src/python-process-manager.cjs
-    // So root is ../../
-    const rootDir = path.resolve(__dirname, "..", "..");
-    const clientDir = path.join(rootDir, "client");
+    // STRICT: Only check for child directory (./openfork_client) to enforce self-contained structure
+    const childClientDir = path.resolve(__dirname, "..", "openfork_client");
     
     const venvPython = isWin 
-      ? path.join(clientDir, "venv", "Scripts", "python.exe")
-      : path.join(clientDir, "venv", "bin", "python");
+      ? path.join(childClientDir, "venv", "Scripts", "python.exe")
+      : path.join(childClientDir, "venv", "bin", "python");
 
-    if (fs.existsSync(venvPython)) {
-      // Logic: Run "venv/python.exe client/dgn_client.py"
-      console.log(`Dev mode: Found Python venv at ${venvPython}, running from source.`);
-      return {
-        command: venvPython,
-        args: [path.join(clientDir, "dgn_client.py")]
-      };
+    if (fs.existsSync(venvPython) && fs.existsSync(path.join(childClientDir, "dgn_client.py"))) {
+       console.log(`Dev mode: Found Python venv in child directory at ${venvPython}`);
+       // Logic: Run "venv/python.exe openfork_client/dgn_client.py"
+       console.log(`Dev mode: Running from source.`);
+       return {
+         command: venvPython,
+         args: [path.join(childClientDir, "dgn_client.py")]
+       };
     }
     
     // Fallback: Look for compiled executable in desktop/bin

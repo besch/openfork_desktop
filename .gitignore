@@ -26,3 +26,5 @@ dist-ssr
 bin
 
 .genkit
+openfork_client/
+bin/

@@ -1,18 +1,45 @@
-const { execSync, spawn } = require('child_process');
+const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
 // Paths
-const desktopDir = path.resolve(__dirname, '..'); // Assuming scripts/setup-dev.js
-const rootDir = path.resolve(desktopDir, '..');
-const clientDir = path.join(rootDir, 'client');
+const desktopDir = path.resolve(__dirname, '..');
+const rootDir = desktopDir; 
+const clientDir = path.join(desktopDir, 'openfork_client');
 const venvDir = path.join(clientDir, 'venv');
 
 const isWin = process.platform === 'win32';
 
 console.log('=== OpenFork Dev Setup ===');
-console.log(`Root Dir: ${rootDir}`);
-console.log(`Client Dir: ${clientDir}`);
+console.log(`Openfork Client Dir: ${clientDir}`);
+
+// 0. Clone Openfork Client if missing
+console.log('\n--> Checking for openfork_client...');
+if (!fs.existsSync(clientDir)) {
+  console.log('Cloning openfork_client repository...');
+  try {
+    execSync('git clone https://github.com/besch/openfork_client.git openfork_client', { stdio: 'inherit', cwd: rootDir });
+  } catch (e) {
+    console.error('Failed to clone openfork_client');
+    process.exit(1);
+  }
+} else {
+  console.log('openfork_client already exists.');
+}
+
+// 0.5. Clean bin/ directory (ensure no stale executables)
+console.log('\n--> Cleaning bin/ directory...');
+const binDir = path.join(desktopDir, 'bin');
+if (fs.existsSync(binDir)) {
+    try {
+        fs.rmSync(binDir, { recursive: true, force: true });
+        console.log('Cleaned bin/ directory.');
+    } catch (e) {
+        console.warn(`Warning: Failed to clean bin/ directory: ${e.message}`);
+    }
+} else {
+    console.log('bin/ directory not present.');
+}
 
 // 1. Install Desktop Dependencies
 console.log('\n--> Installing Desktop Dependencies...');
