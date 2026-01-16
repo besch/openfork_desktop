@@ -33,7 +33,7 @@ This directory contains the source code for the Electron-based desktop applicati
 **One-Click Setup**:
 1.  Run the initialization script (installs deps & creates Python venv):
     ```bash
-    cd desktop
+    cd openfork_desktop
     npm run setup:dev
     ```
 2.  Start the full stack (UI + Electron + Python Client from source):
