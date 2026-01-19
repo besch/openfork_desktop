@@ -78,8 +78,9 @@
     "files": [
       "dist/**/*",
       "electron.cjs",
-      "preload.js",
+      "preload.cjs",
       "src/python-process-manager.cjs",
+      "src/schedule-manager.cjs",
       "config.json",
       "package.json"
     ],
