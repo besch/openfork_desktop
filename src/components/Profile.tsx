@@ -23,7 +23,6 @@ export function Profile() {
             <h3 className="font-medium">User ID</h3>
             <p className="text-muted-foreground">{session.user.id}</p>
           </div>
-          {/* Add more profile information here as needed */}
         </div>
       </CardContent>
     </Card>
