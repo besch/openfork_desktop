@@ -139,7 +139,7 @@ function createWindow() {
     height: 768,
     show: false,
     backgroundColor: "#111827",
-    icon: path.join(__dirname, app.isPackaged ? "dist/logo.png" : "public/logo.png"),
+    icon: path.join(__dirname, app.isPackaged ? "dist/icon.png" : "public/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,

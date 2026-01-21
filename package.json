@@ -71,7 +71,7 @@
   "build": {
     "appId": "com.openfork.openfork_client",
     "productName": "Openfork Client",
-    "icon": "public/logo.png",
+    "icon": "public/icon.png",
     "artifactName": "${productName}-${os}-${arch}.${ext}",
     "publish": {
       "provider": "github"
@@ -96,15 +96,15 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "public/logo.png"
+      "icon": "public/icon.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "public/logo.png"
+      "icon": "public/icon.png"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "public/logo.png"
+      "icon": "public/icon.png"
     },
     "nsis": {
       "oneClick": false,
