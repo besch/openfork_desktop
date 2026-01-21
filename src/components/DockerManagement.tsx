@@ -106,6 +106,27 @@ export const DockerManagement = memo(() => {
     fetchDiskSpace();
   }, []);
 
+  // REAL-TIME UPDATES: Subscribe to background docker monitoring
+  useEffect(() => {
+    // Start background monitoring in Electron
+    window.electronAPI.startDockerMonitoring();
+
+    const cleanupContainers = window.electronAPI.onDockerContainersUpdate((data) => {
+      setContainers(data);
+    });
+
+    const cleanupImages = window.electronAPI.onDockerImagesUpdate((data) => {
+      setImages(data);
+    });
+
+    return () => {
+      cleanupContainers();
+      cleanupImages();
+      // Stop monitoring when user leaves this page to save CPU
+      window.electronAPI.stopDockerMonitoring();
+    };
+  }, []);
+
   const showConfirmDialog = (
     title: string,
     description: string,

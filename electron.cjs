@@ -623,6 +623,12 @@ function execDockerCommand(command) {
   return new Promise((resolve, reject) => {
     exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
       if (error) {
+        // If Docker is not running, we don't want to spam errors in the console
+        // just return empty or handle gracefully
+        if (error.message.includes("is not running") || error.message.includes("connection refused")) {
+           resolve("");
+           return;
+        }
         console.error(`Docker command error: ${error.message}`);
         reject(error);
         return;
@@ -631,6 +637,99 @@ function execDockerCommand(command) {
     });
   });
 }
+
+let dockerMonitorInterval = null;
+let lastContainersJson = "";
+let lastImagesJson = "";
+
+async function checkDockerUpdates() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  try {
+    // Check containers
+    const containersOutput = await execDockerCommand(
+      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"'
+    );
+    if (containersOutput !== lastContainersJson) {
+      lastContainersJson = containersOutput;
+      const containers = containersOutput
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            const container = JSON.parse(line);
+            return {
+              id: container.ID,
+              name: container.Names,
+              image: container.Image,
+              status: container.Status,
+              state: container.State,
+              created: container.CreatedAt,
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      
+      mainWindow.webContents.send("docker:containers-update", containers);
+    }
+
+    // Check images
+    const imagesOutput = await execDockerCommand(
+      'docker images --format "{{json .}}"'
+    );
+    if (imagesOutput !== lastImagesJson) {
+      lastImagesJson = imagesOutput;
+      const images = imagesOutput
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            const img = JSON.parse(line);
+            return {
+              id: img.ID,
+              repository: img.Repository,
+              tag: img.Tag,
+              size: img.Size,
+              created: img.CreatedAt || img.CreatedSince,
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((img) => {
+          if (!img) return false;
+          const fullName = `${img.repository}:${img.tag}`.toLowerCase();
+          return fullName.includes("openfork");
+        });
+      
+      mainWindow.webContents.send("docker:images-update", images);
+    }
+  } catch (error) {
+    // Silent fail for background monitor
+  }
+}
+
+function startDockerMonitoring() {
+  if (dockerMonitorInterval) return;
+  console.log("Starting Docker background monitoring...");
+  // Initial check
+  checkDockerUpdates();
+  // Set interval (5 seconds is a good balance)
+  dockerMonitorInterval = setInterval(checkDockerUpdates, 5000);
+}
+
+function stopDockerMonitoring() {
+  if (dockerMonitorInterval) {
+    console.log("Stopping Docker background monitoring...");
+    clearInterval(dockerMonitorInterval);
+    dockerMonitorInterval = null;
+  }
+}
+
+ipcMain.on("docker:start-monitoring", startDockerMonitoring);
+ipcMain.on("docker:stop-monitoring", stopDockerMonitoring);
 
 ipcMain.handle("docker:list-images", async () => {
   try {

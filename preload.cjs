@@ -89,6 +89,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cleanupDocker: () => ipcRenderer.invoke("docker:cleanup-all"),
   getDiskSpace: () => ipcRenderer.invoke("docker:get-disk-space"),
 
+  // Docker Monitoring
+  startDockerMonitoring: () => ipcRenderer.send("docker:start-monitoring"),
+  stopDockerMonitoring: () => ipcRenderer.send("docker:stop-monitoring"),
+  onDockerContainersUpdate: (callback) => createListener("docker:containers-update", callback),
+  onDockerImagesUpdate: (callback) => createListener("docker:images-update", callback),
+
   // Dependency Detection
   checkDocker: () => ipcRenderer.invoke("deps:check-docker"),
   checkNvidia: () => ipcRenderer.invoke("deps:check-nvidia"),

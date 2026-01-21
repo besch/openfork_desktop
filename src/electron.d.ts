@@ -151,6 +151,12 @@ interface ElectronAPI {
     };
   }>;
 
+  // Docker Monitoring
+  startDockerMonitoring: () => void;
+  stopDockerMonitoring: () => void;
+  onDockerContainersUpdate: (callback: (containers: DockerContainer[]) => void) => CleanupFn;
+  onDockerImagesUpdate: (callback: (images: DockerImage[]) => void) => CleanupFn;
+
   // Dependency Detection
   checkDocker: () => Promise<DockerStatus>;
   checkNvidia: () => Promise<NvidiaStatus>;
