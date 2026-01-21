@@ -100,7 +100,27 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "public/icon.png"
+      "icon": "public/logo.png"
+    },
+    "dmg": {
+      "background": "public/dmgBackground.png",
+      "iconSize": 100,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 130,
+          "y": 190
+        },
+        {
+          "x": 410,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "linux": {
       "target": "AppImage",
@@ -108,7 +128,14 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/logo.png",
+      "uninstallerIcon": "public/logo.png",
+      "installerHeaderIcon": "public/logo.png",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerSidebar": "public/installerSidebar.png",
+      "installerHeader": "public/installerHeader.png"
     }
   }
 }
