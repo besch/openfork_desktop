@@ -256,7 +256,7 @@ export const DockerManagement = memo(() => {
       />
 
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-lg p-4">
+        <div className="bg-destructive-foreground/10 border border-destructive/20 text-destructive rounded-lg p-4">
           {error}
         </div>
       )}
