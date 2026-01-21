@@ -83,21 +83,20 @@ class PythonProcessManager {
       };
     }
     
-    // In development, detect if we can run from source
-    // STRICT: Only check for child directory (./openfork_client) to enforce self-contained structure
-    const childClientDir = path.resolve(__dirname, "..", "openfork_client");
+    // In development, use the sibling client directory (../client from desktop)
+    // This ensures we always use the main client codebase
+    const siblingClientDir = path.resolve(__dirname, "..", "..", "client");
     
     const venvPython = isWin 
-      ? path.join(childClientDir, "venv", "Scripts", "python.exe")
-      : path.join(childClientDir, "venv", "bin", "python");
+      ? path.join(siblingClientDir, "venv", "Scripts", "python.exe")
+      : path.join(siblingClientDir, "venv", "bin", "python");
 
-    if (fs.existsSync(venvPython) && fs.existsSync(path.join(childClientDir, "dgn_client.py"))) {
-       console.log(`Dev mode: Found Python venv in child directory at ${venvPython}`);
-       // Logic: Run "venv/python.exe openfork_client/dgn_client.py"
-       console.log(`Dev mode: Running from source.`);
+    if (fs.existsSync(venvPython) && fs.existsSync(path.join(siblingClientDir, "dgn_client.py"))) {
+       console.log(`Dev mode: Found Python venv at ${venvPython}`);
+       console.log(`Dev mode: Running from source in ${siblingClientDir}`);
        return {
          command: venvPython,
-         args: [path.join(childClientDir, "dgn_client.py")]
+         args: [path.join(siblingClientDir, "dgn_client.py")]
        };
     }
     
