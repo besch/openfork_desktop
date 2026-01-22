@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useLayoutEffect } from "react";
 import { useClientStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { ArrowUp, ArrowDown } from "lucide-react";
@@ -9,15 +9,40 @@ export const LogViewer = () => {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [newestOnTop, setNewestOnTop] = useState(true);
 
-  useEffect(() => {
-    if (logContainerRef.current) {
-      if (newestOnTop) {
-        logContainerRef.current.scrollTop = 0; // Scroll to the top to see newest logs
-      } else {
-        logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; // Scroll to bottom for chronological
-      }
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+
+  // Handle auto-scroll on log updates
+  useLayoutEffect(() => {
+    if (!logContainerRef.current || !shouldAutoScroll) return;
+
+    if (newestOnTop) {
+      logContainerRef.current.scrollTop = 0;
+    } else {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
-  }, [logs, newestOnTop]);
+  }, [logs, newestOnTop, shouldAutoScroll]);
+
+  // Track scroll position to update auto-scroll state
+  const handleScroll = () => {
+    if (!logContainerRef.current) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
+    
+    if (newestOnTop) {
+      // If newest at top, we want to auto-scroll if we are at the top (scrollTop near 0)
+      const isAtTop = scrollTop < 10;
+      setShouldAutoScroll(isAtTop);
+    } else {
+      // If oldest first (newest at bottom), we want to auto-scroll if at the bottom
+      const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 10;
+      setShouldAutoScroll(isAtBottom);
+    }
+  };
+
+  // Reset auto-scroll when switching modes
+  useEffect(() => {
+    setShouldAutoScroll(true);
+  }, [newestOnTop]);
 
   const displayedLogs = newestOnTop ? logs : logs.slice().reverse();
 
@@ -38,14 +63,19 @@ export const LogViewer = () => {
             )}
             {newestOnTop ? "Newest First" : "Oldest First"}
           </Button>
-          <Button variant="destructive" size="sm" onClick={clearLogs}>
+          <Button variant="destructive" size="sm" onClick={() => {
+            clearLogs();
+            setShouldAutoScroll(true);
+          }}>
             Clear Logs
           </Button>
         </div>
       </div>
       <div
         ref={logContainerRef}
+        onScroll={handleScroll}
         className="flex-grow overflow-y-auto bg-background/50 rounded p-2 font-mono text-sm h-[calc(100vh-300px)] border border-white/5"
+        style={{ overflowAnchor: "auto" }}
       >
         {displayedLogs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
