@@ -184,7 +184,7 @@ function App() {
                   Openfork Client
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Distributed Computing Platform
+                  Github for video collaboration
                 </p>
               </div>
             </div>

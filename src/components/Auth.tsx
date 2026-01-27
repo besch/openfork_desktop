@@ -20,7 +20,7 @@ export function Auth() {
               Welcome to OpenFork
             </CardTitle>
             <p className="text-muted-foreground text-lg">
-              Distributed Computing Platform
+              Github for video collaboration
             </p>
           </CardHeader>
           <CardContent className="space-y-6">

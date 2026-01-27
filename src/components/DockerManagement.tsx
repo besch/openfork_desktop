@@ -184,11 +184,25 @@ export const DockerManagement = memo(() => {
   };
 
   const handleCancelDownload = () => {
+    const serviceType = dockerPullProgress?.service_type;
+    
+    if (!serviceType) {
+      // Fallback to legacy behavior if service_type is missing
+      showConfirmDialog(
+        "Cancel Download",
+        "Are you sure you want to cancel the Docker image download? This will stop the client.",
+        async () => {
+          window.electronAPI.stopClient();
+        }
+      );
+      return;
+    }
+
     showConfirmDialog(
       "Cancel Download",
-      "Are you sure you want to cancel the Docker image download? This will stop the current workflow.",
+      "Are you sure you want to cancel the Docker image download?",
       async () => {
-        window.electronAPI.stopClient();
+        window.electronAPI.cancelDownload(serviceType);
       }
     );
   };
@@ -205,26 +219,6 @@ export const DockerManagement = memo(() => {
             await fetchData();
           } else {
             setError(result.error || "Failed to remove images");
-          }
-        } finally {
-          setActionLoading(null);
-        }
-      }
-    );
-  };
-
-  const handleStopAllContainers = () => {
-    showConfirmDialog(
-      "Stop All Containers",
-      `Are you sure you want to stop all ${containers.length} OpenFork containers?`,
-      async () => {
-        setActionLoading("stop-all");
-        try {
-          const result = await window.electronAPI.stopAllContainers();
-          if (result.success) {
-            await fetchData();
-          } else {
-            setError(result.error || "Failed to stop containers");
           }
         } finally {
           setActionLoading(null);
@@ -431,21 +425,6 @@ export const DockerManagement = memo(() => {
             <Container className="h-5 w-5 text-primary" />
             Running Containers ({containers.length})
           </CardTitle>
-          {containers.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleStopAllContainers}
-              disabled={actionLoading !== null}
-            >
-              {actionLoading === "stop-all" ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <X className="h-4 w-4 mr-2" />
-              )}
-              Stop All
-            </Button>
-          )}
         </CardHeader>
         <CardContent>
           {containers.length === 0 ? (

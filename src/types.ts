@@ -63,6 +63,7 @@ export type JobPolicy = "all" | "mine" | "project" | "users";
 
 export interface DockerPullProgress {
   image: string;
+  service_type: string | null;
   progress: number;
   status: string;
 }

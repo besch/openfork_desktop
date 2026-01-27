@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     console.log("Preload: Sending openfork_client:stop IPC message.");
     ipcRenderer.send("openfork_client:stop");
   },
+  cancelDownload: (serviceType) => {
+    console.log(`Preload: Sending docker:cancel-download IPC message for ${serviceType}.`);
+    ipcRenderer.send("docker:cancel-download", serviceType);
+  },
   cleanupProcesses: () => {
     console.log("Preload: Sending openfork_client:cleanup IPC message.");
     return ipcRenderer.invoke("openfork_client:cleanup");

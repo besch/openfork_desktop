@@ -13,6 +13,7 @@ class PythonProcessManager {
     this.isQuitting = false;
     this.userDataPath = userDataPath;
     this.authSubscription = null;
+    this.currentDownloadImage = null; // Track current download to prevent race conditions
 
     // Auth refresh debouncing
     this._lastRefreshAttempt = 0;
@@ -155,6 +156,41 @@ class PythonProcessManager {
     try {
       this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
       console.log("Sent AUTH_FAILED_PERMANENTLY command to Python process.");
+    } catch (error) {
+      console.error("Error writing to Python process stdin:", error);
+    }
+  }
+  
+  cancelDownload(serviceType) {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.error(
+        "Cannot cancel download: Python process not running or stdin not writable."
+      );
+      return;
+    }
+
+    const command = {
+      type: "CANCEL_DOWNLOAD",
+      payload: {
+        service_type: serviceType,
+      },
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log(`Sent CANCEL_DOWNLOAD command for ${serviceType} to Python process.`);
+
+      // Clear the current download tracking
+      this.currentDownloadImage = null;
+
+      // Clear the progress display immediately in the UI for instant feedback
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send("openfork_client:docker-progress", null);
+        this.mainWindow.webContents.send("openfork_client:log", {
+          type: "stdout",
+          message: `Sent cancellation request for ${serviceType}.`,
+        });
+      }
     } catch (error) {
       console.error("Error writing to Python process stdin:", error);
     }
@@ -355,14 +391,21 @@ class PythonProcessManager {
 
           // Handle Docker pull progress messages
           if (message.type === "DOCKER_PULL_PROGRESS") {
-            this.mainWindow.webContents.send(
-              "openfork_client:docker-progress",
-              message.payload
-            );
+            // Only update if this is for the current download
+            if (this.currentDownloadImage === message.payload.image) {
+              this.mainWindow.webContents.send(
+                "openfork_client:docker-progress",
+                message.payload
+              );
+            } else {
+              console.log(`Ignoring progress for stale download: ${message.payload.image}`);
+            }
             return; // Don't log these to avoid spam
           }
 
           if (message.type === "DOCKER_PULL_START") {
+            // Track this as the current download
+            this.currentDownloadImage = message.payload.image;
             this.mainWindow.webContents.send(
               "openfork_client:docker-progress",
               { ...message.payload, status: "Starting", progress: 0 }
@@ -376,22 +419,54 @@ class PythonProcessManager {
           }
 
           if (message.type === "DOCKER_PULL_COMPLETE") {
-            this.mainWindow.webContents.send(
-              "openfork_client:docker-progress",
-              { ...message.payload, status: "Complete", progress: 100 }
-            );
-            // Log a single line for the completion event
-            this.mainWindow.webContents.send("openfork_client:log", {
-              type: "stdout",
-              message: `Docker image ready: ${message.payload.image}`,
-            });
-            // Clear the progress display after a short delay
-            setTimeout(() => {
+            // Only clear if this is for the current download
+            if (this.currentDownloadImage === message.payload.image) {
+              this.mainWindow.webContents.send(
+                "openfork_client:docker-progress",
+                { ...message.payload, status: "Complete", progress: 100 }
+              );
+              // Log a single line for the completion event
+              this.mainWindow.webContents.send("openfork_client:log", {
+                type: "stdout",
+                message: `Docker image ready: ${message.payload.image}`,
+              });
+              // Clear the progress display after a short delay
+              setTimeout(() => {
+                // Double-check image name before clearing (in case a new download started)
+                if (this.currentDownloadImage === message.payload.image) {
+                  this.mainWindow.webContents.send(
+                    "openfork_client:docker-progress",
+                    null
+                  );
+                  this.currentDownloadImage = null;
+                }
+              }, 1500);
+            } else {
+              console.log(`Ignoring completion for stale download: ${message.payload.image}`);
+            }
+            return;
+          }
+
+          if (message.type === "DOCKER_PULL_FAILED") {
+            // Only clear if this is for the current download (prevents race condition)
+            if (this.currentDownloadImage === message.payload.image) {
               this.mainWindow.webContents.send(
                 "openfork_client:docker-progress",
                 null
               );
-            }, 1500);
+              this.currentDownloadImage = null;
+              
+              const errorMsg = message.payload.error === "cancelled" 
+                ? `Download cancelled: ${message.payload.image}` 
+                : `Download failed: ${message.payload.image} (${message.payload.error})`;
+
+              this.mainWindow.webContents.send("openfork_client:log", {
+                type: message.payload.error === "cancelled" ? "stdout" : "stderr",
+                message: errorMsg,
+              });
+            } else {
+              console.log(`Ignoring stale FAILED event for ${message.payload.image} (current: ${this.currentDownloadImage})`);
+            }
             return;
           }
 

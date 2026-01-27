@@ -86,6 +86,7 @@ interface ElectronAPI {
   // DGN Client controls
   startClient: (service: string, policy: string, allowedIds: string) => void;
   stopClient: () => void;
+  cancelDownload: (serviceType: string) => void;
   cleanupProcesses: () => Promise<{ success: boolean; error?: string }>;
 
   onLog: (callback: (log: Omit<LogEntry, "timestamp">) => void) => CleanupFn;

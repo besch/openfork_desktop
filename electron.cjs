@@ -315,6 +315,11 @@ ipcMain.on("openfork_client:start", (event, service, policy, allowedIds) => {
 ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
 });
+ipcMain.on("docker:cancel-download", (event, serviceType) => {
+  if (pythonManager) {
+    pythonManager.cancelDownload(serviceType);
+  }
+});
 
 ipcMain.handle("openfork_client:cleanup", async () => {
   if (pythonManager) {
