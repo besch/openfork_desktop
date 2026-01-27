@@ -277,9 +277,25 @@ export const DockerManagement = memo(() => {
       />
 
       {error && (
-        <div className="bg-destructive-foreground/10 border border-destructive/20 text-destructive rounded-lg p-4">
-          {error}
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="bg-destructive-foreground text-white rounded-lg p-4 flex items-center justify-between shadow-lg border border-white/10"
+        >
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5" />
+            <span className="font-medium">{error}</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setError(null)}
+            className="text-white hover:bg-white/20 h-8 w-8 p-0 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
       )}
 
       {/* Disk Space Error Alert */}
