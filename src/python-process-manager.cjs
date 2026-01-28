@@ -389,16 +389,25 @@ class PythonProcessManager {
           }
 
 
+          // Helper to normalize image names (ensuring :latest if no tag)
+          const normalizeImage = (img) => {
+            if (!img) return img;
+            return img.includes(":") ? img : `${img}:latest`;
+          };
+
           // Handle Docker pull progress messages
           if (message.type === "DOCKER_PULL_PROGRESS") {
+            const currentNorm = normalizeImage(this.currentDownloadImage);
+            const messageNorm = normalizeImage(message.payload.image);
+            
             // Only update if this is for the current download
-            if (this.currentDownloadImage === message.payload.image) {
+            if (currentNorm === messageNorm) {
               this.mainWindow.webContents.send(
                 "openfork_client:docker-progress",
                 message.payload
               );
             } else {
-              console.log(`Ignoring progress for stale download: ${message.payload.image}`);
+              console.log(`Ignoring progress for image mismatch: ${messageNorm} vs current: ${currentNorm}`);
             }
             return; // Don't log these to avoid spam
           }
@@ -419,8 +428,11 @@ class PythonProcessManager {
           }
 
           if (message.type === "DOCKER_PULL_COMPLETE") {
+            const currentNorm = normalizeImage(this.currentDownloadImage);
+            const messageNorm = normalizeImage(message.payload.image);
+
             // Only clear if this is for the current download
-            if (this.currentDownloadImage === message.payload.image) {
+            if (currentNorm === messageNorm) {
               this.mainWindow.webContents.send(
                 "openfork_client:docker-progress",
                 { ...message.payload, status: "Complete", progress: 100 }
@@ -431,9 +443,10 @@ class PythonProcessManager {
                 message: `Docker image ready: ${message.payload.image}`,
               });
               // Clear the progress display after a short delay
+              const completionImage = message.payload.image;
               setTimeout(() => {
                 // Double-check image name before clearing (in case a new download started)
-                if (this.currentDownloadImage === message.payload.image) {
+                if (normalizeImage(this.currentDownloadImage) === normalizeImage(completionImage)) {
                   this.mainWindow.webContents.send(
                     "openfork_client:docker-progress",
                     null
@@ -442,7 +455,7 @@ class PythonProcessManager {
                 }
               }, 1500);
             } else {
-              console.log(`Ignoring completion for stale download: ${message.payload.image}`);
+              console.log(`Ignoring completion for image mismatch: ${messageNorm} vs current: ${currentNorm}`);
             }
             return;
           }

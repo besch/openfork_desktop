@@ -380,7 +380,9 @@ export const DockerManagement = memo(() => {
             <CardTitle className="flex items-center justify-between text-primary">
               <div className="flex items-center gap-2">
                 <Download className="h-5 w-5 animate-pulse" />
-                <span>Downloading Docker Image</span>
+                <span>
+                  {dockerPullProgress?.status || "Downloading"} Docker Image
+                </span>
               </div>
               <Button
                 variant="destructive"
@@ -401,12 +403,13 @@ export const DockerManagement = memo(() => {
                     initial={{ width: 0 }}
                     animate={{ width: `${dockerPullProgress?.progress || 0}%` }}
                     transition={{ duration: 0.3, ease: "easeOut" }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+                  </motion.div>
                 </div>
               </div>
               <span className="text-lg font-bold text-primary tabular-nums min-w-[4ch]">
-                {dockerPullProgress?.progress || 0}%
+                {Math.round(dockerPullProgress?.progress || 0)}%
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
