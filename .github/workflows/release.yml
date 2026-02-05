@@ -49,18 +49,18 @@ jobs:
         run: mkdir -p bin
         shell: bash
 
-      - name: Move openfork_client executable
+      - name: Move openfork_client executable and resources
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
             mv openfork_client/dist/client.exe bin/
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            mv openfork_client/dist/client bin/
-            chmod +x bin/client
           else
             mv openfork_client/dist/client bin/
             chmod +x bin/client
           fi
+          # Copy essential resources that are loaded at runtime
+          cp -r openfork_client/workflows bin/
+          cp -r openfork_client/comfyui-storage bin/
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
