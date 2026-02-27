@@ -399,12 +399,12 @@ export const DockerManagement = memo(() => {
               <div className="flex-1">
                 <div className="relative h-3 bg-muted/30 rounded-full overflow-hidden">
                   <motion.div
-                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary-hover to-primary rounded-full"
+                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary-hover to-primary rounded-full overflow-hidden"
                     initial={{ width: 0 }}
                     animate={{ width: `${dockerPullProgress?.progress || 0}%` }}
                     transition={{ duration: 0.3, ease: "easeOut" }}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
                   </motion.div>
                 </div>
               </div>

@@ -295,5 +295,6 @@
 }
 
 .animate-shimmer {
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.5s linear infinite;
+  will-change: transform;
 }
