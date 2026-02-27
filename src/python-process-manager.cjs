@@ -42,31 +42,33 @@ class PythonProcessManager {
     }
 
     this._cleanupPromise = new Promise((resolve) => {
-      const isWin = process.platform === "win32";
-      if (!isWin) {
-         this._cleanupPromise = null;
-         resolve();
-         return;
-      }
+      const platform = process.platform;
+      const marker = "openfork_dgn_client_v1_marker";
       
       console.log("Cleaning up potential rogue client processes...");
-      
-      // Use PowerShell to find processes by our unique command line marker
-      // This is more reliable than name matching or generic flags
-      const marker = "openfork_dgn_client_v1_marker";
-      const psCommand = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
-      
-      exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, (error, stdout, stderr) => {
-          if (error) {
-              // It's not really an error if no processes were found to kill
-              // console.warn("Cleanup warning (may be empty):", error.message);
-          }
-          // Small delay to let OS release locks
-          setTimeout(() => {
-              this._cleanupPromise = null;
-              resolve();
-          }, 500);
-      });
+
+      if (platform === "win32") {
+        // Use PowerShell to find processes by our unique command line marker
+        const psCommand = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
+        exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, (error) => {
+            // It's not really an error if no processes were found
+            setTimeout(() => {
+                this._cleanupPromise = null;
+                resolve();
+            }, 500);
+        });
+      } else {
+        // Unix (Linux/macOS) cleanup using pgrep and kill
+        // We look for the marker in the full command line
+        const cmd = `pgrep -af "${marker}" | awk '{print $1}' | xargs -r kill -9`;
+        exec(cmd, (error) => {
+            // Small delay to let OS release locks
+            setTimeout(() => {
+                this._cleanupPromise = null;
+                resolve();
+            }, 500);
+        });
+      }
     });
 
     return this._cleanupPromise;
