@@ -600,6 +600,51 @@ ipcMain.handle("search:general", async (event, query) => {
   }
 });
 
+ipcMain.handle("fetch:earnings", async () => {
+  if (!session) return { success: false, error: "Not authenticated" };
+  try {
+    const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/earnings/summary`);
+    const request = net.request({
+      method: "GET",
+      url: requestUrl.toString(),
+    });
+
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+
+    return new Promise((resolve) => {
+      let body = "";
+      request.on("response", (response) => {
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          if (response.statusCode !== 200) {
+            console.error(
+              `Fetch earnings failed with status ${response.statusCode}: ${body}`
+            );
+            resolve({ success: false, error: "Server error" });
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            console.error("Failed to parse earnings response:", e);
+            resolve({ success: false, error: "Parse error" });
+          }
+        });
+      });
+      request.on("error", (error) => {
+        console.error("Failed to fetch earnings:", error);
+        resolve({ success: false, error: "Network error" });
+      });
+      request.end();
+    });
+  } catch (error) {
+    console.error("Error fetching earnings:", error);
+    return { success: false, error: "Unexpected error" };
+  }
+});
+
 // --- DOCKER MANAGEMENT ---
 const { execSync, exec } = require("child_process");
 

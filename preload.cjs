@@ -83,6 +83,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // General Search
   searchGeneral: (query) => ipcRenderer.invoke("search:general", query),
 
+  // Earnings
+  fetchEarnings: () => ipcRenderer.invoke("fetch:earnings"),
+
   // Docker Management
   listDockerImages: () => ipcRenderer.invoke("docker:list-images"),
   listDockerContainers: () => ipcRenderer.invoke("docker:list-containers"),
