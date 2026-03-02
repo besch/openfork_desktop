@@ -965,29 +965,47 @@ ipcMain.handle("docker:get-disk-space", async () => {
     let totalBytes, freeBytes, usedBytes, diskPath;
     
     if (process.platform === "win32") {
-      // Windows: Use PowerShell to get disk info for C: drive
+      // Windows: Use PowerShell to get disk info for system drive or specific drive
+      // Increased timeout to 10s to avoid SIGTERM on slow machines
+      // Added fallback to query C if something else fails
       const psCommand = "Get-PSDrive C | Select-Object @{Name='Total';Expression={$_.Used+$_.Free}}, Free, Used | ConvertTo-Json";
       
       const output = await new Promise((resolve, reject) => {
-        exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, { timeout: 5000 }, (error, stdout, stderr) => {
+        exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, { timeout: 15000 }, (error, stdout, stderr) => {
           if (error) {
             console.error("PowerShell disk space check error:", error.message);
-            reject(error);
+            // Don't reject, just resolve empty or use fallback if PowerShell is broken
+            resolve("");
             return;
           }
           resolve(stdout.trim());
         });
       });
       
-      const diskInfo = JSON.parse(output);
-      totalBytes = diskInfo.Total;
-      freeBytes = diskInfo.Free;
-      usedBytes = diskInfo.Used;
-      diskPath = "C:\\";
+      if (output) {
+        try {
+          const diskInfo = JSON.parse(output);
+          totalBytes = diskInfo.Total;
+          freeBytes = diskInfo.Free;
+          usedBytes = diskInfo.Used;
+          diskPath = "C:\\";
+        } catch (e) {
+          console.error("Error parsing disk space info:", e);
+        }
+      }
+      
+      // If we don't have bytes yet (PowerShell failed or timed out), use safe defaults
+      if (!totalBytes) {
+        return {
+          success: false,
+          error: "Failed to query system disk space",
+          data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "C:\\" }
+        };
+      }
     } else {
       // Linux/macOS: Use df command
       const dfOutput = await new Promise((resolve, reject) => {
-        exec("df -k /", { timeout: 5000 }, (error, stdout, stderr) => {
+        exec("df -k /", { timeout: 10000 }, (error, stdout, stderr) => {
           if (error) {
             reject(error);
             return;
@@ -1030,6 +1048,7 @@ ipcMain.handle("docker:get-disk-space", async () => {
     };
   }
 });
+
 
 // --- DEPENDENCY DETECTION ---
 
