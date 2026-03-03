@@ -227,26 +227,6 @@ export const DockerManagement = memo(() => {
     );
   };
 
-  const handleCleanupAll = () => {
-    showConfirmDialog(
-      "Clean Everything",
-      "This will stop ALL containers and remove ALL Docker images. This action cannot be undone and will require re-downloading large images (10-20GB+) if needed again. Are you absolutely sure?",
-      async () => {
-        setActionLoading("cleanup-all");
-        try {
-          const result = await window.electronAPI.cleanupDocker();
-          if (result.success) {
-            await fetchData();
-          } else {
-            setError(result.error || "Failed to cleanup");
-          }
-        } finally {
-          setActionLoading(null);
-        }
-      }
-    );
-  };
-
   const handlePurgeOpenFork = () => {
     showConfirmDialog(
       "Purge OpenFork Data",
@@ -382,30 +362,17 @@ export const DockerManagement = memo(() => {
             </div>
           )}
           <Button
-            variant="outline"
+            variant="destructive"
             onClick={handlePurgeOpenFork}
             disabled={actionLoading !== null}
-            className="border-primary/30 hover:bg-primary/10 text-primary"
             title="Surgically remove all OpenFork related Docker data while keeping other projects untouched."
           >
             {actionLoading === "purge-openfork" ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Purge OpenFork
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleCleanupAll}
-            disabled={actionLoading !== null || (images.length === 0 && containers.length === 0)}
-          >
-            {actionLoading === "cleanup-all" ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
               <Trash2 className="h-4 w-4 mr-2" />
             )}
-            Clean Everything
+            Purge OpenFork Data
           </Button>
         </div>
       </header>

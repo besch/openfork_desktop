@@ -140,7 +140,6 @@ interface ElectronAPI {
   removeAllDockerImages: () => Promise<DockerOperationResult>;
   stopContainer: (containerId: string) => Promise<DockerOperationResult>;
   stopAllContainers: () => Promise<DockerOperationResult>;
-  cleanupDocker: () => Promise<DockerOperationResult>;
   purgeOpenForkData: () => Promise<DockerOperationResult>;
   getDiskSpace: () => Promise<{
     success: boolean;

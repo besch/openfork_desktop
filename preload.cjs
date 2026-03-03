@@ -90,8 +90,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeAllDockerImages: () => ipcRenderer.invoke("docker:remove-all-images"),
   stopContainer: (containerId) => ipcRenderer.invoke("docker:stop-container", containerId),
   stopAllContainers: () => ipcRenderer.invoke("docker:stop-all-containers"),
-  cleanupDocker: () => ipcRenderer.invoke("docker:cleanup-all"),
-  purgeOpenForkData: () => ipcRenderer.invoke("docker:purge-openfork"),
+  purgeOpenForkData: () => ipcRenderer.invoke("docker:clean-openfork"),
   getDiskSpace: () => ipcRenderer.invoke("docker:get-disk-space"),
 
   // Docker Monitoring
