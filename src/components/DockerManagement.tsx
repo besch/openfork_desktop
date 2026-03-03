@@ -511,8 +511,16 @@ export const DockerManagement = memo(() => {
       </Card>
 
       {/* Images Card */}
-      <Card className="bg-card/50 backdrop-blur-sm border-white/10">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-white/10">
+        {actionLoading?.startsWith("remove-") && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-sm">
+            <Loader2 className="h-8 w-8 animate-spin text-primary drop-shadow-md mb-2" />
+            <p className="text-sm font-medium">
+              {actionLoading === "remove-all" ? "Removing all images..." : "Removing image..."}
+            </p>
+          </div>
+        )}
+        <CardHeader className="flex flex-row items-center justify-between relative z-10">
           <CardTitle className="flex items-center gap-2">
             <HardDrive className="h-5 w-5 text-primary" />
             Docker Images ({images.length})
