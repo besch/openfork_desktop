@@ -247,6 +247,29 @@ export const DockerManagement = memo(() => {
     );
   };
 
+  const handlePurgeOpenFork = () => {
+    showConfirmDialog(
+      "Purge OpenFork Data",
+      "This will surgically remove ALL OpenFork containers, images, and associated volumes. It is the most reliable way to recover space without affecting your other Docker projects. Large images will need re-downloading if needed again. Proceed?",
+      async () => {
+        setActionLoading("purge-openfork");
+        try {
+          const result = await window.electronAPI.purgeOpenForkData();
+          if (result.success) {
+            await fetchData();
+            // Refresh disk space after purge
+            const diskResult = await window.electronAPI.getDiskSpace();
+            if (diskResult.success) setDiskSpace(diskResult.data);
+          } else {
+            setError(result.error || "Failed to purge OpenFork data");
+          }
+        } finally {
+          setActionLoading(null);
+        }
+      }
+    );
+  };
+
   const isDownloading = dockerPullProgress !== null && (status === "starting" || status === "running");
 
   if (loading) {
@@ -358,6 +381,20 @@ export const DockerManagement = memo(() => {
               </span>
             </div>
           )}
+          <Button
+            variant="outline"
+            onClick={handlePurgeOpenFork}
+            disabled={actionLoading !== null}
+            className="border-primary/30 hover:bg-primary/10 text-primary"
+            title="Surgically remove all OpenFork related Docker data while keeping other projects untouched."
+          >
+            {actionLoading === "purge-openfork" ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Purge OpenFork
+          </Button>
           <Button
             variant="destructive"
             onClick={handleCleanupAll}

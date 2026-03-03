@@ -819,7 +819,31 @@ ipcMain.handle("docker:remove-image", async (event, imageId) => {
       console.warn(`Image ${imageId} validation failed, skipping removal`);
       return { success: false, error: "Only OpenFork images can be removed" };
     }
+
+    // WSL2 ROBUSTNESS: 1. Find and remove ANY containers using this image (running or stopped)
+    try {
+      const containerIds = await execDockerCommand(`docker ps -a -q --filter ancestor=${imageId}`);
+      if (containerIds) {
+        const ids = containerIds.split("\n").filter(Boolean);
+        for (const id of ids) {
+          console.log(`Force removing dependent container ${id} for image ${imageId}`);
+          await execDockerCommand(`docker rm -f ${id}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`Non-critical error cleaning up containers for image ${imageId}:`, e.message);
+    }
+
+    // WSL2 ROBUSTNESS: 2. Force remove the image
     await execDockerCommand(`docker rmi -f ${escapeShellArg(imageId)}`);
+    
+    // WSL2 ROBUSTNESS: 3. Prune dangling layers to actually recover space
+    try {
+      await execDockerCommand("docker image prune -f");
+    } catch (e) {
+      // Ignore prune errors
+    }
+
     return { success: true };
   } catch (error) {
     console.error(`Failed to remove Docker image ${imageId}:`, error);
@@ -899,13 +923,7 @@ ipcMain.handle("docker:stop-all-containers", async () => {
 
 ipcMain.handle("docker:cleanup-all", async () => {
   try {
-    // Stop all containers first
-    const containerResult = await new Promise((resolve) => {
-      ipcMain.emit("docker:stop-all-containers");
-      resolve({ success: true });
-    });
-    
-    // Get container IDs
+    // 1. Stop and remove ALL dgn-client containers
     let stoppedCount = 0;
     try {
       const containerOutput = await execDockerCommand(
@@ -915,7 +933,6 @@ ipcMain.handle("docker:cleanup-all", async () => {
         const containerIds = containerOutput.split("\n").filter(Boolean);
         for (const id of containerIds) {
           try {
-            await execDockerCommand(`docker stop ${id}`);
             await execDockerCommand(`docker rm -f ${id}`);
             stoppedCount++;
           } catch (e) {
@@ -927,7 +944,7 @@ ipcMain.handle("docker:cleanup-all", async () => {
       console.warn("Error stopping containers:", e.message);
     }
     
-    // Remove all openfork images
+    // 2. Remove all OpenFork images
     let removedCount = 0;
     try {
       const imageOutput = await execDockerCommand(
@@ -937,9 +954,15 @@ ipcMain.handle("docker:cleanup-all", async () => {
         const lines = imageOutput.split("\n").filter(Boolean);
         for (const line of lines) {
           const [id, fullName] = line.split("|");
-          // Only remove images containing "openfork"
           if (fullName && fullName.toLowerCase().includes("openfork")) {
             try {
+              // Also check for containers using this specific image just in case name filter missed some
+              const deps = await execDockerCommand(`docker ps -a -q --filter ancestor=${id}`);
+              if (deps) {
+                for (const depId of deps.split("\n").filter(Boolean)) {
+                  await execDockerCommand(`docker rm -f ${depId}`);
+                }
+              }
               await execDockerCommand(`docker rmi -f ${id}`);
               removedCount++;
             } catch (e) {
@@ -951,10 +974,70 @@ ipcMain.handle("docker:cleanup-all", async () => {
     } catch (e) {
       console.warn("Error removing images:", e.message);
     }
+
+    // 3. Prune dangling resources to trigger WSL2 reclaim
+    try {
+      await execDockerCommand("docker image prune -f");
+      await execDockerCommand("docker container prune -f");
+    } catch (e) {
+      // Ignore
+    }
     
     return { success: true, stoppedCount, removedCount };
   } catch (error) {
     console.error("Failed to cleanup Docker:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// SURGICAL DEEP CLEAN: Purge all OpenFork data but touch nothing else
+ipcMain.handle("docker:purge-openfork", async () => {
+  try {
+    console.log("Starting targeted OpenFork purge...");
+    
+    // 1. Force remove all dgn-client containers
+    try {
+      const dgnContainers = await execDockerCommand('docker ps -a -q --filter "name=dgn-client"');
+      if (dgnContainers) {
+        for (const id of dgnContainers.split("\n").filter(Boolean)) {
+          await execDockerCommand(`docker rm -f ${id}`);
+        }
+      }
+    } catch (e) {}
+
+    // 2. Find ALL images containing 'openfork' and their containers
+    const listOutput = await execDockerCommand('docker images --format "{{.ID}}|{{.Repository}}"');
+    if (listOutput) {
+      const lines = listOutput.split("\n").filter(Boolean);
+      for (const line of lines) {
+        const [id, repo] = line.split("|");
+        if (repo.toLowerCase().includes("openfork")) {
+          // Remove containers using it
+          try {
+            const deps = await execDockerCommand(`docker ps -a -q --filter ancestor=${id}`);
+            if (deps) {
+              for (const depId of deps.split("\n").filter(Boolean)) {
+                await execDockerCommand(`docker rm -f ${depId}`);
+              }
+            }
+            // Remove the image
+            await execDockerCommand(`docker rmi -f ${id}`);
+          } catch (e) {}
+        }
+      }
+    }
+
+    // 3. Remove all associated volumes (any volume named OpenFork or dangling)
+    try {
+      await execDockerCommand("docker volume prune -f");
+    } catch (e) {}
+
+    // 4. Final prune to signal WSL2 vhdx shrink
+    await execDockerCommand("docker image prune -af"); 
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to purge OpenFork data:", error);
     return { success: false, error: error.message };
   }
 });
