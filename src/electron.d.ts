@@ -162,6 +162,7 @@ interface ElectronAPI {
   checkDocker: () => Promise<DockerStatus>;
   checkNvidia: () => Promise<NvidiaStatus>;
   openDockerDownload: () => Promise<{ success: boolean }>;
+  installEngine: () => Promise<{ success: boolean; error?: string }>;
   
   // Auto Updater - return cleanup functions
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;

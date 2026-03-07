@@ -627,7 +627,12 @@ function escapeShellArg(arg) {
 
 function execDockerCommand(command) {
   return new Promise((resolve, reject) => {
-    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+    let finalCommand = command;
+    if (process.platform === "win32" && command.startsWith("docker ")) {
+      const escapedCmd = command.replace(/"/g, '\\"');
+      finalCommand = `wsl -d Ubuntu -e sudo bash -c "${escapedCmd}"`;
+    }
+    exec(finalCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
       if (error) {
         // If Docker is not running, we don't want to spam errors in the console
         // just return empty or handle gracefully
@@ -1092,7 +1097,11 @@ ipcMain.handle("deps:check-docker", async () => {
   // Use a separate exec that doesn't log errors (cleaner output)
   const checkCommand = (cmd) => {
     return new Promise((resolve) => {
-      exec(cmd, { timeout: 3000 }, (error, stdout) => {
+      let finalCommand = cmd;
+      if (process.platform === "win32") {
+        finalCommand = `wsl -d Ubuntu --user root -e bash -c "${cmd.replace(/"/g, '\\"')}"`;
+      }
+      exec(finalCommand, { timeout: 3000 }, (error, stdout) => {
         if (error) {
           resolve({ success: false, error: error.message });
         } else {
@@ -1122,6 +1131,36 @@ ipcMain.handle("deps:check-docker", async () => {
     console.error("Unexpected error checking Docker:", err);
     return { installed: false, running: false };
   }
+});
+
+ipcMain.handle("deps:install-engine", async () => {
+  return new Promise((resolve) => {
+    if (process.platform === "darwin") {
+      resolve({ success: false, error: "Auto-install not supported on macOS." });
+      return;
+    }
+    
+    let command = "";
+    if (process.platform === "win32") {
+      const scriptPath = app.isPackaged 
+        ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
+        : path.join(__dirname, "..", "client", "setup-wsl.ps1");
+      command = `powershell -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"${scriptPath}\\"' -Verb RunAs -Wait"`;
+    } else if (process.platform === "linux") {
+      const scriptPath = app.isPackaged 
+        ? path.join(process.resourcesPath, "bin", "setup-linux.sh")
+        : path.join(__dirname, "..", "client", "setup-linux.sh");
+      command = `pkexec bash "${scriptPath}"`;
+    }
+    
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: error.message });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
 });
 
 

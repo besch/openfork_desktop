@@ -295,10 +295,15 @@ class PythonProcessManager {
     console.log(`Using CWD: ${cwd}`);
 
     try {
+      const spawnEnv = { ...process.env, PYTHONUNBUFFERED: "1" };
+      if (process.platform === "win32") {
+        spawnEnv.DOCKER_HOST = "tcp://127.0.0.1:2375";
+      }
+
       this.pythonProcess = spawn(command, args, {
         cwd: cwd,
         stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr
-        env: { ...process.env, PYTHONUNBUFFERED: "1" },
+        env: spawnEnv,
       });
 
       this.mainWindow.webContents.send("openfork_client:status", "starting");

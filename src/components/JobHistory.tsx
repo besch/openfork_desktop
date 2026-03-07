@@ -174,7 +174,7 @@ export const JobHistory = memo(() => {
       }
 
       // 2. Fetch jobs
-      let query = supabase
+      const query = supabase
         .from("dgn_jobs")
         .select(`
           id,

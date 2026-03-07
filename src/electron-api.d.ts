@@ -112,6 +112,7 @@ declare global {
       checkDocker: () => Promise<{ installed: boolean; running: boolean }>;
       checkNvidia: () => Promise<{ available: boolean; gpu: string | null }>;
       openDockerDownload: () => Promise<{ success: boolean }>;
+      installEngine: () => Promise<{ success: boolean; error?: string }>;
       
       // Auto Update
       onUpdateAvailable: (callback: (info: unknown) => void) => void;

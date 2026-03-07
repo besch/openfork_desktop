@@ -67,6 +67,9 @@ jobs:
         run: |
           cp -r openfork_client/workflows bin/
           cp -r openfork_client/comfyui-storage bin/
+          cp openfork_client/setup-wsl.ps1 bin/
+          cp openfork_client/setup-linux.sh bin/
+          chmod +x bin/setup-linux.sh
           rm -rf bin/comfyui-storage/storage
 
       - name: Set up Node.js

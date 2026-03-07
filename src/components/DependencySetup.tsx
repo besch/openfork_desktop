@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,9 +18,13 @@ interface DependencySetupProps {
   initialStatus: DependencyStatus;
 }
 
+let autoInstallTriggered = false;
+
 export function DependencySetup({ onReady, initialStatus }: DependencySetupProps) {
   const [status, setStatus] = useState<DependencyStatus>(initialStatus);
   const [isChecking, setIsChecking] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [hasAttemptedUI, setHasAttemptedUI] = useState(autoInstallTriggered);
 
   const checkDependencies = useCallback(async () => {
     setIsChecking(true);
@@ -48,9 +52,30 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
     }
   }, [onReady]);
 
-  const handleInstallDocker = () => {
-    window.electronAPI.openDockerDownload();
-  };
+  const handleInstallEngine = useCallback(async () => {
+    if (isInstalling) return;
+    setIsInstalling(true);
+    try {
+      const result = await window.electronAPI.installEngine();
+      if (result?.success) {
+        // Wait a few seconds for daemon to fully start, then check again
+        setTimeout(checkDependencies, 3000);
+      } else {
+        console.error("Installation failed or cancelled:", result?.error);
+      }
+    } finally {
+      setIsInstalling(false);
+    }
+  }, [isInstalling, checkDependencies]);
+
+  // Auto-trigger installation if not installed
+  useEffect(() => {
+    if (status && !status.docker.installed && !status.docker.running && !isInstalling && !autoInstallTriggered) {
+      autoInstallTriggered = true;
+      setHasAttemptedUI(true);
+      handleInstallEngine();
+    }
+  }, [status, isInstalling, handleInstallEngine]);
 
   return (
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">
@@ -60,7 +85,7 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
             System Setup
           </h1>
           <p className="text-muted-foreground">
-            OpenFork requires Docker to run AI workflows on your machine.
+            OpenFork requires a local AI Engine and an NVIDIA GPU to run workflows on your machine.
           </p>
         </div>
 
@@ -76,7 +101,7 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-3 text-lg">
                 <Container className="h-5 w-5" />
-                Docker Desktop
+                OpenFork AI Engine
                 {status?.docker.running ? (
                   <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto" />
                 ) : status?.docker.installed ? (
@@ -89,32 +114,52 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
             <CardContent className="space-y-3">
               {status?.docker.running ? (
                 <p className="text-sm text-green-400">
-                  ✓ Docker is installed and running
+                  ✓ AI Engine is installed and running
                 </p>
               ) : status?.docker.installed ? (
                 <>
                   <p className="text-sm text-yellow-400">
-                    Docker is installed but not running
+                    AI Engine is installed but not running
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Please start Docker Desktop and click "Retry" below.
+                    Please ensure the engine service is running. If you just installed it, you may need to restart your PC.
                   </p>
+                  <Button
+                    onClick={checkDependencies}
+                    disabled={isChecking}
+                    className="w-full mt-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isChecking ? "animate-spin" : ""}`} />
+                    Retry Check
+                  </Button>
                 </>
               ) : (
                 <>
                   <p className="text-sm text-red-400">
-                    Docker is not installed
+                    AI Engine is not installed
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Docker is required to run AI models locally. Click below to download and install it.
+                    The background engine is required to run models locally. Setup will request administrator privileges.
                   </p>
-                  <Button
-                    onClick={handleInstallDocker}
-                    className="w-full mt-2"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Docker Desktop
-                  </Button>
+                  
+                  {isInstalling ? (
+                    <div className="w-full flex items-center justify-center p-4 border border-white/5 bg-black/20 rounded-lg mt-4 shadow-inner">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary mr-3" />
+                      <span className="text-sm font-medium pt-1 animate-pulse text-primary">Installing Engine Setup... Please wait.</span>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleInstallEngine}
+                      disabled={isInstalling}
+                      className="w-full mt-2 relative overflow-hidden group"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {hasAttemptedUI ? "Retry Installation" : "Install Local AI Engine"}
+                      
+                      {/* Animated shine effect on button */}
+                      <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                    </Button>
+                  )}
                 </>
               )}
             </CardContent>
