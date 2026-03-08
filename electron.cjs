@@ -601,7 +601,7 @@ ipcMain.handle("search:general", async (event, query) => {
 });
 
 // --- DOCKER MANAGEMENT ---
-const { execSync, exec } = require("child_process");
+const { execSync, exec, execFile } = require("child_process");
 
 // SECURITY: Validate Docker ID format to prevent command injection
 // Docker IDs are hex strings (12 or 64 chars for short/full format)
@@ -627,25 +627,36 @@ function escapeShellArg(arg) {
 
 function execDockerCommand(command) {
   return new Promise((resolve, reject) => {
-    let finalCommand = command;
+    // WSL ROBUSTNESS: On Windows, use execFile to avoid CMD shell escaping issues with pipes and quotes
     if (process.platform === "win32" && command.startsWith("docker ")) {
-      const escapedCmd = command.replace(/"/g, '\\"');
-      finalCommand = `wsl -d Ubuntu -e sudo bash -c "${escapedCmd}"`;
-    }
-    exec(finalCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-      if (error) {
-        // If Docker is not running, we don't want to spam errors in the console
-        // just return empty or handle gracefully
-        if (error.message.includes("is not running") || error.message.includes("connection refused")) {
-           resolve("");
-           return;
+      const args = ["-d", "Ubuntu", "-e", "sudo", "bash", "-c", command];
+      execFile("wsl.exe", args, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+        if (error) {
+          // If Docker is not running, we don't want to spam errors in the console
+          if (error.message.includes("is not running") || error.message.includes("connection refused")) {
+             resolve("");
+             return;
+          }
+          console.error(`Docker command error: ${error.message}`);
+          reject(error);
+          return;
         }
-        console.error(`Docker command error: ${error.message}`);
-        reject(error);
-        return;
-      }
-      resolve(stdout.trim());
-    });
+        resolve(stdout.trim());
+      });
+    } else {
+      exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+        if (error) {
+          if (error.message.includes("is not running") || error.message.includes("connection refused")) {
+             resolve("");
+             return;
+          }
+          console.error(`Docker command error: ${error.message}`);
+          reject(error);
+          return;
+        }
+        resolve(stdout.trim());
+      });
+    }
   });
 }
 
@@ -1097,17 +1108,25 @@ ipcMain.handle("deps:check-docker", async () => {
   // Use a separate exec that doesn't log errors (cleaner output)
   const checkCommand = (cmd) => {
     return new Promise((resolve) => {
-      let finalCommand = cmd;
       if (process.platform === "win32") {
-        finalCommand = `wsl -d Ubuntu --user root -e bash -c "${cmd.replace(/"/g, '\\"')}"`;
+        // Use execFile to avoid CMD shell escaping issues
+        const args = ["-d", "Ubuntu", "--user", "root", "-e", "bash", "-c", cmd];
+        execFile("wsl.exe", args, { timeout: 3000 }, (error, stdout) => {
+          if (error) {
+            resolve({ success: false, error: error.message });
+          } else {
+            resolve({ success: true, output: stdout.trim() });
+          }
+        });
+      } else {
+        exec(cmd, { timeout: 3000 }, (error, stdout) => {
+          if (error) {
+            resolve({ success: false, error: error.message });
+          } else {
+            resolve({ success: true, output: stdout.trim() });
+          }
+        });
       }
-      exec(finalCommand, { timeout: 3000 }, (error, stdout) => {
-        if (error) {
-          resolve({ success: false, error: error.message });
-        } else {
-          resolve({ success: true, output: stdout.trim() });
-        }
-      });
     });
   };
 
