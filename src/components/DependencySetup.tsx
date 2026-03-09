@@ -27,6 +27,9 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
   const [isInstalling, setIsInstalling] = useState(false);
   const [availableDrives, setAvailableDrives] = useState<{name: string, freeGB: number}[]>([]);
   const [selectedDrive, setSelectedDrive] = useState<string>("C");
+  const installDrive = status?.docker.installDrive;
+  const isBridgeStarting = status?.docker.error === "DOCKER_API_UNREACHABLE";
+  const canChooseInstallDrive = status?.docker.error === "WSL_DISTRO_MISSING";
 
   useEffect(() => {
     window.electronAPI.getAvailableDrives().then(drives => {
@@ -35,6 +38,12 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
       // Or just stay on C by default for safety.
     });
   }, []);
+
+  useEffect(() => {
+    if (installDrive) {
+      setSelectedDrive(installDrive);
+    }
+  }, [installDrive]);
 
   const checkDependencies = useCallback(async () => {
     setIsChecking(true);
@@ -66,18 +75,38 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
     if (isInstalling) return;
     setIsInstalling(true);
     try {
-      const drivePath = `${selectedDrive}:\\OpenFork\\wsl`;
+      const drivePath = canChooseInstallDrive
+        ? `${selectedDrive}:\\OpenFork\\wsl`
+        : undefined;
       const result = await window.electronAPI.installEngine(drivePath);
       if (result?.success) {
-        // Wait a few seconds for daemon to fully start, then check again
-        setTimeout(checkDependencies, 3000);
+        await checkDependencies();
       } else {
         console.error("Installation failed or cancelled:", result?.error);
       }
     } finally {
       setIsInstalling(false);
     }
-  }, [isInstalling, checkDependencies, selectedDrive]);
+  }, [canChooseInstallDrive, isInstalling, checkDependencies, selectedDrive]);
+
+  useEffect(() => {
+    if (!status?.docker.installed || status.docker.running || !isBridgeStarting || isChecking || isInstalling) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      checkDependencies();
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    checkDependencies,
+    isBridgeStarting,
+    isChecking,
+    isInstalling,
+    status?.docker.installed,
+    status?.docker.running,
+  ]);
 
   // Auto-trigger installation removed as per user request to select drive first
 
@@ -123,19 +152,15 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
               ) : status?.docker.installed ? (
                 <>
                   <p className="text-sm text-yellow-400">
-                    AI Engine is installed but not running
+                    {isBridgeStarting
+                      ? "AI Engine is starting and exposing its Docker API"
+                      : "AI Engine is installed but not running"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Please ensure the engine service is running. If you just installed it, you may need to restart your PC.
+                    {isBridgeStarting
+                      ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
+                      : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."}
                   </p>
-                  <Button
-                    onClick={checkDependencies}
-                    disabled={isChecking}
-                    className="w-full mt-2"
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${isChecking ? "animate-spin" : ""}`} />
-                    Retry Check
-                  </Button>
                 </>
               ) : (
                 <>
@@ -149,8 +174,15 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
                       ? "The required Ubuntu environment is missing from WSL. Setup will install it for you on the selected drive."
                       : "The background engine is required to run models locally. Setup will request administrator privileges."}
                   </p>
+
+                  {installDrive && !canChooseInstallDrive && (
+                    <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-muted-foreground">
+                      Existing Ubuntu storage detected on <span className="font-semibold text-foreground">{installDrive}: drive</span>.
+                      {" "}This setup run will install Docker into that distro. Use Storage Settings after setup if you want to relocate it.
+                    </div>
+                  )}
                   
-                  {availableDrives.length > 1 && (
+                  {canChooseInstallDrive && availableDrives.length > 1 && (
                     <div className="space-y-2 pt-2">
                        <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
                          <HardDrive className="h-3 w-3" />
@@ -256,7 +288,7 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
             ) : (
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            {isChecking ? "Checking..." : "Retry"}
+            {isChecking ? "Checking..." : "Retry Check"}
           </Button>
         </div>
       </div>

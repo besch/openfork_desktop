@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
 const path = require("path");
+const http = require("http");
 
 if (app.isPackaged) {
 }
@@ -9,18 +10,6 @@ const { PythonProcessManager } = require("./src/python-process-manager.cjs");
 const { ScheduleManager, SCHEDULE_PRESETS } = require("./src/schedule-manager.cjs");
 const { autoUpdater } = require("electron-updater");
 const process = require("process");
-
-// --- ENABLE BUILT-IN AI (Gemini Nano) ---
-// Note: Requires Electron 32+ (Chrome 128+)
-// We enable several feature variants to cover all implementations across Chromium versions
-app.commandLine.appendSwitch("enable-features", "OptimizationGuideOnDeviceModel,PromptAPIForGeminiNano,PromptAPIGeminiNano,SummarizationAPI,LanguageModelAPI,GeminiNanoAPI,ExperimentalBuiltInAI,ModelExecutionCapability,OnDeviceModelService,WriterAPI,RewriterAPI");
-app.commandLine.appendSwitch("enable-blink-features", "PromptAPI,SummarizationAPI,LanguageModelAPI,WriterAPI,RewriterAPI");
-app.commandLine.appendSwitch("enable-experimental-web-platform-features");
-// Bypass hardware checks and enable debug info
-app.commandLine.appendSwitch("optimization-guide-on-device-model-show-debug-info");
-app.commandLine.appendSwitch("enable-optimization-guide-on-device-model");
-// Force enable even without full download immediately (will trigger download)
-app.commandLine.appendSwitch("install-optimization-guide-on-device-model");
 
 
 // --- PROTOCOL & INITIALIZATION ---
@@ -59,6 +48,10 @@ let session = null;
 let pythonManager;
 let scheduleManager;
 let isQuittingApp = false; // App-level flag to prevent before-quit race condition
+let pendingClientStart = null;
+
+const OPENFORK_WSL_DISTRO = "Ubuntu";
+const WINDOWS_DOCKER_API_PORT = 2375;
 
 // Listen for auth events to keep the session fresh
 supabase.auth.onAuthStateChange((event, newSession) => {
@@ -309,8 +302,41 @@ ipcMain.handle(
   }
 );
 
-ipcMain.on("openfork_client:start", (event, service, policy, allowedIds) => {
-  if (pythonManager) pythonManager.start(service, policy, allowedIds);
+ipcMain.on("openfork_client:start", async (event, service, policy, allowedIds) => {
+  if (!pythonManager || pythonManager.isRunning() || pendingClientStart) {
+    return;
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("openfork_client:status", "starting");
+  }
+
+  pendingClientStart = (async () => {
+    if (process.platform === "win32") {
+      const dockerHost = await resolveWindowsDockerApiEndpoint();
+      if (!dockerHost) {
+        const message =
+          "Docker is installed in WSL, but its API is not reachable from Windows yet.";
+
+        console.error(message);
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("openfork_client:log", {
+            type: "stderr",
+            message,
+          });
+          mainWindow.webContents.send("openfork_client:status", "stopped");
+        }
+        return;
+      }
+
+      process.env.OPENFORK_DOCKER_HOST = dockerHost;
+    }
+
+    await pythonManager.start(service, policy, allowedIds);
+  })().finally(() => {
+    pendingClientStart = null;
+  });
 });
 ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
@@ -630,7 +656,7 @@ function execDockerCommand(command) {
     // WSL ROBUSTNESS: On Windows, use execFile to avoid CMD shell escaping issues with pipes and quotes
     if (process.platform === "win32" && command.startsWith("docker ")) {
       // Use -- separator which is more robust for passing complex strings to WSL
-      const args = ["-d", "Ubuntu", "--", "sudo", "bash", "-c", command];
+      const args = ["-d", OPENFORK_WSL_DISTRO, "--", "sudo", "bash", "-c", command];
       execFile("wsl.exe", args, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
         if (error) {
           // If Docker is not running or distro is missing, we don't want to spam errors in the console
@@ -666,6 +692,110 @@ function execDockerCommand(command) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getWslIpAddress() {
+  if (process.platform !== "win32") {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve) => {
+    const args = ["-d", OPENFORK_WSL_DISTRO, "--", "hostname", "-I"];
+    execFile("wsl.exe", args, { timeout: 5000 }, (error, stdout) => {
+      if (error || !stdout) {
+        resolve(null);
+        return;
+      }
+
+      const ips = stdout.trim().split(/\s+/).filter(Boolean);
+      resolve(ips[0] || null);
+    });
+  });
+}
+
+async function getWindowsDockerApiHosts() {
+  const hosts = ["127.0.0.1", "localhost"];
+  const wslIp = await getWslIpAddress();
+  if (wslIp) {
+    hosts.push(wslIp);
+  }
+  return [...new Set(hosts)];
+}
+
+function pingDockerApiHost(host, timeoutMs = 1500) {
+  if (process.platform !== "win32") {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    const request = http.request(
+      {
+        host,
+        port: WINDOWS_DOCKER_API_PORT,
+        path: "/_ping",
+        method: "GET",
+        timeout: timeoutMs,
+      },
+      (response) => {
+        let body = "";
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          resolve(response.statusCode === 200 && body.trim() === "OK");
+        });
+      }
+    );
+
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(false);
+    });
+
+    request.on("error", () => {
+      resolve(false);
+    });
+
+    request.end();
+  });
+}
+
+async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
+  if (process.platform !== "win32") {
+    return null;
+  }
+
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    const hosts = await getWindowsDockerApiHosts();
+    for (const host of hosts) {
+      if (await pingDockerApiHost(host)) {
+        return `tcp://${host}:${WINDOWS_DOCKER_API_PORT}`;
+      }
+    }
+
+    try {
+      await execDockerCommand("docker info > /dev/null 2>&1 || true");
+    } catch {
+      // Best-effort warmup only.
+    }
+
+    await sleep(1000);
+  }
+
+  const hosts = await getWindowsDockerApiHosts();
+  for (const host of hosts) {
+    if (await pingDockerApiHost(host)) {
+      return `tcp://${host}:${WINDOWS_DOCKER_API_PORT}`;
+    }
+  }
+
+  return null;
+}
+
 let dockerMonitorInterval = null;
 let lastContainersJson = "";
 let lastImagesJson = "";
@@ -676,7 +806,7 @@ async function checkDockerUpdates() {
   try {
     // If on Windows, check if distro exists before monitoring
     if (process.platform === "win32") {
-       const exists = await checkDistroExists("Ubuntu");
+       const exists = await checkDistroExists(OPENFORK_WSL_DISTRO);
        if (!exists) return;
     }
 
@@ -1029,8 +1159,8 @@ ipcMain.handle("docker:get-disk-space", async () => {
     let totalBytes, freeBytes, usedBytes, diskPath;
     
     if (process.platform === "win32") {
-      // Detect where Ubuntu is actually installed
-      const basePath = await getDistroBasePath("Ubuntu");
+      // Detect where the OpenFork distro is actually installed
+      const basePath = await getDistroBasePath(OPENFORK_WSL_DISTRO);
       // Extract drive letter robustly (handles D:, \??\D:, or defaults to C)
       let driveLetter = "C";
       if (basePath) {
@@ -1130,7 +1260,7 @@ ipcMain.handle("docker:reclaim-space", async () => {
 
     return new Promise((resolve) => {
       // Use execFile to avoid CMD shell escaping issues
-      const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-DistroName", "Ubuntu"];
+      const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-DistroName", OPENFORK_WSL_DISTRO];
       execFile("powershell.exe", args, (error) => {
         if (error) {
           console.error("Compaction failed:", error);
@@ -1195,7 +1325,7 @@ ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
     // First, wipe the old one (this script does not require elevation for its primary function,
     // but it might if it needs to delete files in protected locations. For now, keep it as is.)
     console.log(`Cleaning up old distribution before relocation to: ${newDrivePath}`);
-    const relocateArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", relocateScriptPath, "-DistroName", "Ubuntu", "-NewLocation", newDrivePath];
+    const relocateArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", relocateScriptPath, "-DistroName", OPENFORK_WSL_DISTRO, "-NewLocation", newDrivePath];
     
     const relocateResult = await new Promise((resolve) => {
       execFile("powershell.exe", relocateArgs, (error) => {
@@ -1314,7 +1444,7 @@ ipcMain.handle("deps:check-docker", async () => {
     return new Promise((resolve) => {
       if (process.platform === "win32") {
         // Use -- separator for robustness
-        const args = ["-d", "Ubuntu", "--user", "root", "--", "bash", "-c", cmd];
+        const args = ["-d", OPENFORK_WSL_DISTRO, "--user", "root", "--", "bash", "-c", cmd];
         execFile("wsl.exe", args, { timeout: 15000 }, (error, stdout, stderr) => {
           if (error) {
             console.log(`Check command '${cmd}' failed: ${error.message}`);
@@ -1343,7 +1473,7 @@ ipcMain.handle("deps:check-docker", async () => {
   try {
     // WSL CHECK (Windows only)
     if (process.platform === "win32") {
-      const distroExists = await checkDistroExists("Ubuntu");
+      const distroExists = await checkDistroExists(OPENFORK_WSL_DISTRO);
       if (!distroExists) {
         console.log("Ubuntu WSL distro missing");
         return { installed: false, running: false, error: "WSL_DISTRO_MISSING" };
@@ -1351,7 +1481,7 @@ ipcMain.handle("deps:check-docker", async () => {
     }
 
     // Get installation path for UI
-    const basePath = await getDistroBasePath("Ubuntu");
+    const basePath = await getDistroBasePath(OPENFORK_WSL_DISTRO);
     let installDrive = null;
     if (basePath) {
       const match = basePath.match(/([a-zA-Z]):/);
@@ -1365,11 +1495,24 @@ ipcMain.handle("deps:check-docker", async () => {
       return { installed: false, running: false, installDrive };
     }
 
-    // Check if Docker daemon is running and responsive
-    const infoResult = await checkCommand("docker info");
-    if (infoResult.success) {
-      return { installed: true, running: true, installDrive };
-    } else {
+      // Check if Docker daemon is running and responsive
+      const infoResult = await checkCommand("docker info");
+      if (infoResult.success) {
+        if (process.platform === "win32") {
+          const dockerHost = await resolveWindowsDockerApiEndpoint(15000);
+          if (!dockerHost) {
+            delete process.env.OPENFORK_DOCKER_HOST;
+            return {
+              installed: true,
+              running: false,
+              installDrive,
+              error: "DOCKER_API_UNREACHABLE",
+            };
+          }
+          process.env.OPENFORK_DOCKER_HOST = dockerHost;
+        }
+        return { installed: true, running: true, installDrive };
+      } else {
       console.log("Docker is installed but daemon not running:", infoResult.error);
       return { installed: true, running: false, installDrive };
     }

@@ -128,6 +128,18 @@ function App() {
     };
   }, [setSession]);
 
+  useEffect(() => {
+    if (checkingDeps || !dependencyStatus?.allReady) {
+      return;
+    }
+
+    window.electronAPI.startDockerMonitoring();
+
+    return () => {
+      window.electronAPI.stopDockerMonitoring();
+    };
+  }, [checkingDeps, dependencyStatus?.allReady]);
+
   // Show loading while checking dependencies
   if (checkingDeps) {
     return (

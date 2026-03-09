@@ -224,6 +224,7 @@ class PythonProcessManager {
         message:
           "ERROR: Service type must be selected before starting the client.",
       });
+      this.mainWindow.webContents.send("openfork_client:status", "stopped");
       return;
     }
     if (this.pythonProcess) {
@@ -248,6 +249,7 @@ class PythonProcessManager {
         message:
           "Your session has expired. Please log in again to start the client.",
       });
+      this.mainWindow.webContents.send("openfork_client:status", "stopped");
       return;
     }
 
@@ -259,6 +261,11 @@ class PythonProcessManager {
     const currentSession = data.session;
 
     const { command, args: initialArgs } = this.getPythonCommand();
+    const normalizedAllowedIds = Array.isArray(allowedIds)
+      ? allowedIds.map((id) => `${id}`.trim()).filter(Boolean)
+      : typeof allowedIds === "string"
+        ? allowedIds.split(",").map((id) => id.trim()).filter(Boolean)
+        : [];
 
     const dgnClientRootDir = app.isPackaged
       ? path.dirname(command)
@@ -284,10 +291,9 @@ class PythonProcessManager {
 
     if (
       (policy === "project" || policy === "users") &&
-      Array.isArray(allowedIds) &&
-      allowedIds.length > 0
+      normalizedAllowedIds.length > 0
     ) {
-      args.push("--allowed-targets", allowedIds.join(","));
+      args.push("--allowed-targets", normalizedAllowedIds.join(","));
     }
 
     console.log(`Starting Python backend for '${service}' service...`);
@@ -297,7 +303,10 @@ class PythonProcessManager {
     try {
       const spawnEnv = { ...process.env, PYTHONUNBUFFERED: "1" };
       if (process.platform === "win32") {
-        spawnEnv.DOCKER_HOST = "tcp://127.0.0.1:2375";
+        spawnEnv.DOCKER_HOST =
+          process.env.OPENFORK_DOCKER_HOST ||
+          process.env.DOCKER_HOST ||
+          "tcp://127.0.0.1:2375";
       }
 
       this.pythonProcess = spawn(command, args, {

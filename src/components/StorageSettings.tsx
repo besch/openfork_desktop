@@ -62,7 +62,7 @@ export function StorageSettings() {
     if (!selectedDrive || isRelocating) return;
     
     const confirm = window.confirm(
-      `WARNING: This will DELETE all current Docker data and images to reclaim space on your current drive, then start fresh on ${selectedDrive}: drive.\n\nAre you sure you want to proceed?`
+      `WARNING: This will reinstall the OpenFork engine on ${selectedDrive}: drive and remove the current engine images so they can be downloaded again.\n\nAre you sure you want to proceed?`
     );
     if (!confirm) return;
 
@@ -143,7 +143,7 @@ export function StorageSettings() {
                 Relocate Engine
               </Label>
               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Move everything to another drive. <span className="text-orange-400 font-medium italic">Wipes images.</span>
+                Reinstall the engine on another drive. <span className="text-orange-400 font-medium italic">Requires re-downloading images.</span>
               </p>
             </div>
             
