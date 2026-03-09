@@ -629,11 +629,17 @@ function execDockerCommand(command) {
   return new Promise((resolve, reject) => {
     // WSL ROBUSTNESS: On Windows, use execFile to avoid CMD shell escaping issues with pipes and quotes
     if (process.platform === "win32" && command.startsWith("docker ")) {
-      const args = ["-d", "Ubuntu", "-e", "sudo", "bash", "-c", command];
+      // Use -- separator which is more robust for passing complex strings to WSL
+      const args = ["-d", "Ubuntu", "--", "sudo", "bash", "-c", command];
       execFile("wsl.exe", args, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
         if (error) {
-          // If Docker is not running, we don't want to spam errors in the console
-          if (error.message.includes("is not running") || error.message.includes("connection refused")) {
+          // If Docker is not running or distro is missing, we don't want to spam errors in the console
+          const msg = error.message.toLowerCase();
+          if (
+            msg.includes("is not running") || 
+            msg.includes("connection refused") || 
+            msg.includes("distribution with the supplied name could not be found")
+          ) {
              resolve("");
              return;
           }
@@ -668,6 +674,12 @@ async function checkDockerUpdates() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   try {
+    // If on Windows, check if distro exists before monitoring
+    if (process.platform === "win32") {
+       const exists = await checkDistroExists("Ubuntu");
+       if (!exists) return;
+    }
+
     // Check containers
     const containersOutput = await execDockerCommand(
       'docker ps -a --format "{{json .}}" --filter "name=dgn-client"'
@@ -1017,16 +1029,23 @@ ipcMain.handle("docker:get-disk-space", async () => {
     let totalBytes, freeBytes, usedBytes, diskPath;
     
     if (process.platform === "win32") {
-      // Windows: Use PowerShell to get disk info for system drive or specific drive
-      // Increased timeout to 10s to avoid SIGTERM on slow machines
-      // Added fallback to query C if something else fails
-      const psCommand = "Get-PSDrive C | Select-Object @{Name='Total';Expression={$_.Used+$_.Free}}, Free, Used | ConvertTo-Json";
+      // Detect where Ubuntu is actually installed
+      const basePath = await getDistroBasePath("Ubuntu");
+      // Extract drive letter robustly (handles D:, \??\D:, or defaults to C)
+      let driveLetter = "C";
+      if (basePath) {
+        const match = basePath.match(/([a-zA-Z]):/);
+        if (match) driveLetter = match[1].toUpperCase();
+      }
+      
+      // Windows: Use PowerShell to get disk info for the detected drive
+      const psCommand = `Get-PSDrive ${driveLetter} | Select-Object Free, Used | ConvertTo-Json`;
       
       const output = await new Promise((resolve, reject) => {
         exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, { timeout: 15000 }, (error, stdout, stderr) => {
           if (error) {
             console.error("PowerShell disk space check error:", error.message);
-            // Don't reject, just resolve empty or use fallback if PowerShell is broken
+            // Fallback: Just return something so the UI doesn't spin, but handle it gracefully
             resolve("");
             return;
           }
@@ -1037,10 +1056,10 @@ ipcMain.handle("docker:get-disk-space", async () => {
       if (output) {
         try {
           const diskInfo = JSON.parse(output);
-          totalBytes = diskInfo.Total;
           freeBytes = diskInfo.Free;
           usedBytes = diskInfo.Used;
-          diskPath = "C:\\";
+          totalBytes = freeBytes + usedBytes;
+          diskPath = `${driveLetter}:\\`;
         } catch (e) {
           console.error("Error parsing disk space info:", e);
         }
@@ -1101,26 +1120,217 @@ ipcMain.handle("docker:get-disk-space", async () => {
   }
 });
 
+// --- DOCKER DISK MANAGEMENT ---
+
+ipcMain.handle("docker:reclaim-space", async () => {
+  try {
+    const scriptPath = app.isPackaged
+      ? path.join(process.resourcesPath, "scripts", "compact-wsl.ps1")
+      : path.join(__dirname, "scripts", "compact-wsl.ps1");
+
+    return new Promise((resolve) => {
+      // Use execFile to avoid CMD shell escaping issues
+      const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-DistroName", "Ubuntu"];
+      execFile("powershell.exe", args, (error) => {
+        if (error) {
+          console.error("Compaction failed:", error);
+          resolve({ success: false, error: error.message });
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+async function runElevatedPowerShell(scriptPath, args = []) {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") {
+      resolve({ success: false, error: "Elevation only supported on Windows" });
+      return;
+    }
+
+    // Combine all arguments into a single list for the inner powershell
+    const innerArgs = [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", scriptPath,
+      ...args
+    ];
+
+    // Use PowerShell array literal syntax @('arg1', 'arg2') for -ArgumentList.
+    // This is much more robust than a single string with nested quotes.
+    const argumentArray = innerArgs
+      .map(arg => `'${arg.toString().replace(/'/g, "''")}'`)
+      .join(", ");
+
+    const command = `Start-Process powershell -ArgumentList @(${argumentArray}) -Verb RunAs -Wait`;
+
+    console.log(`Requesting elevation for: ${scriptPath}`);
+    
+    // Use execFile to avoid one layer of CMD/shell parsing
+    execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], (error) => {
+      if (error) {
+        console.error("Elevation failed or was cancelled:", error.message);
+        resolve({ success: false, error: error.message });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+}
+
+ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
+  try {
+    const relocateScriptPath = app.isPackaged
+      ? path.join(process.resourcesPath, "scripts", "relocate-wsl.ps1")
+      : path.join(__dirname, "scripts", "relocate-wsl.ps1");
+
+    const setupScriptPath = app.isPackaged
+      ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
+      : path.join(__dirname, "..", "client", "setup-wsl.ps1");
+
+    // First, wipe the old one (this script does not require elevation for its primary function,
+    // but it might if it needs to delete files in protected locations. For now, keep it as is.)
+    console.log(`Cleaning up old distribution before relocation to: ${newDrivePath}`);
+    const relocateArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", relocateScriptPath, "-DistroName", "Ubuntu", "-NewLocation", newDrivePath];
+    
+    const relocateResult = await new Promise((resolve) => {
+      execFile("powershell.exe", relocateArgs, (error) => {
+        if (error) {
+          console.error("Relocation wipe failed:", error.message);
+          resolve({ success: false, error: `Failed to clean up old distribution: ${error.message}` });
+        } else {
+          console.log("Old distribution cleanup completed.");
+          resolve({ success: true });
+        }
+      });
+    });
+
+    if (!relocateResult.success) {
+      return relocateResult;
+    }
+
+    // Now, trigger a fresh setup WITH elevation
+    console.log("Triggering fresh engine installation (elevated)...");
+    const setupArgs = newDrivePath ? ["-InstallPath", newDrivePath] : [];
+    const result = await runElevatedPowerShell(setupScriptPath, setupArgs);
+    
+    if (!result.success) {
+      console.error("Relocation install failed:", result.error);
+      return { success: false, error: `Installation failed: ${result.error}` };
+    } else {
+      // Save the new base path in settings
+      const settings = store.get("appSettings") || {};
+      settings.wslStoragePath = newDrivePath;
+      store.set("appSettings", settings);
+      console.log(`Engine reinstalled successfully at ${newDrivePath}.`);
+      return { success: true };
+    }
+  } catch (error) {
+    console.error("Error during docker:relocate-storage:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("get-available-drives", async () => {
+  return new Promise((resolve) => {
+    // Fixed PowerShell command string for execFile
+    const psCommand = "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{Name='FreeGB';Expression={[math]::Round($_.Free/1GB, 1)}} | ConvertTo-Json";
+    const args = ["-NoProfile", "-NonInteractive", "-Command", psCommand];
+    
+    execFile("powershell.exe", args, (error, stdout) => {
+      if (error) {
+        console.error("Failed to get drives:", error);
+        resolve([]);
+      } else {
+        try {
+          const result = JSON.parse(stdout);
+          const drives = Array.isArray(result) ? result : [result];
+          // Map PascalCase from PowerShell to camelCase for the API
+          resolve(drives.map(d => ({
+            name: d.Name,
+            freeGB: d.FreeGB
+          })));
+        } catch (e) {
+          console.error("JSON parse error for drives:", e);
+          resolve([]);
+        }
+      }
+    });
+  });
+});
+
 
 // --- DEPENDENCY DETECTION ---
+
+async function getDistroBasePath(distroName) {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") {
+      resolve(null);
+      return;
+    }
+    // Query registry for the distribution's BasePath
+    const psCommand = `Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\\*' | Where-Object DistributionName -eq '${distroName}' | Select-Object -ExpandProperty BasePath`;
+    execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCommand], (error, stdout) => {
+      if (error || !stdout) {
+        resolve(null);
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
+}
+
+async function checkDistroExists(distroName) {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") {
+      resolve(true); // Always true on Linux/macOS
+      return;
+    }
+    // Using powershell to list distros is more robust against encoding issues (UTF-16) 
+    // and weird exit codes that wsl.exe -l -v sometimes returns.
+    const psCommand = "wsl.exe -l -v | Out-String";
+    execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand], (error, stdout) => {
+      // Even if there's an error, check the output as it might contain the list anyway
+      const output = (stdout || "").replace(/\0/g, "");
+      if (output.includes(distroName)) {
+        resolve(true);
+      } else {
+        if (error) {
+           console.error(`WSL check failed: ${error.message}. Output: ${output}`);
+        }
+        resolve(false);
+      }
+    });
+  });
+}
 
 ipcMain.handle("deps:check-docker", async () => {
   // Use a separate exec that doesn't log errors (cleaner output)
   const checkCommand = (cmd) => {
     return new Promise((resolve) => {
       if (process.platform === "win32") {
-        // Use execFile to avoid CMD shell escaping issues
-        const args = ["-d", "Ubuntu", "--user", "root", "-e", "bash", "-c", cmd];
-        execFile("wsl.exe", args, { timeout: 3000 }, (error, stdout) => {
+        // Use -- separator for robustness
+        const args = ["-d", "Ubuntu", "--user", "root", "--", "bash", "-c", cmd];
+        execFile("wsl.exe", args, { timeout: 15000 }, (error, stdout, stderr) => {
           if (error) {
+            console.log(`Check command '${cmd}' failed: ${error.message}`);
+            console.log(`WSL Stdout: ${stdout}`);
+            console.log(`WSL Stderr: ${stderr}`);
             resolve({ success: false, error: error.message });
           } else {
             resolve({ success: true, output: stdout.trim() });
           }
         });
       } else {
-        exec(cmd, { timeout: 3000 }, (error, stdout) => {
+        exec(cmd, { timeout: 10000 }, (error, stdout, stderr) => {
           if (error) {
+            console.log(`Check command '${cmd}' failed: ${error.message}`);
+            console.log(`Stdout: ${stdout}`);
+            console.log(`Stderr: ${stderr}`);
             resolve({ success: false, error: error.message });
           } else {
             resolve({ success: true, output: stdout.trim() });
@@ -1131,20 +1341,37 @@ ipcMain.handle("deps:check-docker", async () => {
   };
 
   try {
+    // WSL CHECK (Windows only)
+    if (process.platform === "win32") {
+      const distroExists = await checkDistroExists("Ubuntu");
+      if (!distroExists) {
+        console.log("Ubuntu WSL distro missing");
+        return { installed: false, running: false, error: "WSL_DISTRO_MISSING" };
+      }
+    }
+
+    // Get installation path for UI
+    const basePath = await getDistroBasePath("Ubuntu");
+    let installDrive = null;
+    if (basePath) {
+      const match = basePath.match(/([a-zA-Z]):/);
+      if (match) installDrive = match[1].toUpperCase();
+    }
+
     // Check if Docker CLI is available
     const versionResult = await checkCommand("docker --version");
     if (!versionResult.success) {
-      console.log("Docker CLI not found");
-      return { installed: false, running: false };
+      console.log("Docker CLI not found inside WSL Ubuntu");
+      return { installed: false, running: false, installDrive };
     }
 
     // Check if Docker daemon is running and responsive
     const infoResult = await checkCommand("docker info");
     if (infoResult.success) {
-      return { installed: true, running: true };
+      return { installed: true, running: true, installDrive };
     } else {
       console.log("Docker is installed but daemon not running:", infoResult.error);
-      return { installed: true, running: false };
+      return { installed: true, running: false, installDrive };
     }
   } catch (err) {
     console.error("Unexpected error checking Docker:", err);
@@ -1152,36 +1379,45 @@ ipcMain.handle("deps:check-docker", async () => {
   }
 });
 
-ipcMain.handle("deps:install-engine", async () => {
-  return new Promise((resolve) => {
-    if (process.platform === "darwin") {
-      resolve({ success: false, error: "Auto-install not supported on macOS." });
-      return;
-    }
-    
-    let command = "";
-    if (process.platform === "win32") {
-      const scriptPath = app.isPackaged 
-        ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
-        : path.join(__dirname, "..", "client", "setup-wsl.ps1");
-      command = `powershell -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"${scriptPath}\\"' -Verb RunAs -Wait"`;
-    } else if (process.platform === "linux") {
-      const scriptPath = app.isPackaged 
-        ? path.join(process.resourcesPath, "bin", "setup-linux.sh")
-        : path.join(__dirname, "..", "client", "setup-linux.sh");
-      command = `pkexec bash "${scriptPath}"`;
-    }
-    
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        resolve({ success: false, error: error.message });
-      } else {
-        resolve({ success: true });
-      }
-    });
-  });
-});
+ipcMain.handle("deps:install-engine", async (event, installPath) => {
+  console.log(`Starting engine installation on path: ${installPath || "default"}`);
+  
+  if (process.platform === "darwin") {
+    return { success: false, error: "Auto-install not supported on macOS." };
+  }
+  
+  const scriptPath = process.platform === "win32"
+    ? (app.isPackaged ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1") : path.join(__dirname, "..", "client", "setup-wsl.ps1"))
+    : (app.isPackaged ? path.join(process.resourcesPath, "bin", "setup-linux.sh") : path.join(__dirname, "..", "client", "setup-linux.sh"));
 
+  if (process.platform === "win32") {
+    console.log(`Using setup script: ${scriptPath}`);
+    const setupArgs = installPath ? ["-InstallPath", installPath] : [];
+    const result = await runElevatedPowerShell(scriptPath, setupArgs);
+    if (!result.success) {
+      console.error("Installation process error:", result.error);
+      return { success: false, error: result.error };
+    } else {
+      console.log("Installation process completed successfully.");
+      return { success: true };
+    }
+  } else {
+    // LinuxPKExec handler
+    return new Promise((resolve) => {
+      console.log(`Using setup script: ${scriptPath}`);
+      const command = `pkexec bash "${scriptPath}"`;
+      exec(command, (error) => {
+        if (error) {
+          console.error("Installation process error:", error.message);
+          resolve({ success: false, error: error.message });
+        } else {
+          console.log("Installation process completed successfully.");
+          resolve({ success: true });
+        }
+      });
+    });
+  }
+});
 
 ipcMain.handle("deps:check-nvidia", async () => {
   try {

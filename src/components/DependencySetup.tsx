@@ -10,6 +10,7 @@ import {
   Loader2,
   Container,
   Cpu,
+  HardDrive,
 } from "lucide-react";
 import type { DependencyStatus } from "@/types";
 
@@ -18,13 +19,22 @@ interface DependencySetupProps {
   initialStatus: DependencyStatus;
 }
 
-let autoInstallTriggered = false;
+
 
 export function DependencySetup({ onReady, initialStatus }: DependencySetupProps) {
   const [status, setStatus] = useState<DependencyStatus>(initialStatus);
   const [isChecking, setIsChecking] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
-  const [hasAttemptedUI, setHasAttemptedUI] = useState(autoInstallTriggered);
+  const [availableDrives, setAvailableDrives] = useState<{name: string, freeGB: number}[]>([]);
+  const [selectedDrive, setSelectedDrive] = useState<string>("C");
+
+  useEffect(() => {
+    window.electronAPI.getAvailableDrives().then(drives => {
+      setAvailableDrives(drives);
+      // Default to first drive with most space that isn't C if possible? 
+      // Or just stay on C by default for safety.
+    });
+  }, []);
 
   const checkDependencies = useCallback(async () => {
     setIsChecking(true);
@@ -56,7 +66,8 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
     if (isInstalling) return;
     setIsInstalling(true);
     try {
-      const result = await window.electronAPI.installEngine();
+      const drivePath = `${selectedDrive}:\\OpenFork\\wsl`;
+      const result = await window.electronAPI.installEngine(drivePath);
       if (result?.success) {
         // Wait a few seconds for daemon to fully start, then check again
         setTimeout(checkDependencies, 3000);
@@ -66,16 +77,9 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
     } finally {
       setIsInstalling(false);
     }
-  }, [isInstalling, checkDependencies]);
+  }, [isInstalling, checkDependencies, selectedDrive]);
 
-  // Auto-trigger installation if not installed
-  useEffect(() => {
-    if (status && !status.docker.installed && !status.docker.running && !isInstalling && !autoInstallTriggered) {
-      autoInstallTriggered = true;
-      setHasAttemptedUI(true);
-      handleInstallEngine();
-    }
-  }, [status, isInstalling, handleInstallEngine]);
+  // Auto-trigger installation removed as per user request to select drive first
 
   return (
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">
@@ -136,11 +140,42 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
               ) : (
                 <>
                   <p className="text-sm text-red-400">
-                    AI Engine is not installed
+                    {status?.docker.error === "WSL_DISTRO_MISSING" 
+                      ? "WSL Ubuntu distribution not found" 
+                      : "AI Engine is not installed"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    The background engine is required to run models locally. Setup will request administrator privileges.
+                    {status?.docker.error === "WSL_DISTRO_MISSING"
+                      ? "The required Ubuntu environment is missing from WSL. Setup will install it for you on the selected drive."
+                      : "The background engine is required to run models locally. Setup will request administrator privileges."}
                   </p>
+                  
+                  {availableDrives.length > 1 && (
+                    <div className="space-y-2 pt-2">
+                       <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                         <HardDrive className="h-3 w-3" />
+                         Storage Drive
+                       </label>
+                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                         {availableDrives.map((drive) => (
+                           <button
+                             key={drive.name}
+                             onClick={() => setSelectedDrive(drive.name)}
+                             className={`flex flex-col items-start p-2 rounded-md border text-left transition-all hover:bg-white/5 ${
+                               selectedDrive === drive.name 
+                                 ? "border-primary bg-primary/10" 
+                                 : "border-white/10 bg-black/20"
+                             }`}
+                           >
+                             <span className="text-sm font-bold">{drive.name}: Drive</span>
+                             <span className={`text-[10px] ${drive.freeGB < 20 ? 'text-red-400 font-bold' : 'text-muted-foreground'}`}>
+                               {drive.freeGB}GB free
+                             </span>
+                           </button>
+                         ))}
+                       </div>
+                    </div>
+                  )}
                   
                   {isInstalling ? (
                     <div className="w-full flex items-center justify-center p-4 border border-white/5 bg-black/20 rounded-lg mt-4 shadow-inner">
@@ -154,7 +189,7 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
                       className="w-full mt-2 relative overflow-hidden group"
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      {hasAttemptedUI ? "Retry Installation" : "Install Local AI Engine"}
+                      Install Local AI Engine
                       
                       {/* Animated shine effect on button */}
                       <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />

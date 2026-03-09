@@ -103,7 +103,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkDocker: () => ipcRenderer.invoke("deps:check-docker"),
   checkNvidia: () => ipcRenderer.invoke("deps:check-nvidia"),
   openDockerDownload: () => ipcRenderer.invoke("deps:open-docker-download"),
-  installEngine: () => ipcRenderer.invoke("deps:install-engine"),
+  installEngine: (installPath) => ipcRenderer.invoke("deps:install-engine", installPath),
+
+  // Disk Management
+  relocateStorage: (newDrivePath) => ipcRenderer.invoke("docker:relocate-storage", newDrivePath),
+  reclaimDiskSpace: () => ipcRenderer.invoke("docker:reclaim-space"),
+  getAvailableDrives: () => ipcRenderer.invoke("get-available-drives"),
   
   // Auto Updater - now return cleanup functions
   onUpdateAvailable: (callback) => createListener("update:available", callback),

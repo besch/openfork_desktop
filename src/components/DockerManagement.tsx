@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
+import { StorageSettings } from "./StorageSettings";
 import type { DockerImage, DockerContainer } from "@/types";
 
 interface ConfirmDialogState {
@@ -47,6 +48,7 @@ export const DockerManagement = memo(() => {
     free_gb: string;
     path: string;
   } | null>(null);
+  const [showStorageSettings, setShowStorageSettings] = useState(false);
 
   const dockerPullProgress = useClientStore((state) => state.dockerPullProgress);
   const status = useClientStore((state) => state.status);
@@ -229,7 +231,7 @@ export const DockerManagement = memo(() => {
 
   const handlePurgeOpenFork = () => {
     showConfirmDialog(
-      "Purge OpenFork Data",
+      "Purge All Data",
       "This will surgically remove ALL OpenFork containers, images, and associated volumes. It is the most reliable way to recover space without affecting your other Docker projects. Large images will need re-downloading if needed again. Proceed?",
       async () => {
         setActionLoading("purge-openfork");
@@ -372,10 +374,54 @@ export const DockerManagement = memo(() => {
             ) : (
               <Trash2 className="h-4 w-4 mr-2" />
             )}
-            Purge OpenFork Data
+            Purge All Data
           </Button>
         </div>
       </header>
+
+      <Card className="bg-card/50 backdrop-blur-sm border-white/10 overflow-hidden">
+        <button 
+          onClick={() => setShowStorageSettings(!showStorageSettings)}
+          className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors focus:outline-none"
+        >
+          <div className="flex items-center gap-2">
+            <HardDrive className="h-5 w-5 text-primary" />
+            <span className="font-semibold">Storage & Engine Settings</span>
+            <span className="text-xs text-muted-foreground ml-2">(Configure Location & Space)</span>
+          </div>
+          <motion.div
+            animate={{ rotate: showStorageSettings ? 0 : -90 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Loader2 className={`h-4 w-4 ${showStorageSettings ? "rotate-0" : ""}`} style={{ display: 'none' }} />
+            {/* Using a simple arrow icon instead of the loader */}
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              className="lucide lucide-chevron-down"
+            >
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </motion.div>
+        </button>
+        <motion.div
+          initial={false}
+          animate={{ height: showStorageSettings ? "auto" : 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="overflow-hidden"
+        >
+          <div className="p-4 pt-0 border-t border-white/5">
+            <StorageSettings />
+          </div>
+        </motion.div>
+      </Card>
 
       {/* Download Progress Card */}
       {isDownloading && (

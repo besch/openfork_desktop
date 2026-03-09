@@ -112,7 +112,12 @@ declare global {
       checkDocker: () => Promise<{ installed: boolean; running: boolean }>;
       checkNvidia: () => Promise<{ available: boolean; gpu: string | null }>;
       openDockerDownload: () => Promise<{ success: boolean }>;
-      installEngine: () => Promise<{ success: boolean; error?: string }>;
+      installEngine: (installPath?: string) => Promise<{ success: boolean; error?: string }>;
+      
+      // Disk Management
+      getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
+      reclaimDiskSpace: () => Promise<{ success: boolean; error?: string }>;
+      relocateStorage: (newDrivePath: string) => Promise<{ success: boolean; error?: string }>;
       
       // Auto Update
       onUpdateAvailable: (callback: (info: unknown) => void) => void;

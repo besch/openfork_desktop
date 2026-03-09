@@ -162,7 +162,12 @@ interface ElectronAPI {
   checkDocker: () => Promise<DockerStatus>;
   checkNvidia: () => Promise<NvidiaStatus>;
   openDockerDownload: () => Promise<{ success: boolean }>;
-  installEngine: () => Promise<{ success: boolean; error?: string }>;
+  installEngine: (installPath?: string) => Promise<{ success: boolean; error?: string }>;
+  
+  // Disk Management
+  getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
+  reclaimDiskSpace: () => Promise<{ success: boolean; error?: string }>;
+  relocateStorage: (newDrivePath: string) => Promise<{ success: boolean; error?: string }>;
   
   // Auto Updater - return cleanup functions
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;

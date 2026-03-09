@@ -88,6 +88,8 @@ export interface DockerContainer {
 export interface DockerStatus {
   installed: boolean;
   running: boolean;
+  error?: string;
+  installDrive?: string;
 }
 
 export interface NvidiaStatus {
