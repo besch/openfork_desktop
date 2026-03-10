@@ -190,6 +190,21 @@ interface ElectronAPI {
   
   // Versions and Environment
   getProcessInfo: () => Promise<ProcessInfo>;
+
+  // Monetize / Stripe
+  openStripeOnboard: () => Promise<{ success?: boolean; error?: string }>;
+  openStripeDashboard: () => Promise<{ success?: boolean; error?: string }>;
+  startMonetizeCleanup: () => void;
+  stopMonetizeCleanup: () => void;
+  setMonetizeIdleTimeout: (minutes: number) => Promise<{ success: boolean }>;
+  getMonetizeConfig: () => Promise<{ idleTimeoutMinutes: number }>;
+  onMonetizeCleanupEvent: (callback: (event: {
+    service_type: string;
+    image: string;
+    action: string;
+    reason: string;
+    timestamp: string;
+  }) => void) => CleanupFn;
 }
 
 declare global {

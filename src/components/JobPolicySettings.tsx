@@ -9,7 +9,7 @@ import { ProjectSelection } from "./ProjectSelection";
 import { UserSelection } from "./UserSelection";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
-import { Globe, Lock, Layout, Users } from "lucide-react";
+import { Globe, Lock, Layout, Users, DollarSign } from "lucide-react";
 import type { Project, Profile, JobPolicy } from "@/types";
 
 interface JobPolicySettingsProps {
@@ -52,6 +52,11 @@ export function JobPolicySettings({
       description: "Trusted collaborators only",
       icon: Users,
     },
+    monetize: {
+      title: "Monetize",
+      description: "Earn real money — paid jobs only",
+      icon: DollarSign,
+    },
   };
 
   const currentInfo = policyInfo[jobPolicy];
@@ -70,9 +75,9 @@ export function JobPolicySettings({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary border border-border/40 text-primary-foreground w-fit"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border w-fit ${jobPolicy === "monetize" ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-primary border-border/40 text-primary-foreground"}`}
             >
-              <Icon size={14} className="text-white flex-shrink-0" />
+              <Icon size={14} className={`flex-shrink-0 ${jobPolicy === "monetize" ? "text-amber-400" : "text-white"}`} />
               <span className="text-[11px] font-medium leading-none whitespace-nowrap">
                 {currentInfo.description}
               </span>
@@ -93,6 +98,7 @@ export function JobPolicySettings({
             <SelectItem value="mine">Only Mine</SelectItem>
             <SelectItem value="project">By Project</SelectItem>
             <SelectItem value="users">By User</SelectItem>
+            <SelectItem value="monetize">Monetize</SelectItem>
           </SelectContent>
         </Select>
       </div>

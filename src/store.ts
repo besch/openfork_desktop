@@ -9,6 +9,7 @@ import type {
   JobPolicy,
   DockerPullProgress,
   DependencyStatus,
+  MonetizeWallet,
 } from "./types";
 import { supabase } from "./supabase";
 
@@ -64,6 +65,8 @@ interface DGNClientState {
     jobId: string | null;
     type: string | null;
   }) => void;
+  monetizeWallet: MonetizeWallet | null;
+  fetchMonetizeWallet: () => Promise<void>;
 }
 
 export const useClientStore = create<DGNClientState>((set, get) => ({
@@ -83,9 +86,24 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   dockerPullProgress: null,
   dependencyStatus: null,
   jobState: { status: "idle", jobId: null, type: null },
+  monetizeWallet: null,
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
   setDependencyStatus: (status) => set({ dependencyStatus: status }),
   setJobState: (state) => set({ jobState: state }),
+  fetchMonetizeWallet: async () => {
+    const { session } = get();
+    if (!session?.user) return;
+    try {
+      const { data, error } = await supabase
+        .rpc("get_monetize_wallet_summary", { p_user_id: session.user.id })
+        .single();
+      if (!error && data) {
+        set({ monetizeWallet: data as MonetizeWallet });
+      }
+    } catch (err) {
+      console.error("store.ts: Error fetching monetize wallet:", err);
+    }
+  },
   setStatus: (status) => set({ status }),
   addLog: (log) => {
     const newLog: LogEntry = {
@@ -271,6 +289,15 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
           table: "dgn_jobs",
         };
         break;
+      case "monetize":
+        channelName = `dgn-jobs-monetize-changes:${instanceId}`;
+        postgresChangesOptions = {
+          event: "*",
+          schema: "public",
+          table: "dgn_jobs",
+          filter: `monetize_job=eq.true`,
+        };
+        break;
       default:
         // This case should not be reached if logic is correct
         return;
@@ -351,7 +378,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       if (settings) {
         // Validate the loaded settings before applying them
         const validatedJobPolicy: JobPolicy = (
-          ["all", "mine", "project", "users"] as JobPolicy[]
+          ["all", "mine", "project", "users", "monetize"] as JobPolicy[]
         ).includes(settings.jobPolicy as JobPolicy)
           ? (settings.jobPolicy as JobPolicy)
           : "mine";
@@ -473,6 +500,9 @@ function initializeIpcListeners() {
         });
         // Refresh stats to ensure counts are accurate
         useClientStore.getState().fetchStats();
+      } else if (payload.type === "MONETIZE_JOB_COMPLETE") {
+        // Refresh wallet balance after a monetize job completes
+        useClientStore.getState().fetchMonetizeWallet();
       }
     })
   );

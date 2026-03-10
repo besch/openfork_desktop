@@ -59,7 +59,23 @@ export interface Project {
   slug: string;
 }
 
-export type JobPolicy = "all" | "mine" | "project" | "users";
+export type JobPolicy = "all" | "mine" | "project" | "users" | "monetize";
+
+export interface MonetizeWallet {
+  pending_earnings_cents: number;
+  available_to_withdraw_cents: number;
+  total_earned_lifetime_cents: number;
+  total_withdrawn_cents: number;
+  prepaid_balance_cents: number;
+  total_purchased_cents: number;
+  stripe_account_verified: boolean;
+  stripe_details_submitted: boolean;
+}
+
+export interface MonetizeConfig {
+  enabled: boolean;
+  idleTimeoutMinutes: number;
+}
 
 export interface DockerPullProgress {
   image: string;

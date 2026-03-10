@@ -13,6 +13,7 @@ import { DockerManagement } from "@/components/DockerManagement";
 import { DependencySetup } from "@/components/DependencySetup";
 import { UpdateNotification } from "@/components/UpdateNotification";
 import { JobHistory } from "@/components/JobHistory";
+import { Monetize } from "@/components/Monetize";
 import {
   LayoutDashboard,
   Terminal,
@@ -23,6 +24,7 @@ import {
   Container,
   Download,
   History,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -233,6 +235,10 @@ function App() {
                 <History className="mr-2" size={16} />
                 History
               </TabsTrigger>
+              <TabsTrigger value="monetize">
+                <DollarSign className="mr-2" size={16} />
+                Monetize
+              </TabsTrigger>
               <TabsTrigger value="logs">
                 <Terminal className="mr-2" size={16} />
                 Logs
@@ -256,6 +262,9 @@ function App() {
             </TabsContent>
             <TabsContent value="history">
               <JobHistory />
+            </TabsContent>
+            <TabsContent value="monetize">
+              <Monetize />
             </TabsContent>
           </Tabs>
         </div>

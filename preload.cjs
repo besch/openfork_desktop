@@ -131,5 +131,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   
   // Versions and Environment
   getProcessInfo: () => ipcRenderer.invoke("get-process-info"),
+
+  // Monetize / Stripe
+  openStripeOnboard: () => ipcRenderer.invoke("monetize:open-stripe-onboard"),
+  openStripeDashboard: () => ipcRenderer.invoke("monetize:open-stripe-dashboard"),
+  startMonetizeCleanup: () => ipcRenderer.send("monetize:start-cleanup"),
+  stopMonetizeCleanup: () => ipcRenderer.send("monetize:stop-cleanup"),
+  setMonetizeIdleTimeout: (minutes) => ipcRenderer.invoke("monetize:set-idle-timeout", minutes),
+  getMonetizeConfig: () => ipcRenderer.invoke("monetize:get-config"),
+  onMonetizeCleanupEvent: (callback) => createListener("monetize:cleanup-event", callback),
 });
 

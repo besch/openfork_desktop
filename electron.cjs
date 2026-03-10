@@ -8,6 +8,7 @@ const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
 const { PythonProcessManager } = require("./src/python-process-manager.cjs");
 const { ScheduleManager, SCHEDULE_PRESETS } = require("./src/schedule-manager.cjs");
+const { DockerCleanupManager } = require("./src/docker-cleanup-manager.cjs");
 const { autoUpdater } = require("electron-updater");
 const process = require("process");
 
@@ -47,6 +48,7 @@ let mainWindow;
 let session = null;
 let pythonManager;
 let scheduleManager;
+let cleanupManager;
 let isQuittingApp = false; // App-level flag to prevent before-quit race condition
 let pendingClientStart = null;
 
@@ -196,6 +198,14 @@ function createWindow() {
     supabase,
     mainWindow,
     userDataPath,
+    onJobEvent: (type, payload) => {
+      if (!cleanupManager) return;
+      if (type === "JOB_START") {
+        cleanupManager.notifyJobStart(payload.service_type);
+      } else if (type === "JOB_COMPLETE" || type === "JOB_FAILED") {
+        cleanupManager.notifyJobEnd(payload.service_type);
+      }
+    },
   });
 
   // Instantiate the schedule manager
@@ -205,6 +215,13 @@ function createWindow() {
     mainWindow,
   });
   scheduleManager.loadConfig(); // Load saved schedule on startup
+
+  // Instantiate the Docker cleanup manager (for monetize mode)
+  cleanupManager = new DockerCleanupManager({
+    store,
+    mainWindow,
+    execDockerCommand,
+  });
 
   // Intercept the close event
   mainWindow.on("close", (event) => {
@@ -381,6 +398,75 @@ ipcMain.handle("get-process-info", () => {
 });
 ipcMain.handle("get-session", async () => {
   return session;
+});
+
+// --- MONETIZE / STRIPE IPC HANDLERS ---
+
+function makeAuthenticatedPostRequest(url) {
+  return new Promise((resolve) => {
+    if (!session) {
+      resolve({ error: "Not authenticated" });
+      return;
+    }
+    const request = net.request({ method: "POST", url });
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+    request.setHeader("Content-Type", "application/json");
+    let body = "";
+    request.on("response", (response) => {
+      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("end", () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { resolve({ error: "Failed to parse response" }); }
+      });
+    });
+    request.on("error", (err) => resolve({ error: err.message }));
+    request.end();
+  });
+}
+
+ipcMain.on("monetize:start-cleanup", () => {
+  if (cleanupManager) cleanupManager.startMonitoring();
+});
+
+ipcMain.on("monetize:stop-cleanup", () => {
+  if (cleanupManager) cleanupManager.stopMonitoring();
+});
+
+ipcMain.handle("monetize:set-idle-timeout", (event, minutes) => {
+  if (cleanupManager) cleanupManager.setIdleTimeoutMinutes(minutes);
+  return { success: true };
+});
+
+ipcMain.handle("monetize:get-config", () => {
+  return store.get("monetizeConfig") || { idleTimeoutMinutes: 30 };
+});
+
+ipcMain.handle("monetize:open-stripe-onboard", async () => {
+  try {
+    const data = await makeAuthenticatedPostRequest(`${ORCHESTRATOR_API_URL}/api/stripe/connect/onboard`);
+    if (data.url) {
+      shell.openExternal(data.url);
+      return { success: true };
+    }
+    return { error: data.error || "No URL returned" };
+  } catch (err) {
+    console.error("Error opening Stripe onboard:", err);
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle("monetize:open-stripe-dashboard", async () => {
+  try {
+    const data = await makeAuthenticatedPostRequest(`${ORCHESTRATOR_API_URL}/api/stripe/connect/dashboard`);
+    if (data.url) {
+      shell.openExternal(data.url);
+      return { success: true };
+    }
+    return { error: data.error || "No URL returned" };
+  } catch (err) {
+    console.error("Error opening Stripe dashboard:", err);
+    return { error: err.message };
+  }
 });
 
 // Add persistence handlers for job policy settings

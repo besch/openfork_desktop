@@ -5,7 +5,7 @@ const { app } = require("electron");
 const http = require("http");
 
 class PythonProcessManager {
-  constructor({ supabase, mainWindow, userDataPath }) {
+  constructor({ supabase, mainWindow, userDataPath, onJobEvent }) {
     this.pythonProcess = null;
     this.shutdownServerPort = 8000;
     this.supabase = supabase;
@@ -14,6 +14,7 @@ class PythonProcessManager {
     this.userDataPath = userDataPath;
     this.authSubscription = null;
     this.currentDownloadImage = null; // Track current download to prevent race conditions
+    this.onJobEvent = onJobEvent || null; // Optional callback for job events (used by DockerCleanupManager)
 
     // Auth refresh debouncing
     this._lastRefreshAttempt = 0;
@@ -296,6 +297,10 @@ class PythonProcessManager {
       args.push("--allowed-targets", normalizedAllowedIds.join(","));
     }
 
+    if (policy === "monetize") {
+      args.push("--monetize-mode");
+    }
+
     console.log(`Starting Python backend for '${service}' service...`);
     const cwd = app.isPackaged ? path.dirname(command) : dgnClientRootDir;
     console.log(`Using CWD: ${cwd}`);
@@ -499,12 +504,16 @@ class PythonProcessManager {
             return;
           }
 
-          // Handle Job Status messages (Start/Complete/Failed)
-          if (["JOB_START", "JOB_COMPLETE", "JOB_FAILED"].includes(message.type)) {
+          // Handle Job Status messages (Start/Complete/Failed/MonetizeComplete)
+          if (["JOB_START", "JOB_COMPLETE", "JOB_FAILED", "MONETIZE_JOB_COMPLETE"].includes(message.type)) {
             this.mainWindow.webContents.send(
               "openfork_client:job-status",
               { type: message.type, ...message.payload }
             );
+            // Notify cleanup manager (if registered) about job lifecycle
+            if (this.onJobEvent) {
+              this.onJobEvent(message.type, message.payload || {});
+            }
             // Also log to console for visibility
             if (message.type === "JOB_START") {
                this.mainWindow.webContents.send("openfork_client:log", {
