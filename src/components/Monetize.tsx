@@ -85,7 +85,9 @@ export function Monetize() {
     try {
       const { data } = await supabase
         .from("monetize_transactions")
-        .select("id, transaction_type, amount_cents, created_at, description, status")
+        .select(
+          "id, transaction_type, amount_cents, created_at, description, status",
+        )
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -106,7 +108,9 @@ export function Monetize() {
     setWithdrawError(null);
     setWithdrawSuccess(false);
     try {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
       const orchestratorUrl = await window.electronAPI.getOrchestratorApiUrl();
       const resp = await fetch(`${orchestratorUrl}/api/monetize/withdraw`, {
         method: "POST",
@@ -170,7 +174,7 @@ export function Monetize() {
   const wallet = monetizeWallet;
   const platformFeePercent = 15;
   const availableAmount = wallet?.available_to_withdraw_cents ?? 0;
-  const feeAmount = Math.round(availableAmount * platformFeePercent / 100);
+  const feeAmount = Math.round((availableAmount * platformFeePercent) / 100);
   const netAmount = availableAmount - feeAmount;
 
   return (
@@ -179,8 +183,8 @@ export function Monetize() {
       <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
         <DollarSign size={16} className="flex-shrink-0" />
         <span>
-          <strong>Monetize mode active</strong> — you earn real money for processing paid jobs.
-          Docker images will auto-cleanup when idle.
+          <strong>Monetize mode active</strong> — you earn real money for
+          processing paid jobs. Docker images will auto-cleanup when idle.
         </span>
       </div>
 
@@ -188,16 +192,22 @@ export function Monetize() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-card/60">
           <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Pending Earnings</p>
+            <p className="text-xs text-muted-foreground mb-1">
+              Pending Earnings
+            </p>
             <p className="text-xl font-bold text-amber-400">
               {wallet ? formatCents(wallet.pending_earnings_cents) : "—"}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">3-day security hold</p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              3-day security hold
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-card/60">
           <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Available to Withdraw</p>
+            <p className="text-xs text-muted-foreground mb-1">
+              Available to Withdraw
+            </p>
             <p className="text-xl font-bold text-green-400">
               {wallet ? formatCents(wallet.available_to_withdraw_cents) : "—"}
             </p>
@@ -205,7 +215,9 @@ export function Monetize() {
         </Card>
         <Card className="bg-card/60">
           <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Lifetime Earned</p>
+            <p className="text-xs text-muted-foreground mb-1">
+              Lifetime Earned
+            </p>
             <p className="text-xl font-bold">
               {wallet ? formatCents(wallet.total_earned_lifetime_cents) : "—"}
             </p>
@@ -213,7 +225,9 @@ export function Monetize() {
         </Card>
         <Card className="bg-card/60">
           <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">Total Withdrawn</p>
+            <p className="text-xs text-muted-foreground mb-1">
+              Total Withdrawn
+            </p>
             <p className="text-xl font-bold">
               {wallet ? formatCents(wallet.total_withdrawn_cents) : "—"}
             </p>
@@ -244,7 +258,11 @@ export function Monetize() {
                   disabled={stripeLoading}
                   className="w-full"
                 >
-                  {stripeLoading ? <Loader2 size={14} className="mr-2 animate-spin" /> : <ExternalLink size={14} className="mr-2" />}
+                  {stripeLoading ? (
+                    <Loader2 size={14} className="mr-2 animate-spin" />
+                  ) : (
+                    <ExternalLink size={14} className="mr-2" />
+                  )}
                   Manage Payout Account
                 </Button>
               </>
@@ -261,21 +279,30 @@ export function Monetize() {
                   disabled={stripeLoading}
                   className="w-full"
                 >
-                  {stripeLoading ? <Loader2 size={14} className="mr-2 animate-spin" /> : <ExternalLink size={14} className="mr-2" />}
+                  {stripeLoading ? (
+                    <Loader2 size={14} className="mr-2 animate-spin" />
+                  ) : (
+                    <ExternalLink size={14} className="mr-2" />
+                  )}
                   Open Stripe Dashboard
                 </Button>
               </>
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Connect your bank account to receive payouts. Stripe handles all identity verification — takes 5–10 minutes.
+                  Connect your bank account to receive payouts. Stripe handles
+                  all identity verification — takes 5–10 minutes.
                 </p>
                 <Button
                   onClick={handleStripeOnboard}
                   disabled={stripeLoading}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-black font-medium"
+                  variant="primary"
                 >
-                  {stripeLoading ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Building2 size={14} className="mr-2" />}
+                  {stripeLoading ? (
+                    <Loader2 size={14} className="mr-2 animate-spin" />
+                  ) : (
+                    <Building2 size={14} className="mr-2" />
+                  )}
                   Connect Bank Account
                 </Button>
               </>
@@ -293,16 +320,21 @@ export function Monetize() {
           </CardHeader>
           <CardContent className="space-y-3">
             {!wallet?.stripe_account_verified ? (
-              <p className="text-sm text-muted-foreground">Connect and verify your bank account first.</p>
+              <p className="text-sm text-muted-foreground">
+                Connect and verify your bank account first.
+              </p>
             ) : availableAmount < 1000 ? (
               <p className="text-sm text-muted-foreground">
-                Minimum withdrawal is $10.00. You have {formatCents(availableAmount)} available.
+                Minimum withdrawal is $10.00. You have{" "}
+                {formatCents(availableAmount)} available.
               </p>
             ) : (
               <>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Available balance</span>
+                    <span className="text-muted-foreground">
+                      Available balance
+                    </span>
                     <span>{formatCents(availableAmount)}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
@@ -331,7 +363,11 @@ export function Monetize() {
                   disabled={withdrawing}
                   className="w-full"
                 >
-                  {withdrawing ? <Loader2 size={14} className="mr-2 animate-spin" /> : <ArrowDownToLine size={14} className="mr-2" />}
+                  {withdrawing ? (
+                    <Loader2 size={14} className="mr-2 animate-spin" />
+                  ) : (
+                    <ArrowDownToLine size={14} className="mr-2" />
+                  )}
                   Withdraw {formatCents(availableAmount)}
                 </Button>
               </>
@@ -357,7 +393,7 @@ export function Monetize() {
               </p>
             </div>
             <Button
-              variant={cleanupEnabled ? "default" : "outline"}
+              variant={cleanupEnabled ? "primary" : "outline"}
               size="sm"
               onClick={() => toggleCleanup(!cleanupEnabled)}
             >
@@ -388,13 +424,23 @@ export function Monetize() {
 
           {cleanupLog.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs text-muted-foreground font-medium">Recent cleanup events</p>
+              <p className="text-xs text-muted-foreground font-medium">
+                Recent cleanup events
+              </p>
               <div className="max-h-32 overflow-y-auto space-y-1">
                 {cleanupLog.map((evt, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Trash2 size={10} className="text-amber-400 flex-shrink-0" />
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                  >
+                    <Trash2
+                      size={10}
+                      className="text-amber-400 flex-shrink-0"
+                    />
                     <span className="truncate">{evt.service_type}</span>
-                    <span className="ml-auto flex-shrink-0">{formatDate(evt.timestamp)}</span>
+                    <span className="ml-auto flex-shrink-0">
+                      {formatDate(evt.timestamp)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -418,16 +464,23 @@ export function Monetize() {
               Loading transactions...
             </div>
           ) : transactions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No transactions yet. Start processing paid jobs to earn.</p>
+            <p className="text-sm text-muted-foreground">
+              No transactions yet. Start processing paid jobs to earn.
+            </p>
           ) : (
             <div className="divide-y divide-border/40">
               {transactions.map((txn) => (
-                <div key={txn.id} className="flex items-center justify-between py-2">
+                <div
+                  key={txn.id}
+                  className="flex items-center justify-between py-2"
+                >
                   <div className="min-w-0">
                     <p className="text-sm truncate">
                       {txn.description || txn.transaction_type}
                     </p>
-                    <p className="text-xs text-muted-foreground">{formatDate(txn.created_at)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(txn.created_at)}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                     <Badge
