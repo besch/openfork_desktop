@@ -172,10 +172,7 @@ export function Monetize() {
   }, []);
 
   const wallet = monetizeWallet;
-  const platformFeePercent = 15;
   const availableAmount = wallet?.available_to_withdraw_cents ?? 0;
-  const feeAmount = Math.round((availableAmount * platformFeePercent) / 100);
-  const netAmount = availableAmount - feeAmount;
 
   return (
     <div className="space-y-6">
@@ -332,19 +329,12 @@ export function Monetize() {
               <>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Available balance
-                    </span>
-                    <span>{formatCents(availableAmount)}</span>
+                    <span className="text-muted-foreground">Available balance</span>
+                    <span className="font-semibold text-green-400">{formatCents(availableAmount)}</span>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Platform fee ({platformFeePercent}%)</span>
-                    <span>−{formatCents(feeAmount)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-green-400 border-t border-border/40 pt-1 mt-1">
-                    <span>You receive</span>
-                    <span>{formatCents(netAmount)}</span>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Platform fee (15%) is already deducted from your earnings at job completion.
+                  </p>
                 </div>
                 {withdrawError && (
                   <div className="flex items-center gap-2 text-red-400 text-sm">
