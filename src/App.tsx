@@ -123,10 +123,13 @@ function App() {
         });
     };
 
-    window.electronAPI.onForceRefresh(handleForceRefresh);
+    const unsubscribe = window.electronAPI.onForceRefresh(handleForceRefresh);
 
     return () => {
-      // No cleanup needed for simple force refresh listener
+      // FIX (#15): Clean up the IPC listener to prevent accumulation across re-renders.
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
     };
   }, [setSession]);
 
@@ -198,13 +201,23 @@ function App() {
                   Openfork Client
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Github for video collaboration
+                  {/* FIX (#12): Align tagline with platform description from GEMINI.md */}
+                  Collaborative movie creation platform
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 border border-border/30">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                {/* FIX (#10): Dot color driven by actual client status, not always green */}
+                <div
+                  className={`h-2 w-2 rounded-full ${
+                    status === "running"
+                      ? "bg-green-500 animate-pulse"
+                      : status === "starting" || status === "stopping"
+                      ? "bg-yellow-400 animate-pulse"
+                      : "bg-muted-foreground/40"
+                  }`}
+                />
                 <span className="text-sm text-muted-foreground">
                   {session.user.email}
                 </span>

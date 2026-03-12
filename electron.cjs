@@ -2,8 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
 const path = require("path");
 const http = require("http");
 
-if (app.isPackaged) {
-}
+
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
 const { PythonProcessManager } = require("./src/python-process-manager.cjs");
