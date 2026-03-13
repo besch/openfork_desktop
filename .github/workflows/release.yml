@@ -13,8 +13,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
-            arch: x64
           - os: ubuntu-latest
             arch: x64
           - os: windows-latest
@@ -109,6 +107,9 @@ jobs:
 
       - name: Install Electron app dependencies
         run: npm ci
+
+      - name: Generate installer images
+        run: npm run generate-installer-images
 
       - name: Build React app
         run: npm run build

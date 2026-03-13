@@ -14,8 +14,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "electron .",
+    "generate-installer-images": "node scripts/generate-installer-images.cjs",
     "pack": "electron-builder",
-    "release": "electron-builder --publish=always"
+    "prepack": "npm run generate-installer-images",
+    "release": "electron-builder --publish=always",
+    "prerelease": "npm run generate-installer-images"
   },
   "dependencies": {
     "@effect/core": "^0.0.16",
@@ -52,6 +55,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^24.10.1",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
@@ -99,30 +103,6 @@
       "target": "nsis",
       "icon": "public/icon.ico"
     },
-    "mac": {
-      "target": "dmg",
-      "icon": "public/icon.png"
-    },
-    "dmg": {
-      "background": "public/dmgBackground.png",
-      "iconSize": 100,
-      "window": {
-        "width": 540,
-        "height": 380
-      },
-      "contents": [
-        {
-          "x": 130,
-          "y": 190
-        },
-        {
-          "x": 410,
-          "y": 190,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
     "linux": {
       "target": "AppImage",
       "icon": "public/logo.png"
@@ -136,7 +116,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "installerSidebar": "public/installerSidebar.png",
-      "installerHeader": "public/installerHeader.png"
+      "uninstallerSidebar": "public/installerSidebar.png",
+      "installerHeader": "public/installerHeader.png",
+      "include": "build/installer.nsh"
     }
   }
 }
