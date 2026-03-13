@@ -221,7 +221,7 @@ function App() {
               />
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="h-8 w-8 rounded-full bg-primary/20 border border-primary/30 text-primary text-sm font-semibold flex items-center justify-center hover:bg-primary/30 transition-colors">
+                  <button className="h-8 w-8 rounded-full bg-white/10 border border-white/20 text-white text-sm font-semibold flex items-center justify-center hover:bg-white/20 transition-colors">
                     {avatarInitial}
                   </button>
                 </PopoverTrigger>
@@ -232,7 +232,7 @@ function App() {
                   <div className="h-px bg-border my-1" />
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors text-left"
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-md bg-destructive text-destructive-foreground border border-[var(--color-destructive-border)] hover:bg-[var(--color-destructive-hover-bg)] hover:text-[var(--color-destructive-hover-fg)] shadow-md active:scale-95 transition-all text-left"
                   >
                     <LogOut size={14} />
                     Log out
