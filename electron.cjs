@@ -51,8 +51,57 @@ let cleanupManager;
 let isQuittingApp = false; // App-level flag to prevent before-quit race condition
 let pendingClientStart = null;
 
-const OPENFORK_WSL_DISTRO = "Ubuntu";
 const WINDOWS_DOCKER_API_PORT = 2375;
+
+// Resolved lazily on first use — user-configured or auto-detected
+let _resolvedWslDistro = null;
+
+/**
+ * Returns the WSL distro name to use for Docker operations.
+ * Priority: (1) user setting in electron-store, (2) first distro from wsl --list, (3) "Ubuntu"
+ */
+async function getWslDistroName() {
+  if (_resolvedWslDistro) return _resolvedWslDistro;
+
+  // Check user-configured override
+  const stored = store.get("wslDistro");
+  if (stored) {
+    _resolvedWslDistro = stored;
+    return _resolvedWslDistro;
+  }
+
+  // Auto-detect: find the default (starred) or first available distro
+  _resolvedWslDistro = await new Promise((resolve) => {
+    execFile(
+      "wsl.exe",
+      ["--list", "--quiet"],
+      { timeout: 5000 },
+      (error, stdout) => {
+        if (error || !stdout) {
+          console.warn("WSL distro auto-detect failed, defaulting to Ubuntu:", error?.message);
+          resolve("Ubuntu");
+          return;
+        }
+        // wsl --list --quiet output may contain null bytes (UTF-16 encoded)
+        const lines = stdout
+          .replace(/\0/g, "")
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        const distro = lines[0];
+        if (distro) {
+          console.log(`Auto-detected WSL distro: ${distro}`);
+          resolve(distro);
+        } else {
+          console.warn("No WSL distros found, defaulting to Ubuntu");
+          resolve("Ubuntu");
+        }
+      },
+    );
+  });
+
+  return _resolvedWslDistro;
+}
 
 // Listen for auth events to keep the session fresh
 supabase.auth.onAuthStateChange((event, newSession) => {
@@ -756,12 +805,13 @@ function escapeShellArg(arg) {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
-function execDockerCommand(command) {
+async function execDockerCommand(command) {
+  const wslDistro = process.platform === "win32" ? await getWslDistroName() : null;
   return new Promise((resolve, reject) => {
     // WSL ROBUSTNESS: On Windows, use execFile to avoid CMD shell escaping issues with pipes and quotes
     if (process.platform === "win32" && command.startsWith("docker ")) {
       // Use -- separator which is more robust for passing complex strings to WSL
-      const args = ["-d", OPENFORK_WSL_DISTRO, "--", "sudo", "bash", "-c", command];
+      const args = ["-d", wslDistro, "--", "sudo", "bash", "-c", command];
       execFile("wsl.exe", args, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
         if (error) {
           // If Docker is not running or distro is missing, we don't want to spam errors in the console
@@ -801,13 +851,14 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getWslIpAddress() {
+async function getWslIpAddress() {
   if (process.platform !== "win32") {
-    return Promise.resolve(null);
+    return null;
   }
 
+  const wslDistro = await getWslDistroName();
   return new Promise((resolve) => {
-    const args = ["-d", OPENFORK_WSL_DISTRO, "--", "hostname", "-I"];
+    const args = ["-d", wslDistro, "--", "hostname", "-I"];
     execFile("wsl.exe", args, { timeout: 5000 }, (error, stdout) => {
       if (error || !stdout) {
         resolve(null);
@@ -911,7 +962,7 @@ async function checkDockerUpdates() {
   try {
     // If on Windows, check if distro exists before monitoring
     if (process.platform === "win32") {
-       const exists = await checkDistroExists(OPENFORK_WSL_DISTRO);
+       const exists = await checkDistroExists(await getWslDistroName());
        if (!exists) return;
     }
 
@@ -1265,7 +1316,7 @@ ipcMain.handle("docker:get-disk-space", async () => {
     
     if (process.platform === "win32") {
       // Detect where the OpenFork distro is actually installed
-      const basePath = await getDistroBasePath(OPENFORK_WSL_DISTRO);
+      const basePath = await getDistroBasePath(await getWslDistroName());
       // Extract drive letter robustly (handles D:, \??\D:, or defaults to C)
       let driveLetter = "C";
       if (basePath) {
@@ -1363,9 +1414,10 @@ ipcMain.handle("docker:reclaim-space", async () => {
       ? path.join(process.resourcesPath, "scripts", "compact-wsl.ps1")
       : path.join(__dirname, "scripts", "compact-wsl.ps1");
 
+    const wslDistro = await getWslDistroName();
     return new Promise((resolve) => {
       // Use execFile to avoid CMD shell escaping issues
-      const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-DistroName", OPENFORK_WSL_DISTRO];
+      const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-DistroName", wslDistro];
       execFile("powershell.exe", args, (error) => {
         if (error) {
           console.error("Compaction failed:", error);
@@ -1435,7 +1487,7 @@ ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
     // First, wipe the old one (this script does not require elevation for its primary function,
     // but it might if it needs to delete files in protected locations. For now, keep it as is.)
     console.log(`Cleaning up old distribution before relocation to: ${newDrivePath}`);
-    const relocateArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", relocateScriptPath, "-DistroName", OPENFORK_WSL_DISTRO, "-NewLocation", newDrivePath];
+    const relocateArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", relocateScriptPath, "-DistroName", await getWslDistroName(), "-NewLocation", newDrivePath];
     
     const relocateResult = await new Promise((resolve) => {
       execFile("powershell.exe", relocateArgs, (error) => {
@@ -1550,11 +1602,12 @@ async function checkDistroExists(distroName) {
 
 ipcMain.handle("deps:check-docker", async () => {
   // Use a separate exec that doesn't log errors (cleaner output)
-  const checkCommand = (cmd) => {
+  const checkCommand = async (cmd) => {
+    const wslDistro = process.platform === "win32" ? await getWslDistroName() : null;
     return new Promise((resolve) => {
       if (process.platform === "win32") {
         // Use -- separator for robustness
-        const args = ["-d", OPENFORK_WSL_DISTRO, "--user", "root", "--", "bash", "-c", cmd];
+        const args = ["-d", wslDistro, "--user", "root", "--", "bash", "-c", cmd];
         execFile("wsl.exe", args, { timeout: 15000 }, (error, stdout, stderr) => {
           if (error) {
             console.log(`Check command '${cmd}' failed: ${error.message}`);
@@ -1583,7 +1636,7 @@ ipcMain.handle("deps:check-docker", async () => {
   try {
     // WSL CHECK (Windows only)
     if (process.platform === "win32") {
-      const distroExists = await checkDistroExists(OPENFORK_WSL_DISTRO);
+      const distroExists = await checkDistroExists(await getWslDistroName());
       if (!distroExists) {
         console.log("Ubuntu WSL distro missing");
         return { installed: false, running: false, error: "WSL_DISTRO_MISSING" };
@@ -1591,7 +1644,7 @@ ipcMain.handle("deps:check-docker", async () => {
     }
 
     // Get installation path for UI
-    const basePath = await getDistroBasePath(OPENFORK_WSL_DISTRO);
+    const basePath = await getDistroBasePath(await getWslDistroName());
     let installDrive = null;
     if (basePath) {
       const match = basePath.match(/([a-zA-Z]):/);

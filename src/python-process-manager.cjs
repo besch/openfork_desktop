@@ -272,12 +272,10 @@ class PythonProcessManager {
       ? path.dirname(command)
       : path.join(__dirname, "..", "..", "client");
 
+    // NOTE: tokens are NOT passed as CLI args (they would be visible in Task Manager).
+    // Instead they are sent as the first stdin message immediately after spawn.
     const args = [
       ...initialArgs,
-      "--access-token",
-      currentSession.access_token,
-      "--refresh-token",
-      currentSession.refresh_token,
       "--service",
       service,
       "--root-dir",
@@ -319,6 +317,9 @@ class PythonProcessManager {
         stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr
         env: spawnEnv,
       });
+
+      // Send initial tokens via stdin — safer than CLI args which are visible in Task Manager
+      this._sendTokensToPython(currentSession.access_token, currentSession.refresh_token);
 
       this.mainWindow.webContents.send("openfork_client:status", "starting");
 
