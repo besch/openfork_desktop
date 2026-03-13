@@ -22,5 +22,11 @@
 !macroend
 
 !macro customUnInstall
-  ; Nothing extra needed at uninstall time.
+  ; Ask whether to remove the AI Engine (WSL distro + all Docker data).
+  ; The script is bundled at resources\bin\uninstall-engine.ps1.
+  MessageBox MB_YESNO|MB_ICONQUESTION \
+    "Do you also want to remove the OpenFork AI Engine?$\r$\n$\r$\nThis will delete the WSL environment and all downloaded Docker images, freeing several GB of disk space.$\r$\n$\r$\nChoose No to keep the engine for a future reinstall." \
+    IDNO openfork_skip_engine_cleanup
+  ExecWait 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\bin\uninstall-engine.ps1"'
+  openfork_skip_engine_cleanup:
 !macroend

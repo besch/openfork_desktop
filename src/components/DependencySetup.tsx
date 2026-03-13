@@ -35,7 +35,7 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
 
   const installDrive = status?.docker.installDrive;
   const isBridgeStarting = status?.docker.error === "DOCKER_API_UNREACHABLE";
-  const canChooseInstallDrive = status?.docker.error === "WSL_DISTRO_MISSING";
+  const canChooseInstallDrive = !status?.docker.installed;
 
   // Auto-scroll log terminal to bottom when new lines arrive
   useEffect(() => {
@@ -209,10 +209,10 @@ export function DependencySetup({ onReady, initialStatus }: DependencySetupProps
                       : "The background engine is required to run models locally. Setup will request administrator privileges."}
                   </p>
 
-                  {installDrive && !canChooseInstallDrive && (
+                  {installDrive && (
                     <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-muted-foreground">
-                      Existing Ubuntu storage detected on <span className="font-semibold text-foreground">{installDrive}: drive</span>.
-                      {" "}This setup run will install Docker into that distro. Use Storage Settings after setup if you want to relocate it.
+                      Existing Ubuntu detected on <span className="font-semibold text-foreground">{installDrive}: drive</span> (e.g. Docker Desktop).
+                      {" "}OpenFork will be installed as a separate environment on the drive you choose below.
                     </div>
                   )}
 

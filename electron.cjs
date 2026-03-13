@@ -1760,7 +1760,9 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
       } catch (_) { /* log not yet created or read error — ignore */ }
     }, 500);
 
-    const setupArgs = installPath ? ["-InstallPath", installPath] : [];
+    const setupArgs = installPath
+      ? ["-InstallPath", installPath, "-DistroName", "OpenFork"]
+      : [];
     let result;
     try {
       result = await runElevatedPowerShell(scriptPath, setupArgs);
@@ -1773,6 +1775,13 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
       console.error("Installation process error:", result.error);
       return { success: false, error: result.error };
     }
+
+    // Persist the distro name so all subsequent checks (Docker, monitoring) use it
+    if (installPath) {
+      store.set("wslDistro", "OpenFork");
+      _resolvedWslDistro = "OpenFork";
+    }
+
     console.log("Installation process completed successfully.");
     return { success: true };
   } else {
