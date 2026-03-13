@@ -2,15 +2,16 @@ const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
 const path = require("path");
 const http = require("http");
 
-
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
 const { PythonProcessManager } = require("./src/python-process-manager.cjs");
-const { ScheduleManager, SCHEDULE_PRESETS } = require("./src/schedule-manager.cjs");
+const {
+  ScheduleManager,
+  SCHEDULE_PRESETS,
+} = require("./src/schedule-manager.cjs");
 const { DockerCleanupManager } = require("./src/docker-cleanup-manager.cjs");
 const { autoUpdater } = require("electron-updater");
 const process = require("process");
-
 
 // --- PROTOCOL & INITIALIZATION ---
 
@@ -78,7 +79,10 @@ async function getWslDistroName() {
       { timeout: 5000 },
       (error, stdout) => {
         if (error || !stdout) {
-          console.warn("WSL distro auto-detect failed, defaulting to Ubuntu:", error?.message);
+          console.warn(
+            "WSL distro auto-detect failed, defaulting to Ubuntu:",
+            error?.message,
+          );
           resolve("Ubuntu");
           return;
         }
@@ -118,7 +122,7 @@ supabase.auth.onAuthStateChange((event, newSession) => {
       (event === "TOKEN_REFRESHED" && !newSession)
     ) {
       console.warn(
-        "Authentication state changed to unauthenticated, forcing UI refresh"
+        "Authentication state changed to unauthenticated, forcing UI refresh",
       );
       mainWindow.webContents.send("auth:force-refresh");
     }
@@ -182,7 +186,10 @@ function createWindow() {
     height: 768,
     show: false,
     backgroundColor: "#111827",
-    icon: path.join(__dirname, app.isPackaged ? "dist/icon.png" : "public/icon.png"),
+    icon: path.join(
+      __dirname,
+      app.isPackaged ? "dist/icon.png" : "public/icon.png",
+    ),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
@@ -217,9 +224,9 @@ function createWindow() {
     console.error("AutoUpdater error:", err);
     // USABILITY: Notify renderer of update errors so users can be informed
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:error", { 
+      mainWindow.webContents.send("update:error", {
         message: err.message || "Update failed",
-        code: err.code || "UNKNOWN_ERROR"
+        code: err.code || "UNKNOWN_ERROR",
       });
     }
   });
@@ -325,7 +332,7 @@ app.on("before-quit", async (event) => {
   if (pythonManager) {
     pythonManager.isQuitting = true;
   }
-  
+
   // If there's no python manager or it's not running, let quit proceed
   if (!pythonManager || !pythonManager.isRunning()) {
     return;
@@ -368,45 +375,48 @@ ipcMain.handle(
 
     session = data.session; // Keep main process session variable in sync
     return { session: data.session, error: null };
-  }
+  },
 );
 
-ipcMain.on("openfork_client:start", async (event, service, policy, allowedIds) => {
-  if (!pythonManager || pythonManager.isRunning() || pendingClientStart) {
-    return;
-  }
-
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("openfork_client:status", "starting");
-  }
-
-  pendingClientStart = (async () => {
-    if (process.platform === "win32") {
-      const dockerHost = await resolveWindowsDockerApiEndpoint();
-      if (!dockerHost) {
-        const message =
-          "Docker is installed in WSL, but its API is not reachable from Windows yet.";
-
-        console.error(message);
-
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("openfork_client:log", {
-            type: "stderr",
-            message,
-          });
-          mainWindow.webContents.send("openfork_client:status", "stopped");
-        }
-        return;
-      }
-
-      process.env.OPENFORK_DOCKER_HOST = dockerHost;
+ipcMain.on(
+  "openfork_client:start",
+  async (event, service, policy, allowedIds) => {
+    if (!pythonManager || pythonManager.isRunning() || pendingClientStart) {
+      return;
     }
 
-    await pythonManager.start(service, policy, allowedIds);
-  })().finally(() => {
-    pendingClientStart = null;
-  });
-});
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("openfork_client:status", "starting");
+    }
+
+    pendingClientStart = (async () => {
+      if (process.platform === "win32") {
+        const dockerHost = await resolveWindowsDockerApiEndpoint();
+        if (!dockerHost) {
+          const message =
+            "Docker is installed in WSL, but its API is not reachable from Windows yet.";
+
+          console.error(message);
+
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("openfork_client:log", {
+              type: "stderr",
+              message,
+            });
+            mainWindow.webContents.send("openfork_client:status", "stopped");
+          }
+          return;
+        }
+
+        process.env.OPENFORK_DOCKER_HOST = dockerHost;
+      }
+
+      await pythonManager.start(service, policy, allowedIds);
+    })().finally(() => {
+      pendingClientStart = null;
+    });
+  },
+);
 ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
 });
@@ -465,10 +475,15 @@ function makeAuthenticatedPostRequest(url) {
     request.setHeader("Content-Type", "application/json");
     let body = "";
     request.on("response", (response) => {
-      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
       response.on("end", () => {
-        try { resolve(JSON.parse(body)); }
-        catch (e) { resolve({ error: "Failed to parse response" }); }
+        try {
+          resolve(JSON.parse(body));
+        } catch (e) {
+          resolve({ error: "Failed to parse response" });
+        }
       });
     });
     request.on("error", (err) => resolve({ error: err.message }));
@@ -505,7 +520,9 @@ ipcMain.handle("monetize:get-config", () => {
 
 ipcMain.handle("monetize:open-stripe-onboard", async () => {
   try {
-    const data = await makeAuthenticatedPostRequest(`${ORCHESTRATOR_API_URL}/api/stripe/connect/onboard`);
+    const data = await makeAuthenticatedPostRequest(
+      `${ORCHESTRATOR_API_URL}/api/stripe/connect/onboard`,
+    );
     if (data.url) {
       shell.openExternal(data.url);
       return { success: true };
@@ -519,7 +536,9 @@ ipcMain.handle("monetize:open-stripe-onboard", async () => {
 
 ipcMain.handle("monetize:open-stripe-dashboard", async () => {
   try {
-    const data = await makeAuthenticatedPostRequest(`${ORCHESTRATOR_API_URL}/api/stripe/connect/dashboard`);
+    const data = await makeAuthenticatedPostRequest(
+      `${ORCHESTRATOR_API_URL}/api/stripe/connect/dashboard`,
+    );
     if (data.url) {
       shell.openExternal(data.url);
       return { success: true };
@@ -574,7 +593,11 @@ ipcMain.handle("schedule:get-status", () => {
   if (scheduleManager) {
     return scheduleManager.getStatus();
   }
-  return { mode: "manual", isActive: false, message: "Schedule manager not initialized" };
+  return {
+    mode: "manual",
+    isActive: false,
+    message: "Schedule manager not initialized",
+  };
 });
 
 ipcMain.handle("schedule:get-presets", () => {
@@ -608,7 +631,7 @@ ipcMain.handle("search:users", async (event, term) => {
         response.on("end", () => {
           if (response.statusCode !== 200) {
             console.error(
-              `Search users failed with status ${response.statusCode}: ${body}`
+              `Search users failed with status ${response.statusCode}: ${body}`,
             );
           }
           try {
@@ -659,7 +682,7 @@ ipcMain.handle("search:projects", async (event, term) => {
         response.on("end", () => {
           if (response.statusCode !== 200) {
             console.error(
-              `Search projects failed with status ${response.statusCode}: ${body}`
+              `Search projects failed with status ${response.statusCode}: ${body}`,
             );
           }
           try {
@@ -705,7 +728,7 @@ ipcMain.handle("fetch:config", async () => {
         response.on("end", () => {
           if (response.statusCode !== 200) {
             console.error(
-              `Fetch config failed with status ${response.statusCode}: ${body}`
+              `Fetch config failed with status ${response.statusCode}: ${body}`,
             );
             resolve({}); // Return empty object on failure
             return;
@@ -749,7 +772,7 @@ ipcMain.handle("search:general", async (event, query) => {
         response.on("end", () => {
           if (response.statusCode !== 200) {
             console.error(
-              `Search general failed with status ${response.statusCode}: ${body}`
+              `Search general failed with status ${response.statusCode}: ${body}`,
             );
             resolve([]); // Return empty array on failure
             return;
@@ -806,43 +829,58 @@ function escapeShellArg(arg) {
 }
 
 async function execDockerCommand(command) {
-  const wslDistro = process.platform === "win32" ? await getWslDistroName() : null;
+  const wslDistro =
+    process.platform === "win32" ? await getWslDistroName() : null;
   return new Promise((resolve, reject) => {
     // WSL ROBUSTNESS: On Windows, use execFile to avoid CMD shell escaping issues with pipes and quotes
     if (process.platform === "win32" && command.startsWith("docker ")) {
       // Use -- separator which is more robust for passing complex strings to WSL
       const args = ["-d", wslDistro, "--", "sudo", "bash", "-c", command];
-      execFile("wsl.exe", args, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-        if (error) {
-          // If Docker is not running or distro is missing, we don't want to spam errors in the console
-          const msg = error.message.toLowerCase();
-          if (
-            msg.includes("is not running") || 
-            msg.includes("connection refused") || 
-            msg.includes("distribution with the supplied name could not be found")
-          ) {
-             resolve("");
-             return;
+      execFile(
+        "wsl.exe",
+        args,
+        { maxBuffer: 1024 * 1024 * 10 },
+        (error, stdout, stderr) => {
+          if (error) {
+            // If Docker is not running or distro is missing, we don't want to spam errors in the console
+            const msg = error.message.toLowerCase();
+            if (
+              msg.includes("is not running") ||
+              msg.includes("connection refused") ||
+              msg.includes(
+                "distribution with the supplied name could not be found",
+              )
+            ) {
+              resolve("");
+              return;
+            }
+            console.error(`Docker command error: ${error.message}`);
+            reject(error);
+            return;
           }
-          console.error(`Docker command error: ${error.message}`);
-          reject(error);
-          return;
-        }
-        resolve(stdout.trim());
-      });
+          resolve(stdout.trim());
+        },
+      );
     } else {
-      exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-        if (error) {
-          if (error.message.includes("is not running") || error.message.includes("connection refused")) {
-             resolve("");
-             return;
+      exec(
+        command,
+        { maxBuffer: 1024 * 1024 * 10 },
+        (error, stdout, stderr) => {
+          if (error) {
+            if (
+              error.message.includes("is not running") ||
+              error.message.includes("connection refused")
+            ) {
+              resolve("");
+              return;
+            }
+            console.error(`Docker command error: ${error.message}`);
+            reject(error);
+            return;
           }
-          console.error(`Docker command error: ${error.message}`);
-          reject(error);
-          return;
-        }
-        resolve(stdout.trim());
-      });
+          resolve(stdout.trim());
+        },
+      );
     }
   });
 }
@@ -902,7 +940,7 @@ function pingDockerApiHost(host, timeoutMs = 1500) {
         response.on("end", () => {
           resolve(response.statusCode === 200 && body.trim() === "OK");
         });
-      }
+      },
     );
 
     request.on("timeout", () => {
@@ -962,13 +1000,13 @@ async function checkDockerUpdates() {
   try {
     // If on Windows, check if distro exists before monitoring
     if (process.platform === "win32") {
-       const exists = await checkDistroExists(await getWslDistroName());
-       if (!exists) return;
+      const exists = await checkDistroExists(await getWslDistroName());
+      if (!exists) return;
     }
 
     // Check containers
     const containersOutput = await execDockerCommand(
-      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"'
+      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
     );
     if (containersOutput !== lastContainersJson) {
       lastContainersJson = containersOutput;
@@ -991,13 +1029,13 @@ async function checkDockerUpdates() {
           }
         })
         .filter(Boolean);
-      
+
       mainWindow.webContents.send("docker:containers-update", containers);
     }
 
     // Check images
     const imagesOutput = await execDockerCommand(
-      'docker images --format "{{json .}}"'
+      'docker images --format "{{json .}}"',
     );
     if (imagesOutput !== lastImagesJson) {
       lastImagesJson = imagesOutput;
@@ -1023,7 +1061,7 @@ async function checkDockerUpdates() {
           const fullName = `${img.repository}:${img.tag}`.toLowerCase();
           return fullName.includes("openfork");
         });
-      
+
       mainWindow.webContents.send("docker:images-update", images);
     }
   } catch (error) {
@@ -1054,10 +1092,10 @@ ipcMain.on("docker:stop-monitoring", stopDockerMonitoring);
 ipcMain.handle("docker:list-images", async () => {
   try {
     const output = await execDockerCommand(
-      'docker images --format "{{json .}}"'
+      'docker images --format "{{json .}}"',
     );
     if (!output) return { success: true, data: [] };
-    
+
     const images = output
       .split("\n")
       .filter(Boolean)
@@ -1086,10 +1124,10 @@ ipcMain.handle("docker:list-images", async () => {
 ipcMain.handle("docker:list-containers", async () => {
   try {
     const output = await execDockerCommand(
-      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"'
+      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
     );
     if (!output) return { success: true, data: [] };
-    
+
     const containers = output
       .split("\n")
       .filter(Boolean)
@@ -1118,15 +1156,18 @@ ipcMain.handle("docker:remove-image", async (event, imageId) => {
       console.warn(`Invalid Docker ID format: ${imageId}`);
       return { success: false, error: "Invalid Docker ID format" };
     }
-    
+
     // Get all images to verify the ID against our OpenFork filter
     const listOutput = await execDockerCommand(
-      'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"'
+      'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
     );
     const lines = listOutput.split("\n").filter(Boolean);
-    const isAllowed = lines.some(line => {
+    const isAllowed = lines.some((line) => {
       const [id, fullName] = line.split("|");
-      return (id === imageId || id.startsWith(imageId)) && fullName.toLowerCase().includes("openfork");
+      return (
+        (id === imageId || id.startsWith(imageId)) &&
+        fullName.toLowerCase().includes("openfork")
+      );
     });
 
     if (!isAllowed) {
@@ -1136,21 +1177,28 @@ ipcMain.handle("docker:remove-image", async (event, imageId) => {
 
     // WSL2 ROBUSTNESS: 1. Find and remove ANY containers using this image (running or stopped)
     try {
-      const containerIds = await execDockerCommand(`docker ps -a -q --filter ancestor=${imageId}`);
+      const containerIds = await execDockerCommand(
+        `docker ps -a -q --filter ancestor=${imageId}`,
+      );
       if (containerIds) {
         const ids = containerIds.split("\n").filter(Boolean);
         for (const id of ids) {
-          console.log(`Force removing dependent container ${id} for image ${imageId}`);
+          console.log(
+            `Force removing dependent container ${id} for image ${imageId}`,
+          );
           await execDockerCommand(`docker rm -f ${id}`);
         }
       }
     } catch (e) {
-      console.warn(`Non-critical error cleaning up containers for image ${imageId}:`, e.message);
+      console.warn(
+        `Non-critical error cleaning up containers for image ${imageId}:`,
+        e.message,
+      );
     }
 
     // WSL2 ROBUSTNESS: 2. Force remove the image
     await execDockerCommand(`docker rmi -f ${escapeShellArg(imageId)}`);
-    
+
     // WSL2 ROBUSTNESS: 3. Prune dangling layers to actually recover space
     try {
       await execDockerCommand("docker image prune -f");
@@ -1169,16 +1217,20 @@ ipcMain.handle("docker:remove-all-images", async () => {
   try {
     // Get all images with openfork in the name
     const listOutput = await execDockerCommand(
-      'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"'
+      'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
     );
     if (!listOutput) return { success: true, removedCount: 0 };
-    
+
     const lines = listOutput.split("\n").filter(Boolean);
     let removedCount = 0;
     for (const line of lines) {
       const [id, fullName] = line.split("|");
       // Double-check each image contains "openfork"
-      if (fullName && fullName.toLowerCase().includes("openfork") && isValidDockerId(id)) {
+      if (
+        fullName &&
+        fullName.toLowerCase().includes("openfork") &&
+        isValidDockerId(id)
+      ) {
         try {
           await execDockerCommand(`docker rmi -f ${escapeShellArg(id)}`);
           removedCount++;
@@ -1213,10 +1265,10 @@ ipcMain.handle("docker:stop-container", async (event, containerId) => {
 ipcMain.handle("docker:stop-all-containers", async () => {
   try {
     const listOutput = await execDockerCommand(
-      'docker ps -a --format "{{.ID}}" --filter "name=dgn-client"'
+      'docker ps -a --format "{{.ID}}" --filter "name=dgn-client"',
     );
     if (!listOutput) return { success: true, stoppedCount: 0 };
-    
+
     const containerIds = listOutput.split("\n").filter(Boolean);
     for (const id of containerIds) {
       // SECURITY: Validate each container ID
@@ -1241,10 +1293,12 @@ ipcMain.handle("docker:clean-openfork", async () => {
     console.log("Starting targeted OpenFork cleanup...");
     let stoppedCount = 0;
     let removedCount = 0;
-    
+
     // 1. Force remove all dgn-client containers (by name)
     try {
-      const containerOutput = await execDockerCommand('docker ps -a -q --filter "name=dgn-client"');
+      const containerOutput = await execDockerCommand(
+        'docker ps -a -q --filter "name=dgn-client"',
+      );
       if (containerOutput) {
         const ids = containerOutput.split("\n").filter(Boolean);
         for (const id of ids) {
@@ -1258,7 +1312,9 @@ ipcMain.handle("docker:clean-openfork", async () => {
 
     // 2. Find ALL images containing 'openfork' and their dependent containers
     try {
-      const imageOutput = await execDockerCommand('docker images --format "{{.ID}}|{{.Repository}}"');
+      const imageOutput = await execDockerCommand(
+        'docker images --format "{{.ID}}|{{.Repository}}"',
+      );
       if (imageOutput) {
         const lines = imageOutput.split("\n").filter(Boolean);
         for (const line of lines) {
@@ -1266,7 +1322,9 @@ ipcMain.handle("docker:clean-openfork", async () => {
           if (repo.toLowerCase().includes("openfork")) {
             // Find any remaining containers using this image (even if not named dgn-client)
             try {
-              const deps = await execDockerCommand(`docker ps -a -q --filter ancestor=${id}`);
+              const deps = await execDockerCommand(
+                `docker ps -a -q --filter ancestor=${id}`,
+              );
               if (deps) {
                 const depIds = deps.split("\n").filter(Boolean);
                 for (const depId of depIds) {
@@ -1298,10 +1356,10 @@ ipcMain.handle("docker:clean-openfork", async () => {
     // 4. Aggressive Prune to reclaim WSL2 space (removes all unused images, not just dangling)
     // We use -af to be aggressive about reclaiming the 10-20GB VHDX space
     try {
-      await execDockerCommand("docker image prune -af"); 
+      await execDockerCommand("docker image prune -af");
       await execDockerCommand("docker container prune -f");
     } catch (e) {}
-    
+
     return { success: true, stoppedCount, removedCount };
   } catch (error) {
     console.error("Failed to clean OpenFork data:", error);
@@ -1313,7 +1371,7 @@ ipcMain.handle("docker:clean-openfork", async () => {
 ipcMain.handle("docker:get-disk-space", async () => {
   try {
     let totalBytes, freeBytes, usedBytes, diskPath;
-    
+
     if (process.platform === "win32") {
       // Detect where the OpenFork distro is actually installed
       const basePath = await getDistroBasePath(await getWslDistroName());
@@ -1323,22 +1381,29 @@ ipcMain.handle("docker:get-disk-space", async () => {
         const match = basePath.match(/([a-zA-Z]):/);
         if (match) driveLetter = match[1].toUpperCase();
       }
-      
+
       // Windows: Use PowerShell to get disk info for the detected drive
       const psCommand = `Get-PSDrive ${driveLetter} | Select-Object Free, Used | ConvertTo-Json`;
-      
+
       const output = await new Promise((resolve, reject) => {
-        exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, { timeout: 15000 }, (error, stdout, stderr) => {
-          if (error) {
-            console.error("PowerShell disk space check error:", error.message);
-            // Fallback: Just return something so the UI doesn't spin, but handle it gracefully
-            resolve("");
-            return;
-          }
-          resolve(stdout.trim());
-        });
+        exec(
+          `powershell -NoProfile -NonInteractive -Command "${psCommand}"`,
+          { timeout: 15000 },
+          (error, stdout, stderr) => {
+            if (error) {
+              console.error(
+                "PowerShell disk space check error:",
+                error.message,
+              );
+              // Fallback: Just return something so the UI doesn't spin, but handle it gracefully
+              resolve("");
+              return;
+            }
+            resolve(stdout.trim());
+          },
+        );
       });
-      
+
       if (output) {
         try {
           const diskInfo = JSON.parse(output);
@@ -1350,13 +1415,13 @@ ipcMain.handle("docker:get-disk-space", async () => {
           console.error("Error parsing disk space info:", e);
         }
       }
-      
+
       // If we don't have bytes yet (PowerShell failed or timed out), use safe defaults
       if (!totalBytes) {
         return {
           success: false,
           error: "Failed to query system disk space",
-          data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "C:\\" }
+          data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "C:\\" },
         };
       }
     } else {
@@ -1370,38 +1435,38 @@ ipcMain.handle("docker:get-disk-space", async () => {
           resolve(stdout.trim());
         });
       });
-      
+
       // Parse df output (skip header, get second line)
       const lines = dfOutput.split("\n");
       if (lines.length < 2) throw new Error("Invalid df output");
-      
+
       const parts = lines[1].split(/\s+/);
       // df -k gives: Filesystem 1K-blocks Used Available Use% Mounted
       const totalKB = parseInt(parts[1]);
       const usedKB = parseInt(parts[2]);
       const availableKB = parseInt(parts[3]);
-      
+
       totalBytes = totalKB * 1024;
       usedBytes = usedKB * 1024;
       freeBytes = availableKB * 1024;
       diskPath = "/";
     }
-    
+
     return {
       success: true,
       data: {
-        total_gb: (totalBytes / (1024 ** 3)).toFixed(1),
-        used_gb: (usedBytes / (1024 ** 3)).toFixed(1),
-        free_gb: (freeBytes / (1024 ** 3)).toFixed(1),
-        path: diskPath
-      }
+        total_gb: (totalBytes / 1024 ** 3).toFixed(1),
+        used_gb: (usedBytes / 1024 ** 3).toFixed(1),
+        free_gb: (freeBytes / 1024 ** 3).toFixed(1),
+        path: diskPath,
+      },
     };
   } catch (error) {
     console.error("Failed to get disk space:", error);
     return {
       success: false,
       error: error.message,
-      data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "" }
+      data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "" },
     };
   }
 });
@@ -1417,7 +1482,15 @@ ipcMain.handle("docker:reclaim-space", async () => {
     const wslDistro = await getWslDistroName();
     return new Promise((resolve) => {
       // Use execFile to avoid CMD shell escaping issues
-      const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-DistroName", wslDistro];
+      const args = [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        scriptPath,
+        "-DistroName",
+        wslDistro,
+      ];
       execFile("powershell.exe", args, (error) => {
         if (error) {
           console.error("Compaction failed:", error);
@@ -1442,15 +1515,17 @@ async function runElevatedPowerShell(scriptPath, args = []) {
     // Combine all arguments into a single list for the inner powershell
     const innerArgs = [
       "-NoProfile",
-      "-ExecutionPolicy", "Bypass",
-      "-File", scriptPath,
-      ...args
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      scriptPath,
+      ...args,
     ];
 
     // Use PowerShell array literal syntax @('arg1', 'arg2') for -ArgumentList.
     // This is much more robust than a single string with nested quotes.
     const argumentArray = innerArgs
-      .map(arg => `'${arg.toString().replace(/'/g, "''")}'`)
+      .map((arg) => `'${arg.toString().replace(/'/g, "''")}'`)
       .join(", ");
 
     const command = `Start-Process powershell -ArgumentList @(${argumentArray}) -Verb RunAs -Wait -WindowStyle Hidden`;
@@ -1458,18 +1533,22 @@ async function runElevatedPowerShell(scriptPath, args = []) {
     console.log(`Requesting elevation for: ${scriptPath}`);
 
     // Use execFile to avoid one layer of CMD/shell parsing
-    const child = execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], (error) => {
-      currentInstallProcess = null;
-      if (currentInstallCancelled) {
-        currentInstallCancelled = false;
-        resolve({ success: false, error: "cancelled" });
-      } else if (error) {
-        console.error("Elevation failed or was cancelled:", error.message);
-        resolve({ success: false, error: error.message });
-      } else {
-        resolve({ success: true });
-      }
-    });
+    const child = execFile(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+      (error) => {
+        currentInstallProcess = null;
+        if (currentInstallCancelled) {
+          currentInstallCancelled = false;
+          resolve({ success: false, error: "cancelled" });
+        } else if (error) {
+          console.error("Elevation failed or was cancelled:", error.message);
+          resolve({ success: false, error: error.message });
+        } else {
+          resolve({ success: true });
+        }
+      },
+    );
     currentInstallProcess = child;
   });
 }
@@ -1486,14 +1565,29 @@ ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
 
     // First, wipe the old one (this script does not require elevation for its primary function,
     // but it might if it needs to delete files in protected locations. For now, keep it as is.)
-    console.log(`Cleaning up old distribution before relocation to: ${newDrivePath}`);
-    const relocateArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", relocateScriptPath, "-DistroName", await getWslDistroName(), "-NewLocation", newDrivePath];
-    
+    console.log(
+      `Cleaning up old distribution before relocation to: ${newDrivePath}`,
+    );
+    const relocateArgs = [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      relocateScriptPath,
+      "-DistroName",
+      await getWslDistroName(),
+      "-NewLocation",
+      newDrivePath,
+    ];
+
     const relocateResult = await new Promise((resolve) => {
       execFile("powershell.exe", relocateArgs, (error) => {
         if (error) {
           console.error("Relocation wipe failed:", error.message);
-          resolve({ success: false, error: `Failed to clean up old distribution: ${error.message}` });
+          resolve({
+            success: false,
+            error: `Failed to clean up old distribution: ${error.message}`,
+          });
         } else {
           console.log("Old distribution cleanup completed.");
           resolve({ success: true });
@@ -1509,7 +1603,7 @@ ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
     console.log("Triggering fresh engine installation (elevated)...");
     const setupArgs = newDrivePath ? ["-InstallPath", newDrivePath] : [];
     const result = await runElevatedPowerShell(setupScriptPath, setupArgs);
-    
+
     if (!result.success) {
       console.error("Relocation install failed:", result.error);
       return { success: false, error: `Installation failed: ${result.error}` };
@@ -1530,9 +1624,10 @@ ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
 ipcMain.handle("get-available-drives", async () => {
   return new Promise((resolve) => {
     // Fixed PowerShell command string for execFile
-    const psCommand = "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{Name='FreeGB';Expression={[math]::Round($_.Free/1GB, 1)}} | ConvertTo-Json";
+    const psCommand =
+      "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{Name='FreeGB';Expression={[math]::Round($_.Free/1GB, 1)}} | ConvertTo-Json";
     const args = ["-NoProfile", "-NonInteractive", "-Command", psCommand];
-    
+
     execFile("powershell.exe", args, (error, stdout) => {
       if (error) {
         console.error("Failed to get drives:", error);
@@ -1542,10 +1637,12 @@ ipcMain.handle("get-available-drives", async () => {
           const result = JSON.parse(stdout);
           const drives = Array.isArray(result) ? result : [result];
           // Map PascalCase from PowerShell to camelCase for the API
-          resolve(drives.map(d => ({
-            name: d.Name,
-            freeGB: d.FreeGB
-          })));
+          resolve(
+            drives.map((d) => ({
+              name: d.Name,
+              freeGB: d.FreeGB,
+            })),
+          );
         } catch (e) {
           console.error("JSON parse error for drives:", e);
           resolve([]);
@@ -1554,7 +1651,6 @@ ipcMain.handle("get-available-drives", async () => {
     });
   });
 });
-
 
 // --- DEPENDENCY DETECTION ---
 
@@ -1566,13 +1662,17 @@ async function getDistroBasePath(distroName) {
     }
     // Query registry for the distribution's BasePath
     const psCommand = `Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\\*' | Where-Object DistributionName -eq '${distroName}' | Select-Object -ExpandProperty BasePath`;
-    execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCommand], (error, stdout) => {
-      if (error || !stdout) {
-        resolve(null);
-        return;
-      }
-      resolve(stdout.trim());
-    });
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCommand],
+      (error, stdout) => {
+        if (error || !stdout) {
+          resolve(null);
+          return;
+        }
+        resolve(stdout.trim());
+      },
+    );
   });
 }
 
@@ -1582,42 +1682,63 @@ async function checkDistroExists(distroName) {
       resolve(true); // Always true on Linux/macOS
       return;
     }
-    // Using powershell to list distros is more robust against encoding issues (UTF-16) 
+    // Using powershell to list distros is more robust against encoding issues (UTF-16)
     // and weird exit codes that wsl.exe -l -v sometimes returns.
     const psCommand = "wsl.exe -l -v | Out-String";
-    execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand], (error, stdout) => {
-      // Even if there's an error, check the output as it might contain the list anyway
-      const output = (stdout || "").replace(/\0/g, "");
-      if (output.includes(distroName)) {
-        resolve(true);
-      } else {
-        if (error) {
-           console.error(`WSL check failed: ${error.message}. Output: ${output}`);
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", psCommand],
+      (error, stdout) => {
+        // Even if there's an error, check the output as it might contain the list anyway
+        const output = (stdout || "").replace(/\0/g, "");
+        if (output.includes(distroName)) {
+          resolve(true);
+        } else {
+          if (error) {
+            console.error(
+              `WSL check failed: ${error.message}. Output: ${output}`,
+            );
+          }
+          resolve(false);
         }
-        resolve(false);
-      }
-    });
+      },
+    );
   });
 }
 
 ipcMain.handle("deps:check-docker", async () => {
   // Use a separate exec that doesn't log errors (cleaner output)
   const checkCommand = async (cmd) => {
-    const wslDistro = process.platform === "win32" ? await getWslDistroName() : null;
+    const wslDistro =
+      process.platform === "win32" ? await getWslDistroName() : null;
     return new Promise((resolve) => {
       if (process.platform === "win32") {
         // Use -- separator for robustness
-        const args = ["-d", wslDistro, "--user", "root", "--", "bash", "-c", cmd];
-        execFile("wsl.exe", args, { timeout: 15000 }, (error, stdout, stderr) => {
-          if (error) {
-            console.log(`Check command '${cmd}' failed: ${error.message}`);
-            console.log(`WSL Stdout: ${stdout}`);
-            console.log(`WSL Stderr: ${stderr}`);
-            resolve({ success: false, error: error.message });
-          } else {
-            resolve({ success: true, output: stdout.trim() });
-          }
-        });
+        const args = [
+          "-d",
+          wslDistro,
+          "--user",
+          "root",
+          "--",
+          "bash",
+          "-c",
+          cmd,
+        ];
+        execFile(
+          "wsl.exe",
+          args,
+          { timeout: 15000 },
+          (error, stdout, stderr) => {
+            if (error) {
+              console.log(`Check command '${cmd}' failed: ${error.message}`);
+              console.log(`WSL Stdout: ${stdout}`);
+              console.log(`WSL Stderr: ${stderr}`);
+              resolve({ success: false, error: error.message });
+            } else {
+              resolve({ success: true, output: stdout.trim() });
+            }
+          },
+        );
       } else {
         exec(cmd, { timeout: 10000 }, (error, stdout, stderr) => {
           if (error) {
@@ -1639,7 +1760,11 @@ ipcMain.handle("deps:check-docker", async () => {
       const distroExists = await checkDistroExists(await getWslDistroName());
       if (!distroExists) {
         console.log("Ubuntu WSL distro missing");
-        return { installed: false, running: false, error: "WSL_DISTRO_MISSING" };
+        return {
+          installed: false,
+          running: false,
+          error: "WSL_DISTRO_MISSING",
+        };
       }
     }
 
@@ -1658,25 +1783,28 @@ ipcMain.handle("deps:check-docker", async () => {
       return { installed: false, running: false, installDrive };
     }
 
-      // Check if Docker daemon is running and responsive
-      const infoResult = await checkCommand("docker info");
-      if (infoResult.success) {
-        if (process.platform === "win32") {
-          const dockerHost = await resolveWindowsDockerApiEndpoint(15000);
-          if (!dockerHost) {
-            delete process.env.OPENFORK_DOCKER_HOST;
-            return {
-              installed: true,
-              running: false,
-              installDrive,
-              error: "DOCKER_API_UNREACHABLE",
-            };
-          }
-          process.env.OPENFORK_DOCKER_HOST = dockerHost;
+    // Check if Docker daemon is running and responsive
+    const infoResult = await checkCommand("docker info");
+    if (infoResult.success) {
+      if (process.platform === "win32") {
+        const dockerHost = await resolveWindowsDockerApiEndpoint(15000);
+        if (!dockerHost) {
+          delete process.env.OPENFORK_DOCKER_HOST;
+          return {
+            installed: true,
+            running: false,
+            installDrive,
+            error: "DOCKER_API_UNREACHABLE",
+          };
         }
-        return { installed: true, running: true, installDrive };
-      } else {
-      console.log("Docker is installed but daemon not running:", infoResult.error);
+        process.env.OPENFORK_DOCKER_HOST = dockerHost;
+      }
+      return { installed: true, running: true, installDrive };
+    } else {
+      console.log(
+        "Docker is installed but daemon not running:",
+        infoResult.error,
+      );
       return { installed: true, running: false, installDrive };
     }
   } catch (err) {
@@ -1688,23 +1816,87 @@ ipcMain.handle("deps:check-docker", async () => {
 // Phase mapping: parse a log line and return { phase, percent } if it matches a known step
 function parseInstallPhase(line) {
   const phases = [
-    { re: /Checking Windows Subsystem|Checking system/i, phase: "Checking system requirements", percent: 5 },
-    { re: /Enabling WSL feature|Enabling Virtual Machine/i, phase: "Enabling WSL features", percent: 10 },
-    { re: /Downloading Ubuntu/i, phase: "Downloading Ubuntu (~130MB)", percent: 18 },
-    { re: /Importing Ubuntu|Installing Ubuntu without launch/i, phase: "Installing Ubuntu", percent: 28 },
-    { re: /Waiting for WSL to list/i, phase: "Registering Ubuntu", percent: 40 },
-    { re: /Provisioning default user/i, phase: "Configuring Ubuntu user", percent: 50 },
+    {
+      re: /Checking Windows Subsystem|Checking system/i,
+      phase: "Checking system requirements",
+      percent: 5,
+    },
+    {
+      re: /Enabling WSL feature|Enabling Virtual Machine/i,
+      phase: "Enabling WSL features",
+      percent: 10,
+    },
+    {
+      re: /Downloading Ubuntu/i,
+      phase: "Downloading Ubuntu (~130MB)",
+      percent: 18,
+    },
+    {
+      re: /Importing Ubuntu|Installing Ubuntu without launch/i,
+      phase: "Installing Ubuntu",
+      percent: 28,
+    },
+    {
+      re: /Waiting for WSL to list/i,
+      phase: "Registering Ubuntu",
+      percent: 40,
+    },
+    {
+      re: /Provisioning default user/i,
+      phase: "Configuring Ubuntu user",
+      percent: 50,
+    },
     { re: /Restarting WSL/i, phase: "Restarting WSL", percent: 55 },
-    { re: /Enabling Sparse VHD/i, phase: "Optimizing disk storage", percent: 60 },
-    { re: /Ensuring WSL is running/i, phase: "Running setup inside WSL…", percent: 63 },
-    { re: /\[Linux\].*Installing Docker/i, phase: "Installing Docker Engine", percent: 70 },
-    { re: /\[Linux\].*Docker is already/i, phase: "Docker already present", percent: 65 },
-    { re: /\[Linux\].*Installing NVIDIA/i, phase: "Installing NVIDIA Container Toolkit", percent: 80 },
-    { re: /\[Linux\].*NVIDIA Container Toolkit is already/i, phase: "NVIDIA toolkit present", percent: 80 },
-    { re: /\[Linux\].*Configuring Docker/i, phase: "Configuring Docker TCP", percent: 88 },
-    { re: /\[Linux\].*Waiting for Docker daemon/i, phase: "Starting Docker daemon", percent: 93 },
-    { re: /\[Linux\].*Docker daemon is running/i, phase: "Docker daemon running", percent: 97 },
-    { re: /Setup Complete|OpenFork AI Engine Setup Complete/i, phase: "Setup complete!", percent: 100 },
+    {
+      re: /Enabling Sparse VHD/i,
+      phase: "Optimizing disk storage",
+      percent: 60,
+    },
+    {
+      re: /Ensuring WSL is running/i,
+      phase: "Running setup inside WSL…",
+      percent: 63,
+    },
+    {
+      re: /\[Linux\].*Installing Docker/i,
+      phase: "Installing Docker Engine",
+      percent: 70,
+    },
+    {
+      re: /\[Linux\].*Docker is already/i,
+      phase: "Docker already present",
+      percent: 65,
+    },
+    {
+      re: /\[Linux\].*Installing NVIDIA/i,
+      phase: "Installing NVIDIA Container Toolkit",
+      percent: 80,
+    },
+    {
+      re: /\[Linux\].*NVIDIA Container Toolkit is already/i,
+      phase: "NVIDIA toolkit present",
+      percent: 80,
+    },
+    {
+      re: /\[Linux\].*Configuring Docker/i,
+      phase: "Configuring Docker TCP",
+      percent: 88,
+    },
+    {
+      re: /\[Linux\].*Waiting for Docker daemon/i,
+      phase: "Starting Docker daemon",
+      percent: 93,
+    },
+    {
+      re: /\[Linux\].*Docker daemon is running/i,
+      phase: "Docker daemon running",
+      percent: 97,
+    },
+    {
+      re: /Setup Complete|OpenFork AI Engine Setup Complete/i,
+      phase: "Setup complete!",
+      percent: 100,
+    },
   ];
   for (const { re, phase, percent } of phases) {
     if (re.test(line)) return { phase, percent };
@@ -1713,21 +1905,30 @@ function parseInstallPhase(line) {
 }
 
 ipcMain.handle("deps:install-engine", async (event, installPath) => {
-  console.log(`Starting engine installation on path: ${installPath || "default"}`);
+  console.log(
+    `Starting engine installation on path: ${installPath || "default"}`,
+  );
 
   if (process.platform === "darwin") {
     return { success: false, error: "Auto-install not supported on macOS." };
   }
 
-  const scriptPath = process.platform === "win32"
-    ? (app.isPackaged ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1") : path.join(__dirname, "..", "client", "setup-wsl.ps1"))
-    : (app.isPackaged ? path.join(process.resourcesPath, "bin", "setup-linux.sh") : path.join(__dirname, "..", "client", "setup-linux.sh"));
+  const scriptPath =
+    process.platform === "win32"
+      ? app.isPackaged
+        ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
+        : path.join(__dirname, "..", "client", "setup-wsl.ps1")
+      : app.isPackaged
+        ? path.join(process.resourcesPath, "bin", "setup-linux.sh")
+        : path.join(__dirname, "..", "client", "setup-linux.sh");
 
   if (process.platform === "win32") {
     console.log(`Using setup script: ${scriptPath}`);
 
     // Clear the progress log before starting
-    try { fs.writeFileSync(INSTALL_PROGRESS_LOG, "", "utf8"); } catch (_) {}
+    try {
+      fs.writeFileSync(INSTALL_PROGRESS_LOG, "", "utf8");
+    } catch (_) {}
 
     let lastReadPos = 0;
     let lastPhase = "";
@@ -1744,7 +1945,10 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
         fs.closeSync(fd);
         lastReadPos = stat.size;
         const newText = buf.toString("utf8");
-        const lines = newText.split("\n").map(l => l.trim()).filter(Boolean);
+        const lines = newText
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
         for (const line of lines) {
           const phaseInfo = parseInstallPhase(line);
           if (phaseInfo) {
@@ -1757,7 +1961,9 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
             percent: lastPercent,
           });
         }
-      } catch (_) { /* log not yet created or read error — ignore */ }
+      } catch (_) {
+        /* log not yet created or read error — ignore */
+      }
     }, 500);
 
     const setupArgs = installPath
@@ -1768,7 +1974,9 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
       result = await runElevatedPowerShell(scriptPath, setupArgs);
     } finally {
       clearInterval(watchInterval);
-      try { fs.unlinkSync(INSTALL_PROGRESS_LOG); } catch (_) {}
+      try {
+        fs.unlinkSync(INSTALL_PROGRESS_LOG);
+      } catch (_) {}
     }
 
     if (!result.success) {
@@ -1777,10 +1985,9 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
     }
 
     // Persist the distro name so all subsequent checks (Docker, monitoring) use it
-    if (installPath) {
-      store.set("wslDistro", "OpenFork");
-      _resolvedWslDistro = "OpenFork";
-    }
+    const distroName = installPath ? "OpenFork" : "Ubuntu";
+    store.set("wslDistro", distroName);
+    _resolvedWslDistro = distroName;
 
     console.log("Installation process completed successfully.");
     return { success: true };
@@ -1809,9 +2016,13 @@ ipcMain.handle("deps:cancel-install", async () => {
   // Kill the outer powershell process
   currentInstallProcess.kill();
   // Also try to kill the full process tree (includes elevated child)
-  try { execSync(`taskkill /F /T /PID ${pid}`); } catch (_) {}
+  try {
+    execSync(`taskkill /F /T /PID ${pid}`);
+  } catch (_) {}
   // Attempt to unregister a partially installed Ubuntu distro
-  try { execSync("wsl --unregister Ubuntu", { timeout: 15000 }); } catch (_) {}
+  try {
+    execSync("wsl --unregister Ubuntu", { timeout: 15000 });
+  } catch (_) {}
   return { success: true };
 });
 
@@ -1824,7 +2035,7 @@ ipcMain.handle("deps:check-nvidia", async () => {
         (error, stdout) => {
           if (error) reject(error);
           else resolve(stdout);
-        }
+        },
       );
     });
     return { available: true, gpu: output.toString().trim().split("\n")[0] };
