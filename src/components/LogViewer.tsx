@@ -47,9 +47,8 @@ export const LogViewer = () => {
   const displayedLogs = newestOnTop ? logs : logs.slice().reverse();
 
   return (
-    <div className="h-full flex flex-col bg-card/50 backdrop-blur-sm border border-white/10 rounded-lg p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold">Client Logs</h2>
+    <div className="h-full flex flex-col bg-card/50 backdrop-blur-sm border border-white/10 rounded-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex justify-end items-center mb-6">
         <div className="flex gap-2">
           <Button
             variant="primary"

@@ -22,6 +22,7 @@ class DockerCleanupManager {
 
     const saved = this.store.get("monetizeConfig") || {};
     this.idleTimeoutMinutes = saved.idleTimeoutMinutes ?? DEFAULT_IDLE_TIMEOUT_MINUTES;
+    this.enabled = saved.enabled ?? false;
   }
 
   /** Called from PythonProcessManager when a JOB_START message arrives */
@@ -42,6 +43,16 @@ class DockerCleanupManager {
     this.idleTimeoutMinutes = minutes;
     const saved = this.store.get("monetizeConfig") || {};
     this.store.set("monetizeConfig", { ...saved, idleTimeoutMinutes: minutes });
+  }
+
+  setEnabled(enabled) {
+    this.enabled = enabled;
+    const saved = this.store.get("monetizeConfig") || {};
+    this.store.set("monetizeConfig", { ...saved, enabled });
+  }
+
+  isEnabled() {
+    return this.enabled;
   }
 
   startMonitoring() {

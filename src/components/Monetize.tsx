@@ -54,7 +54,7 @@ export function Monetize() {
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [idleTimeout, setIdleTimeout] = useState(30);
-  const [cleanupEnabled, setCleanupEnabled] = useState(true);
+  const [cleanupEnabled, setCleanupEnabled] = useState(false);
   const [cleanupLog, setCleanupLog] = useState<CleanupEvent[]>([]);
 
   // Fetch wallet + transactions on mount
@@ -76,6 +76,7 @@ export function Monetize() {
     try {
       const cfg = await window.electronAPI.getMonetizeConfig();
       setIdleTimeout(cfg.idleTimeoutMinutes ?? 30);
+      setCleanupEnabled(cfg.enabled ?? false);
     } catch {}
   }
 
@@ -102,7 +103,7 @@ export function Monetize() {
   const handleWithdraw = useCallback(async () => {
     if (!monetizeWallet) return;
     const amount = monetizeWallet.available_to_withdraw_cents;
-    if (amount < 1000) return;
+    if (amount < 500) return;
 
     setWithdrawing(true);
     setWithdrawError(null);
@@ -175,7 +176,7 @@ export function Monetize() {
   const availableAmount = wallet?.available_to_withdraw_cents ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Amber banner */}
       <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
         <DollarSign size={16} className="flex-shrink-0" />
@@ -320,9 +321,9 @@ export function Monetize() {
               <p className="text-sm text-muted-foreground">
                 Connect and verify your bank account first.
               </p>
-            ) : availableAmount < 1000 ? (
+            ) : availableAmount < 500 ? (
               <p className="text-sm text-muted-foreground">
-                Minimum withdrawal is $10.00. You have{" "}
+                Minimum withdrawal is $5.00. You have{" "}
                 {formatCents(availableAmount)} available.
               </p>
             ) : (

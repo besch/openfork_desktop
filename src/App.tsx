@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
 import { LogViewer } from "@/components/LogViewer";
 import { Auth } from "@/components/Auth";
-import { Profile } from "@/components/Profile";
 import { Chart } from "@/components/Chart";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
 import { DockerManagement } from "@/components/DockerManagement";
@@ -18,7 +17,6 @@ import {
   LayoutDashboard,
   Terminal,
   LogOut,
-  User,
   Loader2,
   BarChart as BarChartIcon,
   Container,
@@ -26,7 +24,7 @@ import {
   History,
   DollarSign,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 // Docker tab trigger with activity indicator
 const DockerTabTrigger = memo(() => {
@@ -188,6 +186,9 @@ function App() {
     return <Auth />;
   }
 
+  // Derive avatar initials from email
+  const avatarInitial = session.user.email?.[0]?.toUpperCase() ?? "?";
+
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
@@ -206,26 +207,38 @@ function App() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 border border-border/30">
-                {/* FIX (#10): Dot color driven by actual client status, not always green */}
-                <div
-                  className={`h-2 w-2 rounded-full ${
-                    status === "running"
-                      ? "bg-green-500 animate-pulse"
-                      : status === "starting" || status === "stopping"
-                      ? "bg-yellow-400 animate-pulse"
-                      : "bg-muted-foreground/40"
-                  }`}
-                />
-                <span className="text-sm text-muted-foreground">
-                  {session.user.email}
-                </span>
-              </div>
-              <Button variant="destructive" size="icon" onClick={handleLogout}>
-                <LogOut className="h-[1.2rem] w-[1.2rem]" />
-                <span className="sr-only">Logout</span>
-              </Button>
+
+            {/* Status dot + avatar profile menu */}
+            <div className="flex items-center gap-3">
+              <div
+                className={`h-2 w-2 rounded-full ${
+                  status === "running"
+                    ? "bg-green-500 animate-pulse"
+                    : status === "starting" || status === "stopping"
+                    ? "bg-yellow-400 animate-pulse"
+                    : "bg-muted-foreground/40"
+                }`}
+              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="h-8 w-8 rounded-full bg-primary/20 border border-primary/30 text-primary text-sm font-semibold flex items-center justify-center hover:bg-primary/30 transition-colors">
+                    {avatarInitial}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-52 p-2">
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                    {session.user.email}
+                  </p>
+                  <div className="h-px bg-border my-1" />
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors text-left"
+                  >
+                    <LogOut size={14} />
+                    Log out
+                  </button>
+                </PopoverContent>
+              </Popover>
             </div>
           </header>
 
@@ -238,10 +251,6 @@ function App() {
               <TabsTrigger value="chart">
                 <BarChartIcon className="mr-2" size={16} />
                 Chart
-              </TabsTrigger>
-              <TabsTrigger value="profile">
-                <User className="mr-2" size={16} />
-                Profile
               </TabsTrigger>
               <DockerTabTrigger />
               <TabsTrigger value="history">
@@ -267,9 +276,6 @@ function App() {
             <TabsContent value="logs">
               <LogViewer />
             </TabsContent>
-            <TabsContent value="profile">
-              <Profile />
-            </TabsContent>
             <TabsContent value="docker">
               <DockerManagement />
             </TabsContent>
@@ -288,4 +294,3 @@ function App() {
 }
 
 export default App;
-

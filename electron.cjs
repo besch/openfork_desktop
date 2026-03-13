@@ -221,6 +221,10 @@ function createWindow() {
     mainWindow,
     execDockerCommand,
   });
+  // Auto-resume monitoring if it was enabled in the previous session
+  if (cleanupManager.isEnabled()) {
+    cleanupManager.startMonitoring();
+  }
 
   // Intercept the close event
   mainWindow.on("close", (event) => {
@@ -424,11 +428,17 @@ function makeAuthenticatedPostRequest(url) {
 }
 
 ipcMain.on("monetize:start-cleanup", () => {
-  if (cleanupManager) cleanupManager.startMonitoring();
+  if (cleanupManager) {
+    cleanupManager.setEnabled(true);
+    cleanupManager.startMonitoring();
+  }
 });
 
 ipcMain.on("monetize:stop-cleanup", () => {
-  if (cleanupManager) cleanupManager.stopMonitoring();
+  if (cleanupManager) {
+    cleanupManager.setEnabled(false);
+    cleanupManager.stopMonitoring();
+  }
 });
 
 ipcMain.handle("monetize:set-idle-timeout", (event, minutes) => {
@@ -437,7 +447,11 @@ ipcMain.handle("monetize:set-idle-timeout", (event, minutes) => {
 });
 
 ipcMain.handle("monetize:get-config", () => {
-  return store.get("monetizeConfig") || { idleTimeoutMinutes: 30 };
+  const saved = store.get("monetizeConfig") || {};
+  return {
+    idleTimeoutMinutes: saved.idleTimeoutMinutes ?? 30,
+    enabled: saved.enabled ?? false,
+  };
 });
 
 ipcMain.handle("monetize:open-stripe-onboard", async () => {
@@ -713,6 +727,12 @@ ipcMain.handle("search:general", async (event, query) => {
 
 // --- DOCKER MANAGEMENT ---
 const { execSync, exec, execFile } = require("child_process");
+const fs = require("fs");
+
+// --- ENGINE INSTALL STATE ---
+let currentInstallProcess = null;
+let currentInstallCancelled = false;
+const INSTALL_PROGRESS_LOG = "C:\\Windows\\Temp\\openfork_install_progress.log";
 
 // SECURITY: Validate Docker ID format to prevent command injection
 // Docker IDs are hex strings (12 or 64 chars for short/full format)
@@ -1381,19 +1401,24 @@ async function runElevatedPowerShell(scriptPath, args = []) {
       .map(arg => `'${arg.toString().replace(/'/g, "''")}'`)
       .join(", ");
 
-    const command = `Start-Process powershell -ArgumentList @(${argumentArray}) -Verb RunAs -Wait`;
+    const command = `Start-Process powershell -ArgumentList @(${argumentArray}) -Verb RunAs -Wait -WindowStyle Hidden`;
 
     console.log(`Requesting elevation for: ${scriptPath}`);
-    
+
     // Use execFile to avoid one layer of CMD/shell parsing
-    execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], (error) => {
-      if (error) {
+    const child = execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], (error) => {
+      currentInstallProcess = null;
+      if (currentInstallCancelled) {
+        currentInstallCancelled = false;
+        resolve({ success: false, error: "cancelled" });
+      } else if (error) {
         console.error("Elevation failed or was cancelled:", error.message);
         resolve({ success: false, error: error.message });
       } else {
         resolve({ success: true });
       }
     });
+    currentInstallProcess = child;
   });
 }
 
@@ -1607,30 +1632,98 @@ ipcMain.handle("deps:check-docker", async () => {
   }
 });
 
+// Phase mapping: parse a log line and return { phase, percent } if it matches a known step
+function parseInstallPhase(line) {
+  const phases = [
+    { re: /Checking Windows Subsystem|Checking system/i, phase: "Checking system requirements", percent: 5 },
+    { re: /Enabling WSL feature|Enabling Virtual Machine/i, phase: "Enabling WSL features", percent: 10 },
+    { re: /Downloading Ubuntu/i, phase: "Downloading Ubuntu (~130MB)", percent: 18 },
+    { re: /Importing Ubuntu|Installing Ubuntu without launch/i, phase: "Installing Ubuntu", percent: 28 },
+    { re: /Waiting for WSL to list/i, phase: "Registering Ubuntu", percent: 40 },
+    { re: /Provisioning default user/i, phase: "Configuring Ubuntu user", percent: 50 },
+    { re: /Restarting WSL/i, phase: "Restarting WSL", percent: 55 },
+    { re: /Enabling Sparse VHD/i, phase: "Optimizing disk storage", percent: 60 },
+    { re: /Ensuring WSL is running/i, phase: "Running setup inside WSL…", percent: 63 },
+    { re: /\[Linux\].*Installing Docker/i, phase: "Installing Docker Engine", percent: 70 },
+    { re: /\[Linux\].*Docker is already/i, phase: "Docker already present", percent: 65 },
+    { re: /\[Linux\].*Installing NVIDIA/i, phase: "Installing NVIDIA Container Toolkit", percent: 80 },
+    { re: /\[Linux\].*NVIDIA Container Toolkit is already/i, phase: "NVIDIA toolkit present", percent: 80 },
+    { re: /\[Linux\].*Configuring Docker/i, phase: "Configuring Docker TCP", percent: 88 },
+    { re: /\[Linux\].*Waiting for Docker daemon/i, phase: "Starting Docker daemon", percent: 93 },
+    { re: /\[Linux\].*Docker daemon is running/i, phase: "Docker daemon running", percent: 97 },
+    { re: /Setup Complete|OpenFork AI Engine Setup Complete/i, phase: "Setup complete!", percent: 100 },
+  ];
+  for (const { re, phase, percent } of phases) {
+    if (re.test(line)) return { phase, percent };
+  }
+  return null;
+}
+
 ipcMain.handle("deps:install-engine", async (event, installPath) => {
   console.log(`Starting engine installation on path: ${installPath || "default"}`);
-  
+
   if (process.platform === "darwin") {
     return { success: false, error: "Auto-install not supported on macOS." };
   }
-  
+
   const scriptPath = process.platform === "win32"
     ? (app.isPackaged ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1") : path.join(__dirname, "..", "client", "setup-wsl.ps1"))
     : (app.isPackaged ? path.join(process.resourcesPath, "bin", "setup-linux.sh") : path.join(__dirname, "..", "client", "setup-linux.sh"));
 
   if (process.platform === "win32") {
     console.log(`Using setup script: ${scriptPath}`);
+
+    // Clear the progress log before starting
+    try { fs.writeFileSync(INSTALL_PROGRESS_LOG, "", "utf8"); } catch (_) {}
+
+    let lastReadPos = 0;
+    let lastPhase = "";
+    let lastPercent = 0;
+
+    // Poll the log file every 500ms and forward new lines to the renderer
+    const watchInterval = setInterval(() => {
+      try {
+        const stat = fs.statSync(INSTALL_PROGRESS_LOG);
+        if (stat.size <= lastReadPos) return;
+        const buf = Buffer.alloc(stat.size - lastReadPos);
+        const fd = fs.openSync(INSTALL_PROGRESS_LOG, "r");
+        fs.readSync(fd, buf, 0, buf.length, lastReadPos);
+        fs.closeSync(fd);
+        lastReadPos = stat.size;
+        const newText = buf.toString("utf8");
+        const lines = newText.split("\n").map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          const phaseInfo = parseInstallPhase(line);
+          if (phaseInfo) {
+            lastPhase = phaseInfo.phase;
+            lastPercent = phaseInfo.percent;
+          }
+          mainWindow?.webContents.send("deps:install-progress", {
+            line,
+            phase: lastPhase,
+            percent: lastPercent,
+          });
+        }
+      } catch (_) { /* log not yet created or read error — ignore */ }
+    }, 500);
+
     const setupArgs = installPath ? ["-InstallPath", installPath] : [];
-    const result = await runElevatedPowerShell(scriptPath, setupArgs);
+    let result;
+    try {
+      result = await runElevatedPowerShell(scriptPath, setupArgs);
+    } finally {
+      clearInterval(watchInterval);
+      try { fs.unlinkSync(INSTALL_PROGRESS_LOG); } catch (_) {}
+    }
+
     if (!result.success) {
       console.error("Installation process error:", result.error);
       return { success: false, error: result.error };
-    } else {
-      console.log("Installation process completed successfully.");
-      return { success: true };
     }
+    console.log("Installation process completed successfully.");
+    return { success: true };
   } else {
-    // LinuxPKExec handler
+    // Linux pkexec handler (no progress streaming on Linux)
     return new Promise((resolve) => {
       console.log(`Using setup script: ${scriptPath}`);
       const command = `pkexec bash "${scriptPath}"`;
@@ -1645,6 +1738,19 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
       });
     });
   }
+});
+
+ipcMain.handle("deps:cancel-install", async () => {
+  if (!currentInstallProcess) return { success: true };
+  currentInstallCancelled = true;
+  const pid = currentInstallProcess.pid;
+  // Kill the outer powershell process
+  currentInstallProcess.kill();
+  // Also try to kill the full process tree (includes elevated child)
+  try { execSync(`taskkill /F /T /PID ${pid}`); } catch (_) {}
+  // Attempt to unregister a partially installed Ubuntu distro
+  try { execSync("wsl --unregister Ubuntu", { timeout: 15000 }); } catch (_) {}
+  return { success: true };
 });
 
 ipcMain.handle("deps:check-nvidia", async () => {

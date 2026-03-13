@@ -113,6 +113,8 @@ declare global {
       checkNvidia: () => Promise<{ available: boolean; gpu: string | null }>;
       openDockerDownload: () => Promise<{ success: boolean }>;
       installEngine: (installPath?: string) => Promise<{ success: boolean; error?: string }>;
+      onInstallProgress: (callback: (data: { line: string; phase: string; percent: number }) => void) => () => void;
+      cancelInstall: () => Promise<{ success: boolean; error?: string }>;
       
       // Disk Management
       getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;

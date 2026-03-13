@@ -39,10 +39,7 @@ export const Chart = () => {
   ];
 
   return (
-    <Card className="bg-card/50 backdrop-blur-sm border-white/10">
-      <CardHeader>
-        <CardTitle>Job Status Overview</CardTitle>
-      </CardHeader>
+    <Card className="bg-card/50 backdrop-blur-sm border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <CardContent>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart

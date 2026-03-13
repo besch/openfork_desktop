@@ -79,6 +79,12 @@ interface ProcessInfo {
   isPackaged: boolean;
 }
 
+interface InstallProgressEvent {
+  line: string;
+  phase: string;
+  percent: number;
+}
+
 interface ElectronAPI {
   // Orchestrator API URL
   getOrchestratorApiUrl: () => Promise<string>;
@@ -92,7 +98,6 @@ interface ElectronAPI {
   onLog: (callback: (log: Omit<LogEntry, "timestamp">) => void) => CleanupFn;
   onStatusChange: (callback: (status: DGNClientStatus) => void) => CleanupFn;
   onDockerProgress: (callback: (progress: DockerPullProgress | null) => void) => CleanupFn;
-  onJobStatus: (callback: (payload: any) => void) => CleanupFn;
   onDiskSpaceError: (callback: (data: {
     image_name: string;
     required_gb: number;
@@ -163,6 +168,8 @@ interface ElectronAPI {
   checkNvidia: () => Promise<NvidiaStatus>;
   openDockerDownload: () => Promise<{ success: boolean }>;
   installEngine: (installPath?: string) => Promise<{ success: boolean; error?: string }>;
+  onInstallProgress: (callback: (data: InstallProgressEvent) => void) => CleanupFn;
+  cancelInstall: () => Promise<{ success: boolean; error?: string }>;
   
   // Disk Management
   getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
@@ -197,7 +204,7 @@ interface ElectronAPI {
   startMonetizeCleanup: () => void;
   stopMonetizeCleanup: () => void;
   setMonetizeIdleTimeout: (minutes: number) => Promise<{ success: boolean }>;
-  getMonetizeConfig: () => Promise<{ idleTimeoutMinutes: number }>;
+  getMonetizeConfig: () => Promise<{ idleTimeoutMinutes: number; enabled: boolean }>;
   onMonetizeCleanupEvent: (callback: (event: {
     service_type: string;
     image: string;

@@ -104,6 +104,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkNvidia: () => ipcRenderer.invoke("deps:check-nvidia"),
   openDockerDownload: () => ipcRenderer.invoke("deps:open-docker-download"),
   installEngine: (installPath) => ipcRenderer.invoke("deps:install-engine", installPath),
+  onInstallProgress: (callback) => createListener("deps:install-progress", callback),
+  cancelInstall: () => ipcRenderer.invoke("deps:cancel-install"),
 
   // Disk Management
   relocateStorage: (newDrivePath) => ipcRenderer.invoke("docker:relocate-storage", newDrivePath),

@@ -224,7 +224,7 @@ export const Dashboard = memo(() => {
   const isProcessingAndRunning = status === "running" && jobState.status === "processing";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header className="bg-card/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 shadow-lg">
         <div className="flex flex-wrap items-center content-center justify-between gap-4">
           <div className="flex items-center gap-4">

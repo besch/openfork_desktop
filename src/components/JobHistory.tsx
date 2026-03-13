@@ -307,14 +307,7 @@ export const JobHistory = memo(() => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60">
-            Job History
-          </h2>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="bg-green-500/10 text-green-400 border-green-500/20 px-3 py-1">
             {stats.completed} Completed
           </Badge>
@@ -335,7 +328,6 @@ export const JobHistory = memo(() => {
             Refresh
           </Button>
         </div>
-      </header>
 
       {/* Filters Card */}
       <Card className="bg-card/30 backdrop-blur-xl border-white/5 shadow-2xl overflow-hidden group">
