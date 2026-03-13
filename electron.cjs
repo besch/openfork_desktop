@@ -1706,7 +1706,113 @@ async function checkDistroExists(distroName) {
   });
 }
 
+async function checkNativeDocker() {
+  if (process.platform !== "win32") return { installed: false, running: false };
+
+  return new Promise((resolve) => {
+    // Check if docker.exe is in PATH or common install location
+    const commonPath = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe';
+    const hasDockerExe = fs.existsSync(commonPath);
+    const dockerCmd = hasDockerExe ? `"${commonPath}"` : 'docker.exe';
+
+    exec('where docker.exe', (error, stdout) => {
+      const inPath = !error && stdout.trim().length > 0;
+      if (!inPath && !hasDockerExe) {
+        resolve({ installed: false, running: false });
+        return;
+      }
+
+      // Check if Docker Desktop process is running or pipe exists
+      exec('tasklist /FI "IMAGENAME eq Docker Desktop.exe" /NH', (err, stdout) => {
+        const processRunning = !err && stdout.includes("Docker Desktop.exe");
+
+        // Advanced check: verify if the Docker named pipe exists (most reliable indicator)
+        const pipePath = '\\\\.\\pipe\\docker_engine';
+        const pipeExists = fs.existsSync(pipePath);
+
+        // If installed, check if it's responding to commands
+        // Use 'version' instead of 'info' (faster, less state-dependent)
+        exec(`${dockerCmd} version --format "{{.Server.Version}}"`, (err) => {
+          resolve({
+            installed: true,
+            running: !err || pipeExists, // Consider it running if pipe exists or version command works
+            isNative: true,
+            isProcessRunning: processRunning || pipeExists
+          });
+        });
+      });
+    });
+  });
+}
+
+async function startNativeDocker() {
+  if (process.platform !== "win32") return { success: false };
+
+  return new Promise((resolve) => {
+    console.log("Attempting to start Docker Desktop...");
+    // Attempt to start Docker Desktop using the default GUI executable
+    const dockerDesktopPath = 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe';
+    if (!fs.existsSync(dockerDesktopPath)) {
+      console.error("Docker Desktop GUI executable not found at default path.");
+      resolve({ success: false, error: "DOCKER_DESKTOP_NOT_FOUND" });
+      return;
+    }
+
+    const command = `Start-Process "${dockerDesktopPath}"`;
+    execFile("powershell.exe", ["-NoProfile", "-Command", command], (error) => {
+      if (error) {
+        console.error("Failed to launch Docker Desktop:", error.message);
+        resolve({ success: false, error: error.message });
+      } else {
+        console.log("Docker Desktop launch command sent.");
+        resolve({ success: true });
+      }
+    });
+  });
+}
+
 ipcMain.handle("deps:check-docker", async () => {
+  // 1. Check for Native Windows Docker first
+  if (process.platform === "win32") {
+    const native = await checkNativeDocker();
+    if (native.installed) {
+      console.log("Native Docker Desktop detected");
+
+      if (native.running) {
+        // If native docker is running and responding, we use it!
+        delete process.env.OPENFORK_DOCKER_HOST;
+        return {
+          installed: true,
+          running: true,
+          isNative: true,
+          installDrive: "C"
+        };
+      } else if (native.isProcessRunning) {
+        // Process is running but not responding yet -> it's starting
+        console.log("Docker Desktop process detected but not responding to API. Status: starting...");
+        return {
+          installed: true,
+          running: false,
+          isNative: true,
+          isStarting: true,
+          installDrive: "C"
+        };
+      } else {
+        // Installed but NOT running at all -> try to start it!
+        console.log("Docker Desktop is not running. Attempting auto-start...");
+        const startResult = await startNativeDocker();
+        return {
+          installed: true,
+          running: false,
+          isNative: true,
+          isStarting: startResult.success,
+          installDrive: "C"
+        };
+      }
+    }
+  }
+
+  // 2. Fall back to custom WSL distro logic
   // Use a separate exec that doesn't log errors (cleaner output)
   const checkCommand = async (cmd) => {
     const wslDistro =

@@ -106,6 +106,8 @@ export interface DockerStatus {
   running: boolean;
   error?: string;
   installDrive?: string;
+  isNative?: boolean;
+  isStarting?: boolean;
 }
 
 export interface NvidiaStatus {
