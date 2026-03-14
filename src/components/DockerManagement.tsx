@@ -423,7 +423,7 @@ export const DockerManagement = memo(() => {
         <Card className="bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm border-primary/30 shadow-lg shadow-primary/10">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-primary">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-white bg-primary p-2 rounded-lg">
                 <Download className="h-5 w-5 animate-pulse" />
                 <span>
                   {dockerPullProgress?.status || "Downloading"} Docker Image
