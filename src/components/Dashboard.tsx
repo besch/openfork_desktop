@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobPolicySettings } from "./JobPolicySettings";
-import { AutoScheduleSettings } from "./AutoScheduleSettings";
 import type { Project, Profile, JobPolicy } from "@/types";
 
 const StatCard = memo(
@@ -272,9 +271,6 @@ export const Dashboard = memo(() => {
                   onSelectedUsersChange={setSelectedUsers}
                   disabled={isRunning || isDisabled}
                 />
-                <div className="pt-2 border-t border-border/50">
-                  <AutoScheduleSettings />
-                </div>
               </CardContent>
             </Card>
           </motion.section>

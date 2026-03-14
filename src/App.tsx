@@ -37,19 +37,19 @@ const DockerTabTrigger = memo(() => {
   const hasActivity = isDownloading || isProcessing;
 
   return (
-    <TabsTrigger value="docker" className="relative">
+    <TabsTrigger value="docker" className="relative data-[state=active]:text-white group">
       {isDownloading ? (
-        <Download className="mr-2 animate-bounce text-primary" size={16} />
+        <Download className="mr-2 animate-bounce text-inherit" size={16} />
       ) : isProcessing ? (
-        <Container className="mr-2 animate-pulse text-primary" size={16} />
+        <Container className="mr-2 animate-pulse text-inherit" size={16} />
       ) : (
         <Container className="mr-2" size={16} />
       )}
       Docker
       {hasActivity && (
         <span className="absolute -top-1 -right-1 flex h-3 w-3">
-          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDownloading ? 'bg-yellow-400' : 'bg-primary'}`} />
-          <span className={`relative inline-flex rounded-full h-3 w-3 ${isDownloading ? 'bg-yellow-500' : 'bg-primary'}`} />
+          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDownloading ? 'bg-yellow-400' : 'bg-primary group-data-[state=active]:bg-white/80'}`} />
+          <span className={`relative inline-flex rounded-full h-3 w-3 ${isDownloading ? 'bg-yellow-500' : 'bg-primary border border-white/20 group-data-[state=active]:bg-white group-data-[state=active]:border-primary/20'}`} />
         </span>
       )}
     </TabsTrigger>
@@ -243,7 +243,7 @@ function App() {
           </header>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4 bg-card/50 backdrop-blur-sm border-white/10">
+            <TabsList className="mb-6 bg-card/40 backdrop-blur-md border border-white/10 p-1 rounded-xl">
               <TabsTrigger value="dashboard">
                 <LayoutDashboard className="mr-2" size={16} />
                 Dashboard
