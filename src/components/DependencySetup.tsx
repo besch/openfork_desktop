@@ -165,8 +165,8 @@ export function DependencySetup({
             System Setup
           </h1>
           <p className="text-muted-foreground">
-            OpenFork requires a local AI Engine and an NVIDIA GPU to run
-            workflows on your machine.
+            OpenFork requires a Docker and an NVIDIA GPU to run workflows on
+            your machine.
           </p>
         </div>
 
@@ -236,7 +236,8 @@ export function DependencySetup({
                         Docker not found
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Docker is required to run OpenFork. It will be installed automatically using a dedicated WSL+Ubuntu environment.
+                        Docker is required to run OpenFork. It will be installed
+                        automatically using a dedicated WSL+Ubuntu environment.
                       </p>
                     </div>
                   )}
