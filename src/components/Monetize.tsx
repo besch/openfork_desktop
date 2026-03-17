@@ -44,9 +44,24 @@ const DISPLAY_VRAM_GB = 8;
 
 // Realistic job specs for earnings estimator (VRAM × duration drives payout)
 const ESTIMATOR_JOBS = [
-  { label: "WAN 2.2  (8 GB · ~7 min)", vramGb: 8, durationMin: 7, jobsPerHour: 7 },
-  { label: "LTX-2 24 GB GGUF  (24 GB · ~12 min)", vramGb: 24, durationMin: 12, jobsPerHour: 4 },
-  { label: "Hunyuan 1.5 24 GB  (24 GB · ~18 min)", vramGb: 24, durationMin: 18, jobsPerHour: 3 },
+  {
+    label: "WAN 2.2  (8 GB · ~7 min)",
+    vramGb: 8,
+    durationMin: 7,
+    jobsPerHour: 7,
+  },
+  {
+    label: "LTX-2 24 GB GGUF  (24 GB · ~12 min)",
+    vramGb: 24,
+    durationMin: 12,
+    jobsPerHour: 4,
+  },
+  {
+    label: "Hunyuan 1.5 24 GB  (24 GB · ~18 min)",
+    vramGb: 24,
+    durationMin: 18,
+    jobsPerHour: 3,
+  },
 ];
 
 function formatCents(cents: number): string {
@@ -544,9 +559,6 @@ export function Monetize() {
             </p>
             <p className="text-xl font-bold text-amber-400">
               {wallet ? formatCents(wallet.pending_earnings_cents) : "—"}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              3-day security hold
             </p>
           </CardContent>
         </Card>
