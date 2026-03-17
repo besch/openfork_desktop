@@ -733,132 +733,140 @@ export function Monetize() {
         </Card>
       </div>
 
-      {/* Docker Auto-Cleanup */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Trash2 size={16} />
-            Docker Auto-Cleanup
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Auto-remove idle images</p>
-              <p className="text-xs text-muted-foreground">
-                Images unused for the idle timeout are removed automatically
-              </p>
-            </div>
-            <Button
-              variant={cleanupEnabled ? "primary" : "outline"}
-              size="sm"
-              onClick={() => toggleCleanup(!cleanupEnabled)}
-            >
-              {cleanupEnabled ? "Enabled" : "Disabled"}
-            </Button>
-          </div>
-
-          {cleanupEnabled && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Idle timeout</span>
-                <span className="font-medium">{idleTimeout} min</span>
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Recent Earnings */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <DollarSign size={16} />
+              Recent Earnings
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingTxns ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Loader2 size={14} className="animate-spin" />
+                Loading transactions...
               </div>
-              <Slider
-                min={15}
-                max={120}
-                step={5}
-                value={[idleTimeout]}
-                onValueChange={handleIdleTimeoutChange}
-                className="w-full"
-              />
-              <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>15 min</span>
-                <span>120 min</span>
-              </div>
-            </div>
-          )}
-
-          {cleanupLog.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground font-medium">
-                Recent cleanup events
+            ) : transactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No transactions yet. Start processing paid jobs to earn.
               </p>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {cleanupLog.map((evt, i) => (
+            ) : (
+              <div className="divide-y divide-border/40">
+                {transactions.map((txn) => (
                   <div
-                    key={i}
-                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                    key={txn.id}
+                    className="flex items-center justify-between py-2"
                   >
-                    <Trash2
-                      size={10}
-                      className="text-amber-400 flex-shrink-0"
-                    />
-                    <span className="truncate">{evt.service_type}</span>
-                    <span className="ml-auto flex-shrink-0">
-                      {formatDate(evt.timestamp)}
-                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm truncate">
+                        {txn.description || txn.transaction_type}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(txn.created_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${
+                          txn.status === "completed"
+                            ? "border-green-500/30 text-green-400"
+                            : "border-amber-500/30 text-amber-400"
+                        }`}
+                      >
+                        {txn.status}
+                      </Badge>
+                      <span
+                        className={`text-sm font-medium ${
+                          txn.amount_cents < 0 ? "text-red-400" : "text-green-400"
+                        }`}
+                      >
+                        {txn.amount_cents >= 0 ? "+" : ""}
+                        {formatCents(txn.amount_cents)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Recent Earnings */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <DollarSign size={16} />
-            Recent Earnings
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loadingTxns ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 size={14} className="animate-spin" />
-              Loading transactions...
+        {/* Docker Auto-Cleanup */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Trash2 size={16} />
+              Docker Auto-Cleanup
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Auto-remove idle images</p>
+                <p className="text-xs text-muted-foreground">
+                  Images unused for the idle timeout are removed automatically
+                </p>
+              </div>
+              <Button
+                variant={cleanupEnabled ? "primary" : "outline"}
+                size="sm"
+                onClick={() => toggleCleanup(!cleanupEnabled)}
+              >
+                {cleanupEnabled ? "Enabled" : "Disabled"}
+              </Button>
             </div>
-          ) : transactions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No transactions yet. Start processing paid jobs to earn.
-            </p>
-          ) : (
-            <div className="divide-y divide-border/40">
-              {transactions.map((txn) => (
-                <div
-                  key={txn.id}
-                  className="flex items-center justify-between py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm truncate">
-                      {txn.description || txn.transaction_type}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(txn.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] ${txn.status === "completed" ? "border-green-500/30 text-green-400" : "border-amber-500/30 text-amber-400"}`}
-                    >
-                      {txn.status}
-                    </Badge>
-                    <span
-                      className={`text-sm font-medium ${txn.amount_cents < 0 ? "text-red-400" : "text-green-400"}`}
-                    >
-                      {txn.amount_cents >= 0 ? "+" : ""}
-                      {formatCents(txn.amount_cents)}
-                    </span>
-                  </div>
+
+            {cleanupEnabled && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Idle timeout</span>
+                  <span className="font-medium">{idleTimeout} min</span>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <Slider
+                  min={15}
+                  max={120}
+                  step={5}
+                  value={[idleTimeout]}
+                  onValueChange={handleIdleTimeoutChange}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>15 min</span>
+                  <span>120 min</span>
+                </div>
+              </div>
+            )}
+
+            {cleanupLog.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-medium">
+                  Recent cleanup events
+                </p>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {cleanupLog.map((evt, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 text-xs text-muted-foreground"
+                    >
+                      <Trash2
+                        size={10}
+                        className="text-amber-400 flex-shrink-0"
+                      />
+                      <span className="truncate">{evt.service_type}</span>
+                      <span className="ml-auto flex-shrink-0">
+                        {formatDate(evt.timestamp)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
