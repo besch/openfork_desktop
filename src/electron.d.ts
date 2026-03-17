@@ -155,7 +155,7 @@ interface ElectronAPI {
   listDockerImages: () => Promise<DockerImagesResult>;
   listDockerContainers: () => Promise<DockerContainersResult>;
   removeDockerImage: (imageId: string) => Promise<DockerOperationResult>;
-  onJobStatus: (callback: (payload: any) => void) => () => void;
+  onJobStatus: (callback: (payload: unknown) => void) => () => void;
   removeAllDockerImages: () => Promise<DockerOperationResult>;
   stopContainer: (containerId: string) => Promise<DockerOperationResult>;
   stopAllContainers: () => Promise<DockerOperationResult>;
@@ -230,6 +230,9 @@ interface ElectronAPI {
   // Provider custom pricing
   getProviderRate: () => Promise<ProviderRateInfo>;
   setProviderRate: (rate: number | null) => Promise<ProviderRateInfo>;
+
+  // External Links
+  openExternal: (url: string) => void;
 }
 
 declare global {

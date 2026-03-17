@@ -198,6 +198,13 @@ function createWindow() {
     },
   });
 
+  // Ensure all target="_blank" links open in the system's default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+
   // --- AUTO UPDATER ---
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -593,6 +600,11 @@ ipcMain.handle("monetize:open-stripe-dashboard", async () => {
     return { error: err.message };
   }
 });
+
+ipcMain.on("open-external", (event, url) => {
+  shell.openExternal(url);
+});
+
 
 // Add persistence handlers for job policy settings
 ipcMain.handle("load-settings", async () => {

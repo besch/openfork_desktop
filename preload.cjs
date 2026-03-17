@@ -146,5 +146,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Provider custom pricing
   getProviderRate: () => ipcRenderer.invoke("monetize:get-provider-rate"),
   setProviderRate: (rate) => ipcRenderer.invoke("monetize:set-provider-rate", rate),
+  
+  // External Links
+  openExternal: (url) => ipcRenderer.send("open-external", url),
 });
 

@@ -162,6 +162,9 @@ declare global {
       // Provider custom pricing
       getProviderRate: () => Promise<ProviderRateInfo>;
       setProviderRate: (rate: number | null) => Promise<ProviderRateInfo>;
+
+      // External Links
+      openExternal: (url: string) => void;
     };
   }
 }
