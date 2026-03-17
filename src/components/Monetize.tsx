@@ -317,15 +317,6 @@ export function Monetize() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Amber banner */}
-      <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
-        <DollarSign size={16} className="flex-shrink-0" />
-        <span>
-          <strong>Monetize mode active</strong> — you earn real money for
-          processing paid jobs. Docker images will auto-cleanup when idle.
-        </span>
-      </div>
-
       {/* GPU Pricing */}
       <Card>
         <CardHeader className="pb-3">
