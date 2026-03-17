@@ -335,15 +335,17 @@ export function Monetize() {
       {/* GPU Pricing */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Gauge size={16} />
+          <CardTitle className="text-base flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-primary text-white group-hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
+        <Gauge size={16} />
+      </div>
             GPU Pricing
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {rateLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin text-white" />
               Loading rate info…
             </div>
           ) : rateInfo ? (
@@ -378,7 +380,7 @@ export function Monetize() {
                     className="shrink-0"
                   >
                     {rateSaving ? (
-                      <Loader2 size={13} className="animate-spin" />
+                      <Loader2 size={13} className="animate-spin text-white" />
                     ) : (
                       "Set Rate"
                     )}
@@ -438,14 +440,14 @@ export function Monetize() {
 
               {/* Error / success feedback */}
               {rateError && (
-                <div className="flex items-center gap-2 text-red-400 text-sm">
-                  <AlertCircle size={13} />
+                <div className="flex items-center gap-2 text-destructive-foreground text-sm">
+                  <AlertCircle size={13} className="text-white" />
                   {rateError}
                 </div>
               )}
               {rateSaved && (
-                <div className="flex items-center gap-2 text-green-400 text-sm">
-                  <CheckCircle2 size={13} />
+                <div className="flex items-center gap-2 text-primary text-sm">
+                  <CheckCircle2 size={13} className="text-white" />
                   Rate saved successfully.
                 </div>
               )}
@@ -499,10 +501,10 @@ export function Monetize() {
                   <div className="flex items-center gap-1.5">
                     {marketPosition === "competitive" && (
                       <>
-                        <TrendingDown size={12} className="text-green-400" />
+                        <TrendingDown size={12} className="text-white" />
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-green-500/30 text-green-400"
+                          className="text-[10px] border-primary/30 text-primary"
                         >
                           Competitive — more jobs likely
                         </Badge>
@@ -510,10 +512,10 @@ export function Monetize() {
                     )}
                     {marketPosition === "above" && (
                       <>
-                        <Minus size={12} className="text-amber-400" />
+                        <Minus size={12} className="text-white" />
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-amber-500/30 text-amber-400"
+                          className="text-[10px] border-merged-status/30 text-merged-status"
                         >
                           Above average — slightly fewer jobs
                         </Badge>
@@ -521,10 +523,10 @@ export function Monetize() {
                     )}
                     {marketPosition === "premium" && (
                       <>
-                        <TrendingUp size={12} className="text-orange-400" />
+                        <TrendingUp size={12} className="text-white" />
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-orange-500/30 text-orange-400"
+                          className="text-[10px] border-merged-status/30 text-merged-status"
                         >
                           Premium — significantly fewer jobs
                         </Badge>
@@ -557,7 +559,7 @@ export function Monetize() {
             <p className="text-xs text-muted-foreground mb-1">
               Pending Earnings
             </p>
-            <p className="text-xl font-bold text-amber-400">
+            <p className="text-xl font-bold text-merged-status">
               {wallet ? formatCents(wallet.pending_earnings_cents) : "—"}
             </p>
           </CardContent>
@@ -567,7 +569,7 @@ export function Monetize() {
             <p className="text-xs text-muted-foreground mb-1">
               Available to Withdraw
             </p>
-            <p className="text-xl font-bold text-green-400">
+            <p className="text-xl font-bold text-primary">
               {wallet ? formatCents(wallet.available_to_withdraw_cents) : "—"}
             </p>
           </CardContent>
@@ -598,16 +600,18 @@ export function Monetize() {
         {/* Bank Account */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Building2 size={16} />
+            <CardTitle className="text-base flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
+                <Building2 size={16} />
+              </div>
               Payout Account
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {wallet?.stripe_account_verified ? (
               <>
-                <div className="flex items-center gap-2 text-green-400 text-sm">
-                  <CheckCircle2 size={14} />
+                <div className="flex items-center gap-2 text-primary text-sm">
+                  <CheckCircle2 size={14} className="text-white" />
                   <span>Bank account connected &amp; verified</span>
                 </div>
                 <Button
@@ -618,17 +622,17 @@ export function Monetize() {
                   className="w-full"
                 >
                   {stripeLoading ? (
-                    <Loader2 size={14} className="mr-2 animate-spin" />
+                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
                   ) : (
-                    <ExternalLink size={14} className="mr-2" />
+                    <ExternalLink size={14} className="mr-2 text-white" />
                   )}
                   Manage Payout Account
                 </Button>
               </>
             ) : wallet?.stripe_details_submitted ? (
               <>
-                <div className="flex items-center gap-2 text-amber-400 text-sm">
-                  <Clock size={14} />
+                <div className="flex items-center gap-2 text-merged-status text-sm">
+                  <Clock size={14} className="text-white" />
                   <span>Verification in progress — check your email</span>
                 </div>
                 <Button
@@ -639,9 +643,9 @@ export function Monetize() {
                   className="w-full"
                 >
                   {stripeLoading ? (
-                    <Loader2 size={14} className="mr-2 animate-spin" />
+                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
                   ) : (
-                    <ExternalLink size={14} className="mr-2" />
+                    <ExternalLink size={14} className="mr-2 text-white" />
                   )}
                   Open Stripe Dashboard
                 </Button>
@@ -658,9 +662,9 @@ export function Monetize() {
                   variant="primary"
                 >
                   {stripeLoading ? (
-                    <Loader2 size={14} className="mr-2 animate-spin" />
+                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
                   ) : (
-                    <Building2 size={14} className="mr-2" />
+                    <Building2 size={14} className="mr-2 text-white" />
                   )}
                   Connect Bank Account
                 </Button>
@@ -672,8 +676,10 @@ export function Monetize() {
         {/* Withdraw */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ArrowDownToLine size={16} />
+            <CardTitle className="text-base flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
+                <ArrowDownToLine size={16} />
+              </div>
               Withdraw Earnings
             </CardTitle>
           </CardHeader>
@@ -694,7 +700,7 @@ export function Monetize() {
                     <span className="text-muted-foreground">
                       Available balance
                     </span>
-                    <span className="font-semibold text-green-400">
+                    <span className="font-semibold text-primary">
                       {formatCents(availableAmount)}
                     </span>
                   </div>
@@ -704,14 +710,14 @@ export function Monetize() {
                   </p>
                 </div>
                 {withdrawError && (
-                  <div className="flex items-center gap-2 text-red-400 text-sm">
-                    <AlertCircle size={14} />
+                  <div className="flex items-center gap-2 text-destructive-foreground text-sm">
+                    <AlertCircle size={14} className="text-white" />
                     {withdrawError}
                   </div>
                 )}
                 {withdrawSuccess && (
-                  <div className="flex items-center gap-2 text-green-400 text-sm">
-                    <CheckCircle2 size={14} />
+                  <div className="flex items-center gap-2 text-primary text-sm">
+                    <CheckCircle2 size={14} className="text-white" />
                     Withdrawal requested! Arrives in 1–3 business days.
                   </div>
                 )}
@@ -721,9 +727,9 @@ export function Monetize() {
                   className="w-full"
                 >
                   {withdrawing ? (
-                    <Loader2 size={14} className="mr-2 animate-spin" />
+                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
                   ) : (
-                    <ArrowDownToLine size={14} className="mr-2" />
+                    <ArrowDownToLine size={14} className="mr-2 text-white" />
                   )}
                   Withdraw {formatCents(availableAmount)}
                 </Button>
@@ -737,15 +743,17 @@ export function Monetize() {
         {/* Recent Earnings */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign size={16} />
+            <CardTitle className="text-base flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
+                <DollarSign size={16} />
+              </div>
               Recent Earnings
             </CardTitle>
           </CardHeader>
           <CardContent>
             {loadingTxns ? (
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Loader2 size={14} className="animate-spin" />
+                <Loader2 size={14} className="animate-spin text-white" />
                 Loading transactions...
               </div>
             ) : transactions.length === 0 ? (
@@ -772,15 +780,15 @@ export function Monetize() {
                         variant="outline"
                         className={`text-[10px] ${
                           txn.status === "completed"
-                            ? "border-green-500/30 text-green-400"
-                            : "border-amber-500/30 text-amber-400"
+                            ? "border-primary/30 text-primary"
+                            : "border-merged-status/30 text-merged-status"
                         }`}
                       >
                         {txn.status}
                       </Badge>
                       <span
                         className={`text-sm font-medium ${
-                          txn.amount_cents < 0 ? "text-red-400" : "text-green-400"
+                          txn.amount_cents < 0 ? "text-destructive-foreground" : "text-primary"
                         }`}
                       >
                         {txn.amount_cents >= 0 ? "+" : ""}
