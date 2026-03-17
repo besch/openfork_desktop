@@ -1,6 +1,20 @@
 import type { LogEntry, DGNClientStatus, Profile, Project, DockerPullProgress, ScheduleConfig, ScheduleStatus } from "./types";
 import type { Session, AuthError } from "@supabase/supabase-js";
 
+interface ProviderRateInfo {
+  custom_rate_cents_per_vram_gb_min: number | null;
+  platform_rate_cents_per_vram_gb_min: number;
+  platform_fee_percent: number;
+  floor_rate: number;
+  ceiling_rate: number;
+  effective_rate: number;
+  effective_rate_hourly_dollars: number;
+  market_avg_rate: number | null;
+  market_avg_rate_hourly_dollars: number | null;
+  display_vram_gb: number;
+  error?: string;
+}
+
 interface DockerImage {
   id: string;
   repository: string;
@@ -135,6 +149,19 @@ declare global {
       getSchedulePresets: () => Promise<Record<string, Partial<ScheduleConfig>>>;
       getSystemIdleTime: () => Promise<number>;
       onScheduleStatus: (callback: (status: ScheduleStatus) => void) => void;
+
+      // Monetize / Stripe
+      openStripeOnboard: () => Promise<{ success?: boolean; error?: string }>;
+      openStripeDashboard: () => Promise<{ success?: boolean; error?: string }>;
+      startMonetizeCleanup: () => void;
+      stopMonetizeCleanup: () => void;
+      setMonetizeIdleTimeout: (minutes: number) => Promise<{ success: boolean }>;
+      getMonetizeConfig: () => Promise<{ idleTimeoutMinutes: number; enabled: boolean }>;
+      onMonetizeCleanupEvent: (callback: (evt: { service_type: string; image: string; reason: string; timestamp: string }) => void) => () => void;
+
+      // Provider custom pricing
+      getProviderRate: () => Promise<ProviderRateInfo>;
+      setProviderRate: (rate: number | null) => Promise<ProviderRateInfo>;
     };
   }
 }

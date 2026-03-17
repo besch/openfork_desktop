@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import type { ProviderRateInfo } from "@/types";
 import {
   DollarSign,
   Building2,
@@ -14,6 +16,10 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Gauge,
+  TrendingDown,
+  TrendingUp,
+  Minus,
 } from "lucide-react";
 import { supabase } from "@/supabase";
 
@@ -33,6 +39,16 @@ interface CleanupEvent {
   timestamp: string;
 }
 
+// Reference VRAM for $/hr display (must match backend DISPLAY_VRAM_GB)
+const DISPLAY_VRAM_GB = 8;
+
+// Typical job specs for earnings estimator
+const ESTIMATOR_JOBS = [
+  { label: "WAN 2.2 job (8 GB, ~3 min)", vramGb: 8, durationMin: 3 },
+  { label: "LTX-2 job (16 GB, ~5 min)", vramGb: 16, durationMin: 5 },
+  { label: "Hunyuan job (16 GB, ~8 min)", vramGb: 16, durationMin: 8 },
+];
+
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
@@ -43,6 +59,25 @@ function formatDate(iso: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+/** Convert internal rate to $/hr display using reference VRAM */
+function rateToHourly(centsPerVramGbMin: number): number {
+  return (centsPerVramGbMin * DISPLAY_VRAM_GB * 60) / 100;
+}
+
+/** Convert $/hr display back to internal rate using reference VRAM */
+function hourlyToRate(dollarsPerHr: number): number {
+  return (dollarsPerHr * 100) / (DISPLAY_VRAM_GB * 60);
+}
+
+/** Estimated provider payout for a job (before platform fee is already baked into provider_rate) */
+function estimateJobEarnings(
+  rateCentsPerVramGbMin: number,
+  vramGb: number,
+  durationMin: number,
+): number {
+  return Math.ceil(vramGb * durationMin * rateCentsPerVramGbMin);
 }
 
 export function Monetize() {
@@ -57,11 +92,20 @@ export function Monetize() {
   const [cleanupEnabled, setCleanupEnabled] = useState(false);
   const [cleanupLog, setCleanupLog] = useState<CleanupEvent[]>([]);
 
-  // Fetch wallet + transactions on mount
+  // Provider pricing state
+  const [rateInfo, setRateInfo] = useState<ProviderRateInfo | null>(null);
+  const [rateLoading, setRateLoading] = useState(false);
+  const [rateInput, setRateInput] = useState<string>("");
+  const [rateSaving, setRateSaving] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
+  const [rateSaved, setRateSaved] = useState(false);
+
+  // Fetch wallet + transactions + rate on mount
   useEffect(() => {
     fetchMonetizeWallet();
     loadTransactions();
     loadMonetizeConfig();
+    loadProviderRate();
   }, []);
 
   // Listen for cleanup events from main process
@@ -71,6 +115,18 @@ export function Monetize() {
     });
     return cleanup;
   }, []);
+
+  async function loadProviderRate() {
+    setRateLoading(true);
+    try {
+      const result = await window.electronAPI.getProviderRate();
+      if (!result.error) {
+        setRateInfo(result);
+        setRateInput(rateToHourly(result.effective_rate).toFixed(3));
+      }
+    } catch {}
+    setRateLoading(false);
+  }
 
   async function loadMonetizeConfig() {
     try {
@@ -172,8 +228,92 @@ export function Monetize() {
     }
   }, []);
 
+  const handleSetPreset = useCallback(
+    (multiplier: number) => {
+      if (!rateInfo) return;
+      const newRate = rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
+      setRateInput(rateToHourly(newRate).toFixed(3));
+      setRateError(null);
+    },
+    [rateInfo],
+  );
+
+  const handleSaveRate = useCallback(async () => {
+    if (!rateInfo) return;
+    const dollars = parseFloat(rateInput);
+    if (isNaN(dollars) || dollars < 0) {
+      setRateError("Enter a valid rate.");
+      return;
+    }
+    const centsPerVramGbMin = hourlyToRate(dollars);
+    if (centsPerVramGbMin < rateInfo.floor_rate) {
+      setRateError(
+        `Minimum rate is $${rateToHourly(rateInfo.floor_rate).toFixed(3)}/hr (50% of platform rate).`,
+      );
+      return;
+    }
+    if (centsPerVramGbMin > rateInfo.ceiling_rate) {
+      setRateError(
+        `Maximum rate is $${rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr (300% of platform rate).`,
+      );
+      return;
+    }
+    setRateSaving(true);
+    setRateError(null);
+    try {
+      const result =
+        await window.electronAPI.setProviderRate(centsPerVramGbMin);
+      if (result.error) {
+        setRateError(result.error);
+      } else {
+        setRateInfo(result);
+        setRateSaved(true);
+        setTimeout(() => setRateSaved(false), 3000);
+      }
+    } catch {
+      setRateError("Network error. Please try again.");
+    } finally {
+      setRateSaving(false);
+    }
+  }, [rateInfo, rateInput]);
+
+  const handleResetRate = useCallback(async () => {
+    if (!rateInfo) return;
+    setRateSaving(true);
+    setRateError(null);
+    try {
+      const result = await window.electronAPI.setProviderRate(null);
+      if (result.error) {
+        setRateError(result.error);
+      } else {
+        setRateInfo(result);
+        setRateInput(rateToHourly(result.effective_rate).toFixed(3));
+        setRateSaved(true);
+        setTimeout(() => setRateSaved(false), 3000);
+      }
+    } catch {
+      setRateError("Network error. Please try again.");
+    } finally {
+      setRateSaving(false);
+    }
+  }, [rateInfo]);
+
   const wallet = monetizeWallet;
   const availableAmount = wallet?.available_to_withdraw_cents ?? 0;
+
+  // Market position relative to average
+  const marketPosition = (() => {
+    if (!rateInfo || !rateInfo.market_avg_rate) return null;
+    const ratio = rateInfo.effective_rate / rateInfo.market_avg_rate;
+    if (ratio <= 1.0) return "competitive";
+    if (ratio <= 1.25) return "above";
+    return "premium";
+  })();
+
+  const currentInputRate = (() => {
+    const d = parseFloat(rateInput);
+    return isNaN(d) ? null : hourlyToRate(d);
+  })();
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -185,6 +325,213 @@ export function Monetize() {
           processing paid jobs. Docker images will auto-cleanup when idle.
         </span>
       </div>
+
+      {/* GPU Pricing */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Gauge size={16} />
+            GPU Pricing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {rateLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2 size={14} className="animate-spin" />
+              Loading rate info…
+            </div>
+          ) : rateInfo ? (
+            <>
+              {/* Rate input row */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      min={rateToHourly(rateInfo.floor_rate).toFixed(3)}
+                      max={rateToHourly(rateInfo.ceiling_rate).toFixed(3)}
+                      value={rateInput}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        setRateInput(e.target.value);
+                        setRateError(null);
+                      }}
+                      className="pl-7 pr-12 font-mono"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
+                      /hr
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveRate}
+                    disabled={rateSaving}
+                    className="shrink-0"
+                  >
+                    {rateSaving ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      "Set Rate"
+                    )}
+                  </Button>
+                  {rateInfo.custom_rate_cents_per_vram_gb_min !== null && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleResetRate}
+                      disabled={rateSaving}
+                      className="shrink-0 text-xs"
+                    >
+                      Reset
+                    </Button>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Based on {DISPLAY_VRAM_GB} GB GPU reference. Platform range:{" "}
+                  <span className="text-foreground/70">
+                    ${rateToHourly(rateInfo.floor_rate).toFixed(3)} – $
+                    {rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr
+                  </span>
+                </p>
+              </div>
+
+              {/* Preset buttons */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "Min (50%)", multiplier: 0.5 },
+                  { label: "Standard", multiplier: 1.0 },
+                  { label: "+25%", multiplier: 1.25 },
+                  { label: "+50%", multiplier: 1.5 },
+                ].map(({ label, multiplier }) => {
+                  const presetRate =
+                    rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
+                  const isActive =
+                    currentInputRate !== null &&
+                    Math.abs(currentInputRate - presetRate) < 0.0001;
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => handleSetPreset(multiplier)}
+                      className={`text-xs px-3 py-1 rounded-md border transition-colors ${
+                        isActive
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                      <span className="ml-1 opacity-60">
+                        ${rateToHourly(presetRate).toFixed(3)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Error / success feedback */}
+              {rateError && (
+                <div className="flex items-center gap-2 text-red-400 text-sm">
+                  <AlertCircle size={13} />
+                  {rateError}
+                </div>
+              )}
+              {rateSaved && (
+                <div className="flex items-center gap-2 text-green-400 text-sm">
+                  <CheckCircle2 size={13} />
+                  Rate saved successfully.
+                </div>
+              )}
+
+              {/* Earnings estimator */}
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">
+                  Earnings estimator
+                </p>
+                <div className="rounded-md border border-border/40 divide-y divide-border/30">
+                  {ESTIMATOR_JOBS.map((job) => {
+                    const displayRate =
+                      currentInputRate ?? rateInfo.effective_rate;
+                    const earnings = estimateJobEarnings(
+                      displayRate,
+                      job.vramGb,
+                      job.durationMin,
+                    );
+                    return (
+                      <div
+                        key={job.label}
+                        className="flex items-center justify-between px-3 py-1.5 text-xs"
+                      >
+                        <span className="text-muted-foreground">
+                          {job.label}
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          ~{formatCents(earnings)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Market position */}
+              {rateInfo.market_avg_rate !== null && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Market position</span>
+                  <div className="flex items-center gap-1.5">
+                    {marketPosition === "competitive" && (
+                      <>
+                        <TrendingDown size={12} className="text-green-400" />
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-green-500/30 text-green-400"
+                        >
+                          Competitive — more jobs likely
+                        </Badge>
+                      </>
+                    )}
+                    {marketPosition === "above" && (
+                      <>
+                        <Minus size={12} className="text-amber-400" />
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-amber-500/30 text-amber-400"
+                        >
+                          Above average — slightly fewer jobs
+                        </Badge>
+                      </>
+                    )}
+                    {marketPosition === "premium" && (
+                      <>
+                        <TrendingUp size={12} className="text-orange-400" />
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-orange-500/30 text-orange-400"
+                        >
+                          Premium — significantly fewer jobs
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {rateInfo.custom_rate_cents_per_vram_gb_min === null && (
+                <p className="text-[10px] text-muted-foreground">
+                  Using platform default rate. Set a custom rate above to
+                  override.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Rate info unavailable — connect to the network to configure
+              pricing.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Wallet Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -330,11 +677,16 @@ export function Monetize() {
               <>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Available balance</span>
-                    <span className="font-semibold text-green-400">{formatCents(availableAmount)}</span>
+                    <span className="text-muted-foreground">
+                      Available balance
+                    </span>
+                    <span className="font-semibold text-green-400">
+                      {formatCents(availableAmount)}
+                    </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Platform fee (15%) is already deducted from your earnings at job completion.
+                    Platform fee (15%) is already deducted from your earnings at
+                    job completion.
                   </p>
                 </div>
                 {withdrawError && (

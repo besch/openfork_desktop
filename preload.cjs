@@ -142,5 +142,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setMonetizeIdleTimeout: (minutes) => ipcRenderer.invoke("monetize:set-idle-timeout", minutes),
   getMonetizeConfig: () => ipcRenderer.invoke("monetize:get-config"),
   onMonetizeCleanupEvent: (callback) => createListener("monetize:cleanup-event", callback),
+
+  // Provider custom pricing
+  getProviderRate: () => ipcRenderer.invoke("monetize:get-provider-rate"),
+  setProviderRate: (rate) => ipcRenderer.invoke("monetize:set-provider-rate", rate),
 });
 

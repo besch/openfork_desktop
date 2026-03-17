@@ -518,6 +518,50 @@ ipcMain.handle("monetize:get-config", () => {
   };
 });
 
+ipcMain.handle("monetize:get-provider-rate", async () => {
+  if (!session) return { error: "Not authenticated" };
+  return new Promise((resolve) => {
+    const request = net.request({
+      method: "GET",
+      url: `${ORCHESTRATOR_API_URL}/api/dgn/provider/rate`,
+    });
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+    let body = "";
+    request.on("response", (response) => {
+      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("end", () => {
+        try { resolve(JSON.parse(body)); }
+        catch { resolve({ error: "Failed to parse response" }); }
+      });
+    });
+    request.on("error", (err) => resolve({ error: err.message }));
+    request.end();
+  });
+});
+
+ipcMain.handle("monetize:set-provider-rate", async (event, rateCentsPerVramGbMin) => {
+  if (!session) return { error: "Not authenticated" };
+  return new Promise((resolve) => {
+    const request = net.request({
+      method: "PUT",
+      url: `${ORCHESTRATOR_API_URL}/api/dgn/provider/rate`,
+    });
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+    request.setHeader("Content-Type", "application/json");
+    let body = "";
+    request.on("response", (response) => {
+      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("end", () => {
+        try { resolve(JSON.parse(body)); }
+        catch { resolve({ error: "Failed to parse response" }); }
+      });
+    });
+    request.on("error", (err) => resolve({ error: err.message }));
+    request.write(JSON.stringify({ rate_cents_per_vram_gb_min: rateCentsPerVramGbMin }));
+    request.end();
+  });
+});
+
 ipcMain.handle("monetize:open-stripe-onboard", async () => {
   try {
     const data = await makeAuthenticatedPostRequest(

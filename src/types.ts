@@ -144,3 +144,16 @@ export interface ScheduleStatus {
   schedules?: ScheduleSlot[];
 }
 
+export interface ProviderRateInfo {
+  custom_rate_cents_per_vram_gb_min: number | null;
+  platform_rate_cents_per_vram_gb_min: number;
+  platform_fee_percent: number;
+  floor_rate: number;
+  ceiling_rate: number;
+  effective_rate: number;
+  effective_rate_hourly_dollars: number;
+  market_avg_rate: number | null;
+  market_avg_rate_hourly_dollars: number | null;
+  display_vram_gb: number;
+  error?: string;
+}
