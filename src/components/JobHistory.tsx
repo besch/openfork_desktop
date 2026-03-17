@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useCallback, useMemo } from "react";
+import { useState, useEffect, memo, useCallback, useMemo, useRef } from "react";
 import { useClientStore } from "@/store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -181,66 +181,122 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
 
 export const JobHistory = memo(() => {
   const [jobs, setJobs] = useState<ProcessedJob[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 20;
+
+  // Refs to avoid stale closure or infinite loops in useCallback
+  const pageRef = useRef(0);
+  const hasMoreRef = useRef(true);
+  const loadingRef = useRef(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
   const session = useClientStore((state) => state.session);
 
-  const fetchJobHistory = useCallback(async () => {
-    if (!session?.user?.id) {
-      setJobs([]);
-      setLoading(false);
-      return;
-    }
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      // 1. Get user's provider IDs
-      const { data: providerData, error: providerError } = await supabase
-        .from("dgn_providers")
-        .select("id")
-        .eq("user_id", session.user.id);
-
-      if (providerError) throw providerError;
-
-      const providerIds = providerData?.map((p) => p.id) || [];
-
-      if (providerIds.length === 0) {
+  const fetchJobHistory = useCallback(
+    async (isInitial = false) => {
+      if (!session?.user?.id) {
         setJobs([]);
         setLoading(false);
         return;
       }
 
-      // 2. Fetch jobs
-      const query = supabase
-        .from("dgn_jobs")
-        .select(
-          `
-          id,
-          workflow_type,
-          service_type,
-          status,
-          prompt,
-          created_at,
-          updated_at,
-          generation_started_at,
-          generation_completed_at,
-          duration_seconds,
-          user_id
-        `,
-        )
-        .in("provider_id", providerIds)
-        .order("updated_at", { ascending: false })
-        .limit(100);
+      const targetPage = isInitial ? 0 : pageRef.current;
+      if (!isInitial && (!hasMoreRef.current || loadingRef.current)) return;
 
-      const { data, error: fetchError } = await query;
+      setLoading(true);
+      loadingRef.current = true;
+      setError(null);
+
+      try {
+        // 1. Get user's provider IDs
+        const { data: providerData, error: providerError } = await supabase
+          .from("dgn_providers")
+          .select("id")
+          .eq("user_id", session.user.id);
+
+        if (providerError) throw providerError;
+
+        const providerIds = providerData?.map((p) => p.id) || [];
+
+        if (providerIds.length === 0) {
+          setJobs([]);
+          setLoading(false);
+          loadingRef.current = false;
+          setHasMore(false);
+          hasMoreRef.current = false;
+          return;
+        }
+
+        // 2. Fetch jobs with server-side filters and pagination
+        let query = supabase
+          .from("dgn_jobs")
+          .select(
+            `
+            id,
+            workflow_type,
+            service_type,
+            status,
+            prompt,
+            created_at,
+            updated_at,
+            generation_started_at,
+            generation_completed_at,
+            duration_seconds,
+            user_id
+          `,
+          )
+          .in("provider_id", providerIds);
+
+        if (statusFilter !== "all") {
+          query = query.eq("status", statusFilter);
+        }
+
+        if (typeFilter !== "all") {
+          query = query.ilike("workflow_type", `%${typeFilter}%`);
+        }
+
+        if (debouncedSearchQuery) {
+          // Fetch matching user IDs for username search
+          const { data: matchedProfiles } = await supabase
+            .from("profiles")
+            .select("id")
+            .ilike("username", `%${debouncedSearchQuery}%`);
+
+          const orConditions = [
+            `prompt.ilike.%${debouncedSearchQuery}%`,
+            `workflow_type.ilike.%${debouncedSearchQuery}%`,
+          ];
+
+          if (matchedProfiles && matchedProfiles.length > 0) {
+            const matchedUserIds = matchedProfiles.map((p) => p.id);
+            orConditions.push(`user_id.in.(${matchedUserIds.join(",")})`);
+          }
+          query = query.or(orConditions.join(","));
+        }
+
+        const from = targetPage * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        query = query
+          .order("updated_at", { ascending: false })
+          .range(from, to);
+
+        const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
 
@@ -280,7 +336,20 @@ export const JobHistory = memo(() => {
         user: job.user_id ? profileMap[job.user_id] || null : null,
       }));
 
-      setJobs(mergedJobs);
+      if (isInitial) {
+        setJobs(mergedJobs);
+        pageRef.current = 1;
+      } else {
+        setJobs((prev) => {
+          const existingIds = new Set(prev.map((j) => j.id));
+          const newJobs = mergedJobs.filter((j) => !existingIds.has(j.id));
+          return [...prev, ...newJobs];
+        });
+        pageRef.current = pageRef.current + 1;
+      }
+      const hasMoreData = mergedJobs.length === PAGE_SIZE;
+      setHasMore(hasMoreData);
+      hasMoreRef.current = hasMoreData;
     } catch (err) {
       console.error("Error fetching job history:", err);
       setError(
@@ -288,12 +357,30 @@ export const JobHistory = memo(() => {
       );
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, statusFilter, typeFilter, debouncedSearchQuery]);
 
+  // Initial load or when filters change
   useEffect(() => {
-    fetchJobHistory();
-  }, [fetchJobHistory]);
+    fetchJobHistory(true);
+  }, [session?.user?.id, statusFilter, typeFilter, debouncedSearchQuery]);
+
+  // Intersection observer for infinite scroll
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastJobElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (loading) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          fetchJobHistory();
+        }
+      });
+      if (node) observer.current.observe(node);
+    },
+    [loading, hasMore, fetchJobHistory],
+  );
 
   // Real-time updates
   useEffect(() => {
@@ -309,7 +396,8 @@ export const JobHistory = memo(() => {
           table: "dgn_jobs",
         },
         () => {
-          fetchJobHistory();
+          // On real-time update, we refresh to catch new entries at the top
+          fetchJobHistory(true);
         },
       )
       .subscribe();
@@ -319,27 +407,7 @@ export const JobHistory = memo(() => {
     };
   }, [session?.user?.id, fetchJobHistory]);
 
-  const filteredJobs = useMemo(() => {
-    return jobs.filter((job) => {
-      const matchStatus = statusFilter === "all" || job.status === statusFilter;
-      const matchType =
-        typeFilter === "all" ||
-        (job.workflow_type || "")
-          .toLowerCase()
-          .includes(typeFilter.toLowerCase());
-      const matchSearch =
-        !searchQuery ||
-        (job.prompt || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (job.workflow_type || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (job.user?.username || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
-
-      return matchStatus && matchType && matchSearch;
-    });
-  }, [jobs, statusFilter, typeFilter, searchQuery]);
+  const filteredJobs = jobs; // Results are already filtered by the server
 
   const stats = useMemo(() => {
     return {
@@ -417,12 +485,12 @@ export const JobHistory = memo(() => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={fetchJobHistory}
+          onClick={() => fetchJobHistory(true)}
           disabled={loading}
           className="ml-2 hover:bg-primary/10 hover:text-primary transition-all rounded-full"
         >
           <RefreshCw
-            className={`h-4 w-4 mr-2 text-white ${loading ? "animate-spin" : ""}`}
+            className={`h-4 w-4 mr-2 text-white ${loading && jobs.length === 0 ? "animate-spin" : ""}`}
           />
           Refresh
         </Button>
@@ -524,7 +592,7 @@ export const JobHistory = memo(() => {
                 <Button
                   variant="link"
                   size="sm"
-                  onClick={fetchJobHistory}
+                  onClick={() => fetchJobHistory(true)}
                   className="h-auto p-0 mt-2 text-destructive-foreground hover:text-destructive-foreground/80 font-bold"
                 >
                   Try reconnecting now
@@ -566,13 +634,28 @@ export const JobHistory = memo(() => {
             </div>
           ) : (
             <div className="grid gap-3">
-              {filteredJobs.map((job) => (
-                <JobRow key={job.id} job={job} />
-              ))}
+              {filteredJobs.map((job, index) => {
+                if (filteredJobs.length === index + 1) {
+                  return (
+                    <div ref={lastJobElementRef} key={job.id}>
+                      <JobRow job={job} />
+                    </div>
+                  );
+                }
+                return <JobRow key={job.id} job={job} />;
+              })}
+
+              {loading && jobs.length > 0 && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-white/50" />
+                </div>
+              )}
 
               <div className="mt-8 text-center">
                 <p className="text-[10px] font-bold text-muted-foreground/30 uppercase tracking-[0.2em]">
-                  Displaying last {filteredJobs.length} active records
+                  {hasMore
+                    ? `Loading more... (${jobs.length} loaded)`
+                    : `Displaying all ${jobs.length} records`}
                 </p>
               </div>
             </div>

@@ -109,7 +109,7 @@ export const ProjectSelection: React.FC<ProjectSelectionProps> = ({
             ))}
           </AnimatePresence>
         </div>
-        <Command className="bg-transparent">
+        <Command className="bg-transparent" shouldFilter={false}>
           <CommandInput
             placeholder="Search for projects to allow..."
             value={searchTerm}

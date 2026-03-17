@@ -102,7 +102,7 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
             ))}
           </AnimatePresence>
         </div>
-        <Command className="bg-transparent">
+        <Command className="bg-transparent" shouldFilter={false}>
           <CommandInput
             placeholder="Search for users to allow..."
             value={searchTerm}
