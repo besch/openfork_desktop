@@ -10,7 +10,15 @@ import { ProjectSelection } from "./ProjectSelection";
 import { UserSelection } from "./UserSelection";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
-import { Globe, Lock, Layout, Users, DollarSign, Clock, Zap } from "lucide-react";
+import {
+  Globe,
+  Lock,
+  Layout,
+  Users,
+  DollarSign,
+  Clock,
+  Zap,
+} from "lucide-react";
 import type { Project, Profile, JobPolicy } from "@/types";
 
 interface JobPolicySettingsProps {
@@ -58,10 +66,13 @@ export function JobPolicySettings({
         let mode: ScheduleMode = "manual";
         let startTime = "22:00";
         let endTime = "08:00";
-        
+
         if (savedConfig.mode === "scheduled") {
           const schedule = savedConfig.schedules?.[0];
-          if (schedule?.startTime === "00:00" && schedule?.endTime === "23:59") {
+          if (
+            schedule?.startTime === "00:00" &&
+            schedule?.endTime === "23:59"
+          ) {
             mode = "always";
           } else if (schedule) {
             mode = "scheduled";
@@ -69,7 +80,7 @@ export function JobPolicySettings({
             endTime = schedule.endTime || "08:00";
           }
         }
-        
+
         setConfig({ mode, startTime, endTime });
       }
     };
@@ -78,23 +89,31 @@ export function JobPolicySettings({
 
   const saveConfig = useCallback(async (newConfig: ScheduleConfig) => {
     setConfig(newConfig);
-    
+
     let fullConfig;
     switch (newConfig.mode) {
       case "always":
         fullConfig = {
           mode: "scheduled" as const,
-          schedules: [{ startTime: "00:00", endTime: "23:59", days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] }],
+          schedules: [
+            {
+              startTime: "00:00",
+              endTime: "23:59",
+              days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+            },
+          ],
         };
         break;
       case "scheduled":
         fullConfig = {
           mode: "scheduled" as const,
-          schedules: [{ 
-            startTime: newConfig.startTime || "22:00", 
-            endTime: newConfig.endTime || "08:00", 
-            days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] 
-          }],
+          schedules: [
+            {
+              startTime: newConfig.startTime || "22:00",
+              endTime: newConfig.endTime || "08:00",
+              days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+            },
+          ],
         };
         break;
       default:
@@ -103,11 +122,14 @@ export function JobPolicySettings({
           schedules: [],
         };
     }
-    
+
     await window.electronAPI.setScheduleConfig(fullConfig);
   }, []);
 
-  const policyInfo: Record<JobPolicy, { title: string; description: string; icon: any }> = {
+  const policyInfo: Record<
+    JobPolicy,
+    { title: string; description: string; icon: any }
+  > = {
     all: {
       title: "Global",
       description: "Share your GPU and use any GPU on the network",
@@ -130,7 +152,7 @@ export function JobPolicySettings({
     },
     monetize: {
       title: "Monetize",
-      description: "Earn real money — paid jobs only",
+      description: "Earn real money — paid by processed jobs",
       icon: DollarSign,
     },
   };
@@ -150,7 +172,7 @@ export function JobPolicySettings({
                 Who can run jobs on your machine
               </p>
             </div>
-            
+
             <Select
               value={jobPolicy}
               onValueChange={(value) => onJobPolicyChange(value as JobPolicy)}
@@ -160,11 +182,21 @@ export function JobPolicySettings({
                 <SelectValue placeholder="Policy" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-xs">All Public</SelectItem>
-                <SelectItem value="mine" className="text-xs">Only Mine</SelectItem>
-                <SelectItem value="project" className="text-xs">By Project</SelectItem>
-                <SelectItem value="users" className="text-xs">By User</SelectItem>
-                <SelectItem value="monetize" className="text-xs">Monetize</SelectItem>
+                <SelectItem value="all" className="text-xs">
+                  All Public
+                </SelectItem>
+                <SelectItem value="mine" className="text-xs">
+                  Only Mine
+                </SelectItem>
+                <SelectItem value="project" className="text-xs">
+                  By Project
+                </SelectItem>
+                <SelectItem value="users" className="text-xs">
+                  By User
+                </SelectItem>
+                <SelectItem value="monetize" className="text-xs">
+                  Monetize
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -178,7 +210,14 @@ export function JobPolicySettings({
               transition={{ duration: 0.15 }}
               className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border w-full ${jobPolicy === "monetize" ? "bg-amber-500/10 border-amber-500/20 text-amber-500" : "bg-muted/30 border-border/40 text-foreground/80"}`}
             >
-              <Icon size={12} className={jobPolicy === "monetize" ? "text-amber-500" : "text-muted-foreground"} />
+              <Icon
+                size={12}
+                className={
+                  jobPolicy === "monetize"
+                    ? "text-amber-500"
+                    : "text-muted-foreground"
+                }
+              />
               <span className="text-[10.5px] font-medium leading-none">
                 {currentInfo.description}
               </span>
@@ -195,10 +234,12 @@ export function JobPolicySettings({
                 When the engine starts automatically
               </p>
             </div>
-            
+
             <Select
               value={config.mode}
-              onValueChange={(value: ScheduleMode) => saveConfig({ ...config, mode: value })}
+              onValueChange={(value: ScheduleMode) =>
+                saveConfig({ ...config, mode: value })
+              }
               disabled={disabled}
             >
               <SelectTrigger className="w-32 h-8 text-xs">
@@ -240,7 +281,13 @@ export function JobPolicySettings({
                   </SelectTrigger>
                   <SelectContent>
                     {HOURS.map((h) => (
-                      <SelectItem key={h.value} value={h.value} className="text-[10px]">{h.label}</SelectItem>
+                      <SelectItem
+                        key={h.value}
+                        value={h.value}
+                        className="text-[10px]"
+                      >
+                        {h.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -254,7 +301,13 @@ export function JobPolicySettings({
                   </SelectTrigger>
                   <SelectContent>
                     {HOURS.map((h) => (
-                      <SelectItem key={h.value} value={h.value} className="text-[10px]">{h.label}</SelectItem>
+                      <SelectItem
+                        key={h.value}
+                        value={h.value}
+                        className="text-[10px]"
+                      >
+                        {h.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -263,7 +316,9 @@ export function JobPolicySettings({
               <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border/40 bg-muted/30 w-full">
                 <Clock size={12} className="text-muted-foreground" />
                 <span className="text-[10.5px] font-medium text-foreground/60">
-                  {config.mode === "manual" ? "Control manually" : "Run whenever app is open"}
+                  {config.mode === "manual"
+                    ? "Control manually"
+                    : "Run whenever app is open"}
                 </span>
               </div>
             )}
@@ -273,7 +328,7 @@ export function JobPolicySettings({
 
       <AnimatePresence>
         {jobPolicy === "project" && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -288,7 +343,7 @@ export function JobPolicySettings({
         )}
 
         {jobPolicy === "users" && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -304,4 +359,4 @@ export function JobPolicySettings({
       </AnimatePresence>
     </div>
   );
-}
+}

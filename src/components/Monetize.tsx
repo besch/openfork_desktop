@@ -42,11 +42,11 @@ interface CleanupEvent {
 // Reference VRAM for $/hr display (must match backend DISPLAY_VRAM_GB)
 const DISPLAY_VRAM_GB = 8;
 
-// Typical job specs for earnings estimator
+// Realistic job specs for earnings estimator (VRAM × duration drives payout)
 const ESTIMATOR_JOBS = [
-  { label: "WAN 2.2 job (8 GB, ~3 min)", vramGb: 8, durationMin: 3 },
-  { label: "LTX-2 job (16 GB, ~5 min)", vramGb: 16, durationMin: 5 },
-  { label: "Hunyuan job (16 GB, ~8 min)", vramGb: 16, durationMin: 8 },
+  { label: "WAN 2.2  (8 GB · ~7 min)", vramGb: 8, durationMin: 7, jobsPerHour: 7 },
+  { label: "LTX-2 24 GB GGUF  (24 GB · ~12 min)", vramGb: 24, durationMin: 12, jobsPerHour: 4 },
+  { label: "Hunyuan 1.5 24 GB  (24 GB · ~18 min)", vramGb: 24, durationMin: 18, jobsPerHour: 3 },
 ];
 
 function formatCents(cents: number): string {
@@ -437,18 +437,24 @@ export function Monetize() {
 
               {/* Earnings estimator */}
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground font-medium">
-                  Earnings estimator
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Per-job earnings
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Idle = $0 &mdash; paid per completed job only
+                  </p>
+                </div>
                 <div className="rounded-md border border-border/40 divide-y divide-border/30">
                   {ESTIMATOR_JOBS.map((job) => {
                     const displayRate =
                       currentInputRate ?? rateInfo.effective_rate;
-                    const earnings = estimateJobEarnings(
+                    const perJob = estimateJobEarnings(
                       displayRate,
                       job.vramGb,
                       job.durationMin,
                     );
+                    const perHour = Math.ceil(perJob * job.jobsPerHour);
                     return (
                       <div
                         key={job.label}
@@ -457,9 +463,14 @@ export function Monetize() {
                         <span className="text-muted-foreground">
                           {job.label}
                         </span>
-                        <span className="font-medium tabular-nums">
-                          ~{formatCents(earnings)}
-                        </span>
+                        <div className="flex items-center gap-2 tabular-nums">
+                          <span className="font-medium">
+                            ~{formatCents(perJob)}
+                          </span>
+                          <span className="text-muted-foreground/60">
+                            ≈ {formatCents(perHour)}/hr if busy
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
