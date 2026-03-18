@@ -297,7 +297,7 @@ function App() {
             onValueChange={setActiveTab}
             className="relative z-10"
           >
-            <TabsList className="mb-6 bg-surface/40 backdrop-blur-xl border border-white/20 p-1 rounded-lg h-11 overflow-x-auto no-scrollbar justify-start shadow-lg">
+            <TabsList className="bg-surface/40 backdrop-blur-xl border border-white/20 p-1 rounded-lg h-11 overflow-x-auto no-scrollbar justify-start shadow-lg">
               <TabTrigger
                 value="dashboard"
                 icon={LayoutDashboard}
@@ -310,7 +310,7 @@ function App() {
               <TabTrigger value="logs" icon={Terminal} label="Logs" />
             </TabsList>
 
-            <div className="mt-8 transition-all duration-500">
+            <div className="mt-6 transition-all duration-500">
               <TabsContent
                 value="dashboard"
                 className="mt-0 focus-visible:outline-none"

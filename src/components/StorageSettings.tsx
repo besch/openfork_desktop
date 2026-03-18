@@ -121,7 +121,7 @@ export function StorageSettings() {
               <div className="text-[9px] text-white/80 bg-white/5 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/5">
                 Active: {diskInfo.path}
               </div>
-              <div className="text-[10px] font-black tracking-tighter text-primary">
+              <div className="text-[10px] font-black tracking-tighter text-white">
                 {diskInfo.free_gb} GB FREE / {diskInfo.total_gb} GB TOTAL
               </div>
             </div>
@@ -133,7 +133,7 @@ export function StorageSettings() {
           <div className="space-y-2">
             <div className="space-y-0.5">
               <Label className="text-xs font-bold flex items-center gap-1.5">
-                <RefreshCw className="h-3 w-3 text-primary" />
+                <RefreshCw className="h-3 w-3 text-white" />
                 Space Reclamation
               </Label>
               <p className="text-[10px] text-muted-foreground leading-relaxed">
@@ -160,7 +160,7 @@ export function StorageSettings() {
           <div className="space-y-2 md:border-l md:pl-4 border-white/5">
             <div className="space-y-0.5">
               <Label className="text-xs font-bold flex items-center gap-1.5">
-                <ArrowRightLeft className="h-3 w-3 text-primary" />
+                <ArrowRightLeft className="h-3 w-3 text-white" />
                 Relocate Engine
               </Label>
               <p className="text-[10px] text-muted-foreground leading-relaxed">

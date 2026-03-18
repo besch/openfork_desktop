@@ -605,7 +605,7 @@ export const DockerManagement = memo(() => {
             <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
               <HardDrive className="h-5 w-5" />
             </div>
-            <span>Docker Images ({images.length})</span>
+            <span>Downloaded Docker Images ({images.length})</span>
           </CardTitle>
           {images.length > 0 && (
             <Button
