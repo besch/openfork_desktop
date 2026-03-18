@@ -62,7 +62,7 @@ const TabTrigger = memo(
     return (
       <TabsTrigger
         value={value}
-        className="relative h-9 px-4 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5"
+        className="relative h-9 px-4 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5 cursor-pointer"
       >
         {isDownloading ? (
           <Download className="mr-2 animate-bounce text-inherit" size={14} />

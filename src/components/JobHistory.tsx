@@ -19,6 +19,13 @@ import {
 } from "lucide-react";
 import { supabase } from "@/supabase";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ProcessedJob {
   id: string;
@@ -420,7 +427,7 @@ export const JobHistory = memo(() => {
   }, [jobs]);
 
   const workflowTypes = useMemo(() => {
-    const types = new Set<string>();
+    const types = new Set<string>(["Image", "Video", "Audio", "Text"]);
     jobs.forEach((j) => {
       if (j.workflow_type) {
         if (j.workflow_type.includes("video")) types.add("Video");
@@ -458,15 +465,17 @@ export const JobHistory = memo(() => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="primary">{stats.completed} Completed</Badge>
-        <Badge variant="secondary">{stats.failed} Failed</Badge>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="primary">{stats.completed} Completed</Badge>
+          <Badge variant="secondary">{stats.failed} Failed</Badge>
+        </div>
         <Button
           variant="primary"
           size="sm"
           onClick={() => fetchJobHistory(true)}
           disabled={loading}
-          className="ml-2 rounded-lg"
+          className="rounded-lg"
         >
           <RefreshCw
             className={`h-4 w-4 mr-2 ${loading && jobs.length === 0 ? "animate-spin" : ""}`}
@@ -479,8 +488,8 @@ export const JobHistory = memo(() => {
       <Card className="bg-card/40 backdrop-blur-xl border-white/20 shadow-2xl overflow-hidden group">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         <CardContent className="p-4 space-y-4">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="relative flex-1 group/search">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="relative flex-1 min-w-[200px] group/search">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 group-focus-within/search:text-white transition-colors" />
               <input
                 placeholder="Search by prompt, workflow or username..."
@@ -500,56 +509,67 @@ export const JobHistory = memo(() => {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1 p-1 bg-muted/20 border border-white/5 rounded-lg">
-                {[
-                  { id: "all", label: "All" },
-                  { id: "completed", label: "Completed" },
-                  { id: "failed", label: "Failed" },
-                  { id: "cancelled", label: "Cancelled" },
-                  { id: "processing", label: "Active" },
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setStatusFilter(s.id)}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      statusFilter === s.id
-                        ? s.id === "failed" || s.id === "cancelled"
-                          ? "bg-destructive-foreground text-white shadow-lg shadow-destructive-foreground/40"
-                          : "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                    }`}
+            <div className="flex items-center gap-2">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px] bg-muted/20 border-white/5 text-xs font-bold">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent className="bg-surface border-white/10">
+                  <SelectItem
+                    value="all"
+                    className="text-xs font-bold focus:bg-primary/20 focus:text-white"
                   >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+                    All Statuses
+                  </SelectItem>
+                  <SelectItem
+                    value="completed"
+                    className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+                  >
+                    Completed
+                  </SelectItem>
+                  <SelectItem
+                    value="failed"
+                    className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+                  >
+                    Failed
+                  </SelectItem>
+                  <SelectItem
+                    value="cancelled"
+                    className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+                  >
+                    Cancelled
+                  </SelectItem>
+                  <SelectItem
+                    value="processing"
+                    className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+                  >
+                    Active
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 
-              <div className="flex items-center gap-1 p-1 bg-muted/20 border border-white/5 rounded-lg">
-                <button
-                  onClick={() => setTypeFilter("all")}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    typeFilter === "all"
-                      ? "bg-muted-foreground/20 text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                  }`}
-                >
-                  All Types
-                </button>
-                {workflowTypes.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTypeFilter(t)}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      typeFilter === t
-                        ? "bg-muted-foreground/20 text-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                    }`}
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[140px] bg-muted/20 border-white/5 text-xs font-bold">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent className="bg-surface border-white/10">
+                  <SelectItem
+                    value="all"
+                    className="text-xs font-bold focus:bg-primary/20 focus:text-white"
                   >
-                    {t}
-                  </button>
-                ))}
-              </div>
+                    All Types
+                  </SelectItem>
+                  {workflowTypes.map((t) => (
+                    <SelectItem
+                      key={t}
+                      value={t}
+                      className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+                    >
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
