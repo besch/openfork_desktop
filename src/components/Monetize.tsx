@@ -428,7 +428,7 @@ export function Monetize() {
                       onClick={() => handleSetPreset(multiplier)}
                       className={`text-xs px-3 py-1 rounded-md border transition-colors ${
                         isActive
-                          ? "border-primary bg-primary/10 text-primary"
+                          ? "border-primary bg-primary text-white"
                           : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
                       }`}
                     >
