@@ -20,6 +20,7 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
+  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/supabase";
 
@@ -62,6 +63,14 @@ const ESTIMATOR_JOBS = [
     durationMin: 18,
     jobsPerHour: 3,
   },
+];
+
+// Rate preset multipliers for quick rate adjustment
+const RATE_PRESETS = [
+  { label: "Min (50%)", multiplier: 0.5 },
+  { label: "Standard", multiplier: 1.0 },
+  { label: "+25%", multiplier: 1.25 },
+  { label: "+50%", multiplier: 1.5 },
 ];
 
 function formatCents(cents: number): string {
@@ -121,6 +130,12 @@ export function Monetize() {
     loadTransactions();
     loadMonetizeConfig();
     loadProviderRate();
+  }, []);
+
+  // Auto-refresh rate info every 5 minutes to keep market data fresh
+  useEffect(() => {
+    const interval = setInterval(loadProviderRate, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Listen for cleanup events from main process
@@ -243,54 +258,59 @@ export function Monetize() {
     }
   }, []);
 
+  const handleSaveRate = useCallback(
+    async (valueStr?: string) => {
+      if (!rateInfo) return;
+      const dollars = parseFloat(valueStr ?? rateInput);
+      if (isNaN(dollars) || dollars < 0) {
+        setRateError("Enter a valid rate.");
+        return;
+      }
+      const centsPerVramGbMin = hourlyToRate(dollars);
+      if (centsPerVramGbMin < rateInfo.floor_rate) {
+        setRateError(
+          `Minimum rate is $${rateToHourly(rateInfo.floor_rate).toFixed(3)}/hr (50% of platform rate).`,
+        );
+        return;
+      }
+      if (centsPerVramGbMin > rateInfo.ceiling_rate) {
+        setRateError(
+          `Maximum rate is $${rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr (300% of platform rate).`,
+        );
+        return;
+      }
+      setRateSaving(true);
+      setRateError(null);
+      try {
+        const result =
+          await window.electronAPI.setProviderRate(centsPerVramGbMin);
+        if (result.error) {
+          setRateError(result.error);
+        } else {
+          setRateInfo(result);
+          setRateSaved(true);
+          setTimeout(() => setRateSaved(false), 3000);
+        }
+      } catch {
+        setRateError("Network error. Please try again.");
+      } finally {
+        setRateSaving(false);
+      }
+    },
+    [rateInfo, rateInput],
+  );
+
   const handleSetPreset = useCallback(
     (multiplier: number) => {
       if (!rateInfo) return;
       const newRate = rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
-      setRateInput(rateToHourly(newRate).toFixed(3));
+      const valueStr = rateToHourly(newRate).toFixed(3);
+      setRateInput(valueStr);
       setRateError(null);
+      handleSaveRate(valueStr);
     },
-    [rateInfo],
+    [rateInfo, handleSaveRate],
   );
-
-  const handleSaveRate = useCallback(async () => {
-    if (!rateInfo) return;
-    const dollars = parseFloat(rateInput);
-    if (isNaN(dollars) || dollars < 0) {
-      setRateError("Enter a valid rate.");
-      return;
-    }
-    const centsPerVramGbMin = hourlyToRate(dollars);
-    if (centsPerVramGbMin < rateInfo.floor_rate) {
-      setRateError(
-        `Minimum rate is $${rateToHourly(rateInfo.floor_rate).toFixed(3)}/hr (50% of platform rate).`,
-      );
-      return;
-    }
-    if (centsPerVramGbMin > rateInfo.ceiling_rate) {
-      setRateError(
-        `Maximum rate is $${rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr (300% of platform rate).`,
-      );
-      return;
-    }
-    setRateSaving(true);
-    setRateError(null);
-    try {
-      const result =
-        await window.electronAPI.setProviderRate(centsPerVramGbMin);
-      if (result.error) {
-        setRateError(result.error);
-      } else {
-        setRateInfo(result);
-        setRateSaved(true);
-        setTimeout(() => setRateSaved(false), 3000);
-      }
-    } catch {
-      setRateError("Network error. Please try again.");
-    } finally {
-      setRateSaving(false);
-    }
-  }, [rateInfo, rateInput]);
 
   const handleResetRate = useCallback(async () => {
     if (!rateInfo) return;
@@ -370,24 +390,20 @@ export function Monetize() {
                         setRateInput(e.target.value);
                         setRateError(null);
                       }}
+                      onBlur={() => handleSaveRate()}
                       className="pl-7 pr-12 font-mono"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-                      /hr
+                      {rateSaving ? (
+                        <Loader2
+                          size={12}
+                          className="animate-spin text-white"
+                        />
+                      ) : (
+                        "/hr"
+                      )}
                     </span>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveRate}
-                    disabled={rateSaving}
-                    className="shrink-0"
-                  >
-                    {rateSaving ? (
-                      <Loader2 size={13} className="animate-spin text-white" />
-                    ) : (
-                      "Set Rate"
-                    )}
-                  </Button>
                   {rateInfo.custom_rate_cents_per_vram_gb_min !== null && (
                     <Button
                       size="sm"
@@ -411,49 +427,34 @@ export function Monetize() {
 
               {/* Preset buttons */}
               <div className="flex flex-wrap gap-2">
-                {[
-                  { label: "Min (50%)", multiplier: 0.5 },
-                  { label: "Standard", multiplier: 1.0 },
-                  { label: "+25%", multiplier: 1.25 },
-                  { label: "+50%", multiplier: 1.5 },
-                ].map(({ label, multiplier }) => {
+                {RATE_PRESETS.map(({ label, multiplier }) => {
                   const presetRate =
                     rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
                   const isActive =
                     currentInputRate !== null &&
                     Math.abs(currentInputRate - presetRate) < 0.0001;
                   return (
-                    <button
+                    <Button
                       key={label}
+                      type="button"
+                      variant={isActive ? "primary" : "outline"}
+                      size="xs"
+                      aria-pressed={isActive}
                       onClick={() => handleSetPreset(multiplier)}
-                      className={`text-xs px-3 py-1 rounded-md border transition-colors ${
+                      className={`h-auto rounded-lg px-2.5 py-1.5 font-semibold transition-colors justify-between gap-1.5 ${
                         isActive
-                          ? "border-primary bg-primary text-white"
-                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                          ? ""
+                          : "text-muted-foreground hover:text-foreground hover:border-primary/50"
                       }`}
                     >
-                      {label}
-                      <span className="ml-1 opacity-60">
+                      <span>{label}</span>
+                      <span className="opacity-60">
                         ${rateToHourly(presetRate).toFixed(3)}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
-
-              {/* Error / success feedback */}
-              {rateError && (
-                <div className="flex items-center gap-2 text-destructive-foreground text-sm">
-                  <AlertCircle size={13} className="text-white" />
-                  {rateError}
-                </div>
-              )}
-              {rateSaved && (
-                <div className="flex items-center gap-2 text-primary text-sm">
-                  <CheckCircle2 size={13} className="text-white" />
-                  Rate saved successfully.
-                </div>
-              )}
 
               {/* Earnings estimator */}
               <div className="space-y-1.5">
@@ -488,7 +489,7 @@ export function Monetize() {
                             ~{formatCents(perJob)}
                           </span>
                           <span className="text-muted-foreground/60">
-                            ≈ {formatCents(perHour)}/hr if busy
+                            ≈ {formatCents(perHour)}/hr
                           </span>
                         </div>
                       </div>

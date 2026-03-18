@@ -154,6 +154,9 @@ export interface ProviderRateInfo {
   effective_rate_hourly_dollars: number;
   market_avg_rate: number | null;
   market_avg_rate_hourly_dollars: number | null;
+  online_monetize_providers_count: number;
+  suggested_rate_cents_per_vram_gb_min: number;
+  suggested_rate_hourly_dollars: number;
   display_vram_gb: number;
   error?: string;
 }
