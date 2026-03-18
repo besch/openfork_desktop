@@ -556,7 +556,7 @@ export function Monetize() {
       </Card>
 
       {/* Wallet Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
           {
             label: "Pending Earnings",
@@ -604,21 +604,26 @@ export function Monetize() {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Bank Account */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
+        <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl border-white/20 bg-surface/40 backdrop-blur-md">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
+          <CardHeader className="pb-3 relative z-10">
+            <CardTitle className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary text-white shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
                 <Building2 size={16} />
               </div>
-              Payout Account
+              <span className="font-black tracking-widest uppercase text-[10px] text-white">
+                Payout Account
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {wallet?.stripe_account_verified ? (
               <>
-                <div className="flex items-center gap-2 text-primary text-sm">
-                  <CheckCircle2 size={14} className="text-white" />
-                  <span>Bank account connected &amp; verified</span>
+                <div className="w-full">
+                  <Badge variant="success" className="gap-1.5">
+                    <CheckCircle2 size={12} />
+                    Bank account connected &amp; verified
+                  </Badge>
                 </div>
                 <Button
                   variant="primary"
@@ -807,7 +812,7 @@ export function Monetize() {
                         className={`text-sm font-medium ${
                           txn.amount_cents < 0
                             ? "text-destructive-foreground"
-                            : "text-primary"
+                            : "text-white"
                         }`}
                       >
                         {txn.amount_cents >= 0 ? "+" : ""}
