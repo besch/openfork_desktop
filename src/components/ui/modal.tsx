@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+function hasChildren(children: React.ReactNode): boolean {
+  return React.Children.toArray(children).filter(Boolean).length > 0;
+}
 
 interface ModalProps {
   isOpen: boolean;
@@ -9,7 +14,9 @@ interface ModalProps {
   title: string;
   description?: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl" | "full";
+  scrollbarVariant?: "primary";
 }
 
 export function Modal({
@@ -18,7 +25,9 @@ export function Modal({
   title,
   description,
   children,
+  footer,
   size = "md",
+  scrollbarVariant,
 }: ModalProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -50,8 +59,10 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
-      style={{ background: "rgba(0,0,0,0.6)" }}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md transition-all duration-200"
+      style={{ 
+        background: "rgba(20, 16, 12, 0.6)",
+      }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -59,22 +70,22 @@ export function Modal({
       }}
     >
       <div
-        className={`card relative w-full ${sizeClasses[size]} max-h-[90vh] rounded-2xl shadow-2xl overflow-auto text-foreground`}
+        className={`relative w-full ${sizeClasses[size]} max-h-[90vh] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col text-foreground border border-white/10 bg-surface`}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 px-6 py-4 bg-surface border-b border-border">
+        <div className="flex-shrink-0 px-6 py-4 bg-surface border-b border-white/5">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+              <h2 className="text-lg font-bold text-white tracking-tight truncate max-w-[calc(100vw-120px)]">{title}</h2>
               {description && (
-                <p className="text-sm mt-1 text-muted">{description}</p>
+                <p className="text-sm mt-1 text-zinc-400 break-words">{description}</p>
               )}
             </div>
             <Button
-              variant="ghost"
-              size="icon"
+              variant="destructive"
+              size="icon-sm"
               onClick={onClose}
-              className="rounded-lg text-muted"
+              className="rounded-lg"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -82,7 +93,26 @@ export function Modal({
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto p-6">{children}</div>
+        {hasChildren(children) && (
+          <div 
+            className={cn(
+              "flex-1 overflow-y-auto p-6 scrollbar-thin",
+              scrollbarVariant === "primary" && "scrollbar-primary"
+            )}
+            style={{
+              background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.1))"
+            }}
+          >
+            {children}
+          </div>
+        )}
+
+        {/* Footer */}
+        {footer && (
+          <div className="flex-shrink-0 px-6 py-4 bg-surface/80 backdrop-blur-sm border-t border-white/5">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body

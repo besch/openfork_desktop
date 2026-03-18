@@ -23,31 +23,43 @@ export function ConfirmationDialog({
   cancelButtonText = "Cancel",
   isLoading,
 }: ConfirmationDialogProps) {
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <div className="space-y-4">
-        {description && (
-          <p className="text-sm text-muted">{description}</p>
+  const footer = (
+    <div className="flex justify-end gap-3 w-full">
+      <Button 
+        variant="destructive" 
+        onClick={onClose} 
+        disabled={isLoading}
+      >
+        {cancelButtonText}
+      </Button>
+      <Button
+        variant="primary"
+        onClick={onConfirm}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <div className="flex items-center gap-2">
+            <Loader size="xs" />
+            <span>{confirmButtonText}...</span>
+          </div>
+        ) : (
+          confirmButtonText
         )}
-        <div className="flex justify-end space-x-2">
-          <Button variant="destructive" onClick={onClose}>
-            {cancelButtonText}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={onConfirm}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader /> {confirmButtonText}
-              </>
-            ) : (
-              confirmButtonText
-            )}
-          </Button>
-        </div>
-      </div>
+      </Button>
+    </div>
+  );
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      footer={footer}
+      scrollbarVariant="primary"
+    >
+      {description && (
+        <p className="text-sm text-muted-foreground">{description}</p>
+      )}
     </Modal>
   );
 }

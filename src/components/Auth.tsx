@@ -7,37 +7,41 @@ export function Auth() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-background p-4">
-      <div className="w-full max-w-md">
-        <Card className="bg-card/50 backdrop-blur-sm border-white/10 shadow-2xl hover:shadow-3xl transition-all duration-300">
-          <CardHeader className="text-center py-6">
-            <img
-              src="./logo.png"
-              alt="OpenFork Logo"
-              className="h-16 mx-auto mb-4"
-            />
-            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent mb-2">
-              Welcome to OpenFork
+    <div className="flex flex-col items-center justify-center min-h-screen relative overflow-hidden p-4">
+      {/* Website Signature Background Effects */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_600px_at_80%_-10%,color-mix(in_oklab,var(--color-primary)_25%,transparent),transparent_60%),radial-gradient(900px_500px_at_10%_20%,color-mix(in_oklab,var(--color-primary)_18%,transparent),transparent_60%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-background)_96%,var(--color-foreground)_4%),var(--color-background))]" />
+
+      <div className="w-full max-w-md relative z-10">
+        <Card className="bg-surface/30 backdrop-blur-2xl border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.5)] rounded-[2.5rem] overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+          <CardHeader className="text-center py-8 relative z-10">
+            <div className="relative mb-6 inline-block select-none">
+              <div className="absolute inset-0 blur-3xl bg-primary/20 animate-pulse" />
+              <img
+                src="./logo.png"
+                alt="OpenFork Logo"
+                className="h-20 mx-auto relative z-10 drop-shadow-3xl"
+              />
+            </div>
+            <CardTitle className="text-3xl font-black tracking-tighter text-white mb-2">
+              Openfork Client
             </CardTitle>
-            <p className="text-muted-foreground text-lg">
-              Github for video collaboration
-            </p>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Sign in to access your dashboard and manage distributed
-                computing tasks
+          <CardContent className="space-y-6 pb-10 relative z-10 px-8 text-center">
+            <div className="space-y-4">
+              <p className="text-sm text-white/50 font-medium leading-relaxed px-4">
+                Collaborative peer-to-peer movie creation platform.
               </p>
             </div>
             <Button
               variant="primary"
               onClick={handleLogin}
               size="lg"
-              className="w-full h-12 text-base font-medium mb-4"
+              className="w-full h-14 text-sm font-black uppercase tracking-widest rounded-2xl shadow-2xl shadow-primary/20 group/btn transition-all duration-500 hover:scale-[1.02] active:scale-95"
             >
               <svg
-                className="w-5 h-5 mr-2"
+                className="w-5 h-5 mr-3 group-hover/btn:scale-110 transition-transform duration-300"
                 viewBox="0 0 24 24"
                 fill="currentColor"
               >

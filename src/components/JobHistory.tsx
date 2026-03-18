@@ -84,26 +84,24 @@ const formatTimeAgo = (dateString: string): string => {
 const StatusBadge = memo(({ status }: { status: string }) => {
   const config = {
     completed: {
-      icon: <CheckCircle className="h-3 w-3 text-white" />,
-      className: "bg-primary/50 text-white border-primary/20",
+      icon: <CheckCircle className="h-3 w-3 text-emerald-400" />,
+      className: "border-emerald-400/20 bg-emerald-400/5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.05)]",
     },
     failed: {
-      icon: <XCircle className="h-3 w-3 text-white" />,
-      className:
-        "bg-destructive-foreground/50 text-white-foreground border-destructive-foreground/20",
+      icon: <XCircle className="h-3 w-3 text-destructive" />,
+      className: "border-destructive/20 bg-destructive/5 text-destructive shadow-[0_0_10px_rgba(239,68,68,0.05)]",
     },
     cancelled: {
-      icon: <XCircle className="h-3 w-3 text-white" />,
-      className: "bg-merged-status/50 text-white border-merged-status/20",
+      icon: <XCircle className="h-3 w-3 text-muted/40" />,
+      className: "border-white/5 bg-white/20 text-muted/50",
     },
     processing: {
-      icon: <Loader2 className="h-3 w-3 animate-spin text-white" />,
-      className: "bg-secondary/50 text-secondary border-secondary/20",
+      icon: <Loader2 className="h-3 w-3 animate-spin text-amber-400" />,
+      className: "border-amber-400/20 bg-amber-400/5 text-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.05)]",
     },
     pending: {
-      icon: <Clock className="h-3 w-3 text-white" />,
-      className:
-        "bg-merged-status/50 text-merged-status border-merged-status/20",
+      icon: <Clock className="h-3 w-3 text-muted/40" />,
+      className: "border-white/5 bg-white/20 text-muted/50",
     },
   };
 
@@ -113,7 +111,7 @@ const StatusBadge = memo(({ status }: { status: string }) => {
   return (
     <Badge
       variant="outline"
-      className={`flex items-center gap-1.5 px-2.5 py-0.5 font-semibold capitalize ${className}`}
+      className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all duration-300 ${className}`}
     >
       {icon}
       {status}
@@ -133,46 +131,49 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
   };
 
   return (
-    <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/20 border border-white/5 hover:border-primary/20 hover:bg-muted/40 transition-all group">
-      <div className="p-3 rounded-xl bg-primary text-white group-hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
+    <div className="flex items-center gap-3 p-3 rounded-xl bg-surface/20 border border-white/5 hover:border-white/10 hover:bg-surface/30 transition-all duration-500 group relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="relative z-10 p-2 rounded-lg bg-white/5 border border-white/5 text-white/70 group-hover:text-white group-hover:scale-105 transition-all duration-500">
         {getWorkflowIcon(job.workflow_type)}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-sm tracking-tight text-foreground/90 uppercase">
+      <div className="relative z-10 flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-black text-[10px] tracking-widest text-white uppercase line-clamp-1">
             {job.workflow_type?.replace(/_/g, " ") || "unknown workflow"}
           </span>
           <StatusBadge status={job.status} />
         </div>
         <p
-          className="text-xs text-muted-foreground line-clamp-1 mt-1 font-medium"
+          className="text-[10px] text-white/70 line-clamp-1 mt-0.5 font-medium tracking-tight group-hover:text-white/90 transition-colors"
           title={job.prompt || undefined}
         >
           {truncatePrompt(job.prompt)}
         </p>
       </div>
-      <div className="text-right shrink-0 flex flex-col justify-center">
-        <div className="text-xs font-bold text-foreground/80 flex items-center justify-end">
+      <div className="relative z-10 text-right shrink-0 flex flex-col justify-center">
+        <div className="text-[9px] font-black tracking-widest text-white/80 flex items-center justify-end group-hover:text-white transition-colors">
           {job.user?.username ? (
             <a
               href={`https://openfork.video/${job.user.username}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-white transition-colors cursor-pointer underline-offset-2 hover:underline"
+              className="hover:text-primary-active transition-colors cursor-pointer underline-offset-4 hover:underline"
             >
-              {job.user.username}
+              @{job.user.username.toUpperCase()}
             </a>
           ) : (
-            "Unknown Submitter"
+            "UNKNOWN USER"
           )}
         </div>
-        <div className="text-[10px] font-medium text-muted-foreground/60 mt-1 uppercase tracking-wider">
-          {job.duration_seconds ? (
-            <>
-              {formatDuration(job.duration_seconds)} <span className="mx-1">•</span>{" "}
-            </>
-          ) : null}
-          {formatTimeAgo(job.updated_at)}
+        <div className="text-[8px] font-black text-white/40 mt-0.5 uppercase tracking-[0.2em] flex items-center justify-end gap-2">
+          {job.duration_seconds && (
+            <span className="flex items-center gap-1">
+              <Clock size={8} className="opacity-50" />
+              {formatDuration(job.duration_seconds)}
+            </span>
+          )}
+          {job.duration_seconds && <span className="opacity-20">•</span>}
+          <span>{formatTimeAgo(job.updated_at)}</span>
         </div>
       </div>
     </div>
@@ -577,8 +578,8 @@ export const JobHistory = memo(() => {
       </Card>
 
       {/* List Card */}
-      <Card className="bg-card/40 backdrop-blur-2xl border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.3)] min-h-[400px] flex flex-col rounded-3xl overflow-hidden border-t-white/20">
-        <CardContent className="p-6 flex-1 overflow-y-auto max-h-[600px] custom-scrollbar">
+      <Card className="bg-surface/10 backdrop-blur-3xl border-white/10 shadow-3xl min-h-[400px] flex flex-col rounded-[2.5rem] overflow-hidden">
+        <CardContent className="p-8 flex-1 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-primary">
           {error && (
             <div className="mb-6 bg-destructive-foreground/10 border border-destructive-foreground/20 text-destructive-foreground rounded-2xl p-5 flex items-start gap-4">
               <div className="p-2 rounded-lg bg-destructive-foreground/20 text-destructive-foreground">

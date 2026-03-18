@@ -331,65 +331,74 @@ export const DockerManagement = memo(() => {
         </Card>
       )}
 
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h2 className="text-2xl font-bold">Docker Management</h2>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={fetchData}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-surface/50 border border-white/5 shadow-xl">
+            <Container className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black tracking-tight text-white uppercase">Docker Management</h2>
+            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mt-0.5">Engine & Container Runtime</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {diskSpace && (
-            <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md transition-all duration-300 ${
               diskSpaceError 
-                ? 'bg-destructive/10 border border-destructive/20'  
-                : 'bg-muted/30 border border-white/10'
+                ? 'bg-destructive/10 border border-destructive/20 text-destructive'  
+                : 'bg-white/5 border border-white/5 text-white/60'
               }`}
             >
-              <HardDrive className={`h-4 w-4 ${diskSpaceError ? 'text-destructive' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-medium ${diskSpaceError ? 'text-destructive' : 'text-foreground'}`}>
-                {diskSpace.free_gb} GB / {diskSpace.total_gb} GB
+              <HardDrive className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-black tracking-widest uppercase">
+                {diskSpace.free_gb}GB / {diskSpace.total_gb}GB
               </span>
             </div>
           )}
           <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchData}
+            disabled={loading}
+            className="rounded-lg hover:bg-white/5 h-8 w-8 p-0"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
             variant="destructive"
             onClick={handlePurgeOpenFork}
             disabled={actionLoading !== null}
-            title="Surgically remove all OpenFork related Docker data while keeping other projects untouched."
+            className="rounded-xl h-8 text-[10px] font-black uppercase tracking-widest px-4"
           >
             {actionLoading === "purge-openfork" ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
             ) : (
-              <Trash2 className="h-4 w-4 mr-2" />
+              <Trash2 className="h-3.5 w-3.5 mr-2" />
             )}
-            Purge All Data
+            Purge All
           </Button>
         </div>
       </header>
 
-      <Card className="bg-card/50 backdrop-blur-sm border-white/10 overflow-hidden">
+      <Card className="group relative overflow-hidden transition-all duration-500 border-white/5 bg-surface/30 backdrop-blur-md">
         <button 
           onClick={() => setShowStorageSettings(!showStorageSettings)}
-          className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors focus:outline-none"
+          className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
         >
-          <div className="flex items-center gap-2">
-            <HardDrive className="h-5 w-5 text-primary" />
-            <span className="font-semibold">Storage & Engine Settings</span>
-            <span className="text-xs text-muted-foreground ml-2">(Configure Location & Space)</span>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-primary group-hover:scale-110 transition-transform duration-500">
+              <HardDrive className="h-4 w-4" />
+            </div>
+            <div className="text-left">
+              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white">Storage & Engine Settings</span>
+              <p className="text-[9px] text-white/50 font-black uppercase tracking-[0.1em] mt-0.5">Configure Location & Performance</p>
+            </div>
           </div>
           <motion.div
             animate={{ rotate: showStorageSettings ? 0 : -90 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3, ease: "anticipate" }}
+            className="text-white/20 group-hover:text-white transition-colors"
           >
-            <Loader2 className={`h-4 w-4 ${showStorageSettings ? "rotate-0" : ""}`} style={{ display: 'none' }} />
-            {/* Using a simple arrow icon instead of the loader */}
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
               width="16" 
@@ -397,10 +406,9 @@ export const DockerManagement = memo(() => {
               viewBox="0 0 24 24" 
               fill="none" 
               stroke="currentColor" 
-              strokeWidth="2" 
+              strokeWidth="3" 
               strokeLinecap="round" 
               strokeLinejoin="round" 
-              className="lucide lucide-chevron-down"
             >
               <path d="m6 9 6 6 6-6"/>
             </svg>
@@ -409,10 +417,10 @@ export const DockerManagement = memo(() => {
         <motion.div
           initial={false}
           animate={{ height: showStorageSettings ? "auto" : 0 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="overflow-hidden"
         >
-          <div className="p-4 pt-0 border-t border-white/5">
+          <div className="p-4 pt-0 relative z-10 border-t border-white/5">
             <StorageSettings />
           </div>
         </motion.div>
@@ -420,81 +428,93 @@ export const DockerManagement = memo(() => {
 
       {/* Download Progress Card */}
       {isDownloading && (
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm border-primary/30 shadow-lg shadow-primary/10">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-primary">
-              <div className="flex items-center gap-2 text-white bg-primary p-2 rounded-lg">
-                <Download className="h-5 w-5 animate-pulse" />
-                <span>
-                  {dockerPullProgress?.status || "Downloading"} Docker Image
-                </span>
+        <Card className="relative overflow-hidden group transition-all duration-500 border-primary/20 bg-primary/5 backdrop-blur-xl shadow-2xl shadow-primary/10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-primary)_15%,transparent),transparent)]" />
+          <CardHeader className="pb-4 relative z-10">
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-primary text-white shadow-lg shadow-primary/30">
+                  <Download className="h-5 w-5 animate-bounce" />
+                </div>
+                <div>
+                  <span className="font-black text-xs uppercase tracking-widest text-primary">
+                    {dockerPullProgress?.status || "Downloading"}
+                  </span>
+                  <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">Docker Engine Component</p>
+                </div>
               </div>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleCancelDownload}
+                className="rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest"
               >
-                <X className="h-4 w-4 mr-1" />
-                Cancel
+                Abort
               </Button>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="relative h-3 bg-muted/30 rounded-full overflow-hidden">
-                  <motion.div
-                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary-hover to-primary rounded-full overflow-hidden"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${dockerPullProgress?.progress || 0}%` }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
-                  </motion.div>
-                </div>
+          <CardContent className="space-y-4 relative z-10 pb-8">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[10px] font-black tracking-[0.2em] text-muted/40 uppercase">
+                <span>Progress</span>
+                <span className="text-primary tabular-nums">
+                  {Math.round(dockerPullProgress?.progress || 0)}%
+                </span>
               </div>
-              <span className="text-lg font-bold text-primary tabular-nums min-w-[4ch]">
-                {Math.round(dockerPullProgress?.progress || 0)}%
-              </span>
+              <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+                <motion.div
+                  className="absolute inset-y-0 left-0 bg-primary rounded-full overflow-hidden"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${dockerPullProgress?.progress || 0}%` }}
+                  transition={{ duration: 0.5, ease: "backOut" }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+                </motion.div>
+              </div>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground truncate max-w-[300px]" title={dockerPullProgress?.image}>
-                {dockerPullProgress?.image}
-              </span>
+            <div className="text-[10px] font-bold text-muted/30 uppercase tracking-widest truncate max-w-full text-center">
+              Target: {dockerPullProgress?.image}
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* Containers Card */}
-      <Card className="bg-card/50 backdrop-blur-sm border-white/10">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Container className="h-5 w-5 text-primary" />
-            Running Containers ({containers.length})
+      <Card className="group relative overflow-hidden transition-all duration-500 border-white/5 bg-surface/30 backdrop-blur-md">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+        <CardHeader className="flex flex-row items-center justify-between relative z-10 pb-4">
+          <CardTitle className="flex items-center gap-4">
+            <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-primary">
+              <Container className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="font-black text-[10px] uppercase tracking-widest text-white/90">Running Containers</span>
+              <p className="text-[9px] text-muted/30 font-bold uppercase tracking-[0.2em] mt-0.5">{containers.length} Instances</p>
+            </div>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="relative z-10">
           {containers.length === 0 ? (
-            <p className="text-muted-foreground text-center py-4">
-              No OpenFork containers found
-            </p>
+            <div className="text-center py-12 opacity-30 select-none">
+              <Container className="h-10 w-10 mx-auto mb-3 opacity-20" />
+              <p className="text-[10px] font-black uppercase tracking-widest">No active containers found</p>
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {containers.map((container) => (
                 <div
                   key={container.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{container.name}</p>
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="font-black text-xs text-white/90 truncate tracking-tight">{container.name}</p>
+                    <p className="text-[10px] text-muted-foreground/60 truncate font-medium mt-0.5">
                       {container.image}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 ml-4">
+                  <div className="flex items-center gap-4 ml-4">
                     <span
-                      className="px-2 py-1 rounded-md text-xs font-medium transition-all duration-300 shadow-lg bg-primary text-primary-foreground border border-primary shadow-primary/20"
+                      className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-400/20 bg-emerald-400/5 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
                     >
                       {container.status}
                     </span>
@@ -503,6 +523,7 @@ export const DockerManagement = memo(() => {
                       size="sm"
                       onClick={() => handleStopContainer(container.id, container.name)}
                       disabled={actionLoading !== null}
+                      className="rounded-lg h-9 w-9 p-0 bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white"
                     >
                       {actionLoading === `stop-${container.id}` ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

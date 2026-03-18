@@ -333,13 +333,14 @@ export function Monetize() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* GPU Pricing */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-primary text-white group-hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
-        <Gauge size={16} />
-      </div>
-            GPU Pricing
+      <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl border-white/5 bg-surface/30 backdrop-blur-md">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
+        <CardHeader className="pb-3 relative z-10">
+          <CardTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-primary text-white shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
+              <Gauge size={14} />
+            </div>
+            <span className="font-black tracking-widest uppercase text-[10px] text-white">GPU Pricing</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -397,9 +398,9 @@ export function Monetize() {
                     </Button>
                   )}
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[10px] text-white/70">
                   Based on {DISPLAY_VRAM_GB} GB GPU reference. Platform range:{" "}
-                  <span className="text-foreground/70">
+                  <span className="text-white/90">
                     ${rateToHourly(rateInfo.floor_rate).toFixed(3)} – $
                     {rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr
                   </span>
@@ -553,47 +554,25 @@ export function Monetize() {
       </Card>
 
       {/* Wallet Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-card/60">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">
-              Pending Earnings
-            </p>
-            <p className="text-xl font-bold text-merged-status">
-              {wallet ? formatCents(wallet.pending_earnings_cents) : "—"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card/60">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">
-              Available to Withdraw
-            </p>
-            <p className="text-xl font-bold text-primary">
-              {wallet ? formatCents(wallet.available_to_withdraw_cents) : "—"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card/60">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">
-              Lifetime Earned
-            </p>
-            <p className="text-xl font-bold">
-              {wallet ? formatCents(wallet.total_earned_lifetime_cents) : "—"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card/60">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-xs text-muted-foreground mb-1">
-              Total Withdrawn
-            </p>
-            <p className="text-xl font-bold">
-              {wallet ? formatCents(wallet.total_withdrawn_cents) : "—"}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Pending Earnings", value: wallet ? formatCents(wallet.pending_earnings_cents) : "—", color: "text-amber-400" },
+          { label: "Available to Withdraw", value: wallet ? formatCents(wallet.available_to_withdraw_cents) : "—", color: "text-emerald-400" },
+          { label: "Lifetime Earned", value: wallet ? formatCents(wallet.total_earned_lifetime_cents) : "—", color: "text-white" },
+          { label: "Total Withdrawn", value: wallet ? formatCents(wallet.total_withdrawn_cents) : "—", color: "text-muted/60" },
+        ].map((item, i) => (
+          <Card key={i} className="relative overflow-hidden group hover:shadow-xl transition-all duration-500 border-white/5 bg-surface/30 backdrop-blur-md">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <CardContent className="pt-6 pb-5 relative z-10">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted/40 font-black mb-2 group-hover:text-muted/60 transition-colors">
+                {item.label}
+              </p>
+              <p className={`text-2xl font-black tracking-tighter ${item.color} drop-shadow-2xl`}>
+                {item.value}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">

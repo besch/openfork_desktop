@@ -29,24 +29,25 @@ const StatCard = memo(
     icon: React.ReactNode;
     className?: string;
   }) => (
-    <Card className="transition-all duration-300 hover:shadow-xl group border-white/10 bg-card/50 backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors duration-200">
+    <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 border-white/5 bg-surface/30 backdrop-blur-md">
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+        <CardTitle className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60 group-hover:text-white/90 transition-colors duration-300">
           {title}
         </CardTitle>
-        <div className="p-2 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors duration-200">
+        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all duration-300 group-hover:scale-110">
           {icon}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="relative z-10 pb-3">
         <div
-          className={`text-3xl font-bold ${className} transition-all duration-300`}
+          className={`text-xl font-black tracking-tighter text-white transition-all duration-500 group-hover:scale-[1.02] drop-shadow-2xl`}
         >
           {value.toLocaleString()}
         </div>
       </CardContent>
     </Card>
-  )
+  ),
 );
 
 export const StatusIndicator = memo(() => {
@@ -54,29 +55,33 @@ export const StatusIndicator = memo(() => {
 
   const statusConfig = {
     running: {
-      text: "Running",
-      className: "text-green-400 border-green-400/20 bg-green-400/10",
-      icon: <Power size={16} />,
+      text: "ONLINE",
+      className:
+        "text-emerald-400 border-emerald-400/20 bg-emerald-400/5 shadow-[0_0_15px_rgba(16,185,129,0.1)]",
+      icon: <Power size={14} className="animate-pulse" />,
     },
     stopped: {
-      text: "Stopped",
-      className: "text-muted-foreground border-border bg-muted/10",
-      icon: <Power size={16} />,
+      text: "OFFLINE",
+      className: "text-white/30 border-white/5 bg-white/5",
+      icon: <Power size={14} />,
     },
     starting: {
-      text: "Starting...",
-      className: "text-yellow-400 border-yellow-400/20 bg-yellow-400/10",
-      icon: <Loader size={16} className="animate-spin" />,
+      text: "INITIALIZING",
+      className:
+        "text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_15px_rgba(251,191,36,0.1)]",
+      icon: <Loader size={14} className="animate-spin" />,
     },
     stopping: {
-      text: "Stopping...",
-      className: "text-orange-400 border-orange-400/20 bg-orange-400/10",
-      icon: <Loader size={16} className="animate-spin" />,
+      text: "TERMINATING",
+      className:
+        "text-orange-400 border-orange-400/20 bg-orange-400/5 shadow-[0_0_15px_rgba(251,146,60,0.1)]",
+      icon: <Loader size={14} className="animate-spin" />,
     },
     error: {
-      text: "Error",
-      className: "text-destructive border-destructive/20 bg-destructive/10",
-      icon: <AlertCircle size={16} />,
+      text: "ERROR",
+      className:
+        "text-destructive border-destructive/20 bg-destructive/5 shadow-[0_0_15px_rgba(239,68,68,0.1)]",
+      icon: <AlertCircle size={14} />,
     },
   };
 
@@ -84,9 +89,9 @@ export const StatusIndicator = memo(() => {
 
   return (
     <div
-      className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${className}`}
+      className={`flex items-center space-x-2.5 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest border transition-all duration-500 backdrop-blur-md ${className}`}
     >
-      {icon}
+      <div className="flex-shrink-0">{icon}</div>
       <span>{text}</span>
     </div>
   );
@@ -157,7 +162,7 @@ const PowerButton = memo(
         </AnimatePresence>
       </motion.button>
     );
-  }
+  },
 );
 
 export const Dashboard = memo(() => {
@@ -172,7 +177,7 @@ export const Dashboard = memo(() => {
   } = useClientStore();
   // Subscribe to jobState for local status
   const jobState = useClientStore((state) => state.jobState);
-  
+
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -212,7 +217,7 @@ export const Dashboard = memo(() => {
         window.electronAPI.stopClient();
       }
     },
-    [isDisabled, jobPolicy, allowedIds]
+    [isDisabled, jobPolicy, allowedIds],
   );
 
   const handleJobPolicyChange = (policy: JobPolicy) => {
@@ -220,23 +225,22 @@ export const Dashboard = memo(() => {
     savePersistentSettings();
   };
 
-  const isProcessingAndRunning = status === "running" && jobState.status === "processing";
+  const isProcessingAndRunning =
+    status === "running" && jobState.status === "processing";
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header className="bg-card/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 shadow-lg">
-        <div className="flex flex-wrap items-center content-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <header className="bg-surface/30 backdrop-blur-md border border-white/5 rounded-xl p-3 shadow-xl">
+        <div className="flex flex-wrap items-center content-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <PowerButton
               isRunning={isRunning}
               isDisabled={isDisabled}
               onToggle={handleToggle}
               status={status}
             />
-            <div>
-              <div className="mt-1 ml-4">
-                <StatusIndicator />
-              </div>
+            <div className="ml-1">
+              <StatusIndicator />
             </div>
           </div>
 
@@ -244,7 +248,7 @@ export const Dashboard = memo(() => {
             variant="primary"
             onClick={() => setIsSettingsOpen((prev) => !prev)}
           >
-            <Settings className="mr-2 h-4 w-4" />
+            <Settings className="mr-1.5 h-3.5 w-3.5" />
             <span>Settings</span>
           </Button>
         </div>

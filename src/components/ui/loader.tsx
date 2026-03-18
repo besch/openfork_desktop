@@ -2,44 +2,64 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { OpenForkLogo } from "./open-fork-logo";
+import { OpenForkLogo } from "@/components/ui/open-fork-logo";
 
 interface LoaderProps {
   className?: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
+  variant?: "primary" | "secondary" | "white";
   label?: string;
 }
 
 export function Loader({ 
   className, 
-  size = "sm", 
+  size = "md", 
+  variant = "primary",
   label 
 }: LoaderProps) {
   const sizeMap = {
-    xs: 12,
-    sm: 18,
-    md: 32,
-    lg: 48,
-    xl: 64,
+    xs: 16,
+    sm: 24,
+    md: 40,
+    lg: 64,
+    xl: 96,
+  };
+
+  const variants = {
+    primary: "text-primary",
+    secondary: "text-status-pending",
+    white: "text-white",
   };
 
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-3", className)}>
-      <div className="relative">
-        <div className="absolute inset-0 blur-2xl opacity-10 bg-primary rounded-full" />
+    <div className={cn(
+      "flex flex-col items-center justify-center gap-4 py-4",
+      className
+    )}>
+      <div className="relative group">
+        {/* Aesthetic Background Glow */}
+        <div className={cn(
+          "absolute inset-0 blur-3xl opacity-10 rounded-full transition-opacity duration-1000",
+          variant === "primary" ? "bg-primary" : "bg-status-pending"
+        )} />
+        
         <OpenForkLogo 
           size={sizeMap[size]} 
-          className="text-primary relative z-10"
+          className={cn(
+            variants[variant],
+            "relative z-10 drop-shadow-2xl"
+          )} 
         />
       </div>
+
       {label && (
-        <motion.span 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.6 }}
-          className="text-[10px] font-medium tracking-tight uppercase"
+        <motion.p 
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-xs font-medium tracking-widest uppercase text-muted/60"
         >
           {label}
-        </motion.span>
+        </motion.p>
       )}
     </div>
   );

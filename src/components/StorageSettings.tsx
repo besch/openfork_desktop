@@ -83,25 +83,25 @@ export function StorageSettings() {
   };
 
   return (
-    <Card className="card overflow-hidden border-primary/20 bg-card/40 backdrop-blur-md">
-      <CardContent className="p-4 space-y-4">
-        <div className="flex items-center justify-between border-b border-white/5 pb-2">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20">
-              <HardDrive className="h-4 w-4 text-primary" />
+    <Card className="card overflow-hidden border-white/5 bg-surface/20 backdrop-blur-md">
+      <CardContent className="p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
+          <div className="flex items-center gap-4">
+            <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-primary">
+              <HardDrive className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold tracking-tight">Storage Management</h3>
-              <p className="text-[10px] text-muted-foreground font-medium">Configure WSL Disk Location & Space</p>
+              <h3 className="text-xs font-black uppercase tracking-widest text-white">Storage Management</h3>
+              <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">WSL Partition Configuration</p>
             </div>
           </div>
           {diskInfo && (
-            <div className="flex flex-col items-end">
-              <div className="text-[9px] text-white bg-primary font-mono uppercase tracking-widest px-2 py-0.5 rounded border border-primary/10">
-                Using disk {diskInfo.path}
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="text-[9px] text-white/80 bg-white/5 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/5">
+                Active: {diskInfo.path}
               </div>
-              <div className="text-[10px] font-semibold text-foreground/80">
-                {diskInfo.free_gb} GB Free / {diskInfo.total_gb} GB
+              <div className="text-[10px] font-black tracking-tighter text-primary">
+                {diskInfo.free_gb} GB FREE / {diskInfo.total_gb} GB TOTAL
               </div>
             </div>
           )}

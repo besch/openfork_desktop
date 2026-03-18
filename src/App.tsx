@@ -24,41 +24,81 @@ import {
   History,
   DollarSign,
 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Button } from "./components/ui/button";
 
-// Docker tab trigger with activity indicator
-const DockerTabTrigger = memo(() => {
-  const dockerPullProgress = useClientStore((state) => state.dockerPullProgress);
-  const status = useClientStore((state) => state.status);
-  const stats = useClientStore((state) => state.stats);
+// Unified Tab Trigger Style
+const TabTrigger = memo(
+  ({
+    value,
+    icon: Icon,
+    label,
+    children,
+  }: {
+    value: string;
+    icon?: any;
+    label?: string;
+    children?: React.ReactNode;
+  }) => {
+    const dockerPullProgress = useClientStore(
+      (state) => state.dockerPullProgress,
+    );
+    const status = useClientStore((state) => state.status);
+    const stats = useClientStore((state) => state.stats);
 
-  const isDownloading = dockerPullProgress !== null && (status === "starting" || status === "running");
-  const isProcessing = status === "running" && stats.processing > 0;
-  const hasActivity = isDownloading || isProcessing;
+    const isDocker = value === "docker";
+    const isDownloading =
+      isDocker &&
+      dockerPullProgress !== null &&
+      (status === "starting" || status === "running");
+    const isProcessing =
+      isDocker && status === "running" && stats.processing > 0;
+    const hasActivity = isDownloading || isProcessing;
 
-  return (
-    <TabsTrigger value="docker" className="relative data-[state=active]:text-white group">
-      {isDownloading ? (
-        <Download className="mr-2 animate-bounce text-inherit" size={16} />
-      ) : isProcessing ? (
-        <Container className="mr-2 animate-pulse text-inherit" size={16} />
-      ) : (
-        <Container className="mr-2" size={16} />
-      )}
-      Docker
-      {hasActivity && (
-        <span className="absolute -top-1 -right-1 flex h-3 w-3">
-          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDownloading ? 'bg-yellow-400' : 'bg-primary group-data-[state=active]:bg-white/80'}`} />
-          <span className={`relative inline-flex rounded-full h-3 w-3 ${isDownloading ? 'bg-yellow-500' : 'bg-primary border border-white/20 group-data-[state=active]:bg-white group-data-[state=active]:border-primary/20'}`} />
-        </span>
-      )}
-    </TabsTrigger>
-  );
-});
-
+    return (
+      <TabsTrigger
+        value={value}
+        className="relative h-9 px-4 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5"
+      >
+        {isDownloading ? (
+          <Download className="mr-2 animate-bounce text-inherit" size={14} />
+        ) : isProcessing ? (
+          <Container className="mr-2 animate-pulse text-inherit" size={14} />
+        ) : Icon ? (
+          <Icon
+            className="mr-2 group-hover:scale-110 transition-transform"
+            size={14}
+          />
+        ) : null}
+        {label || children}
+        {hasActivity && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+            <span
+              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDownloading ? "bg-yellow-400" : "bg-primary group-data-[state=active]:bg-white/80"}`}
+            />
+            <span
+              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isDownloading ? "bg-yellow-500" : "bg-primary border border-white/20 group-data-[state=active]:bg-white group-data-[state=active]:border-primary/20"}`}
+            />
+          </span>
+        )}
+      </TabsTrigger>
+    );
+  },
+);
 
 function App() {
-  const { status, session, isLoading, setSession, dependencyStatus, setDependencyStatus } = useClientStore();
+  const {
+    status,
+    session,
+    isLoading,
+    setSession,
+    dependencyStatus,
+    setDependencyStatus,
+  } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [, setForceRefreshKey] = useState(0);
   const [checkingDeps, setCheckingDeps] = useState(true);
@@ -115,7 +155,7 @@ function App() {
         .catch((error) => {
           console.error(
             "Failed to get current session during force refresh:",
-            error
+            error,
           );
           setSession(null);
         });
@@ -162,7 +202,9 @@ function App() {
   if (dependencyStatus && !dependencyStatus.allReady) {
     return (
       <DependencySetup
-        onReady={() => setDependencyStatus({ ...dependencyStatus, allReady: true })}
+        onReady={() =>
+          setDependencyStatus({ ...dependencyStatus, allReady: true })
+        }
         initialStatus={dependencyStatus}
       />
     );
@@ -192,99 +234,140 @@ function App() {
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
-      <div className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-7xl mx-auto">
-          <header className="flex items-center justify-between mb-8 p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-white/10 shadow-lg">
-            <div className="flex items-center gap-4">
-              <img src="./logo.png" alt="logo" className="h-12" />
+      <div className="min-h-screen relative overflow-hidden">
+        {/* Website Signature Background Effects */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_600px_at_80%_-10%,color-mix(in_oklab,var(--color-primary)_25%,transparent),transparent_60%),radial-gradient(900px_500px_at_10%_20%,color-mix(in_oklab,var(--color-primary)_18%,transparent),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-background)_96%,var(--color-foreground)_4%),var(--color-background))]" />
+
+        <div className="relative container mx-auto px-4 py-6 max-w-7xl">
+          <header className="relative z-20 flex items-center justify-between mb-6 p-4 rounded-3xl border border-white/10 bg-surface/30 backdrop-blur-md shadow-2xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
+            <div className="relative z-10 flex items-center gap-4">
+              <img
+                src="./logo.png"
+                alt="logo"
+                className="h-10 drop-shadow-2xl"
+              />
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white leading-none">
                   Openfork Client
                 </h1>
-                <p className="text-sm text-muted-foreground">
-                  {/* FIX (#12): Align tagline with platform description from GEMINI.md */}
-                  Collaborative movie creation platform
+                <p className="text-[10px] md:text-xs text-white/70 mt-1 font-bold uppercase tracking-[0.15em]">
+                  Open-Source Engine for AI Video Collaboration
                 </p>
               </div>
             </div>
 
             {/* Status dot + avatar profile menu */}
-            <div className="flex items-center gap-3">
-              <div
-                className={`h-2 w-2 rounded-full ${
-                  status === "running"
-                    ? "bg-green-500 animate-pulse"
-                    : status === "starting" || status === "stopping"
-                    ? "bg-yellow-400 animate-pulse"
-                    : "bg-muted-foreground/40"
-                }`}
-              />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="flex flex-col items-end mr-2 hidden md:flex">
+                <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-0.5">
+                  Status
+                </span>
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`h-2 w-2 rounded-full ${
+                      status === "running"
+                        ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse"
+                        : status === "starting" || status === "stopping"
+                          ? "bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)] animate-pulse"
+                          : "bg-muted-foreground/30"
+                    }`}
+                  />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    {status}
+                  </span>
+                </div>
+              </div>
+
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="h-8 w-8 rounded-full bg-white/10 border border-white/20 text-white text-sm font-semibold flex items-center justify-center hover:bg-white/20 transition-colors">
-                    {avatarInitial}
-                  </button>
+                  <Button>{avatarInitial}</Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-52 p-2">
-                  <p className="px-2 py-1.5 text-xs text-muted-foreground truncate">
-                    {session.user.email}
-                  </p>
-                  <div className="h-px bg-border my-1" />
+                <PopoverContent
+                  align="end"
+                  className="w-56 p-2 bg-surface-secondary/95 backdrop-blur-xl border-white/10 shadow-3xl"
+                >
+                  <div className="px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-1">
+                      Signed in as
+                    </p>
+                    <p className="text-xs font-semibold text-white truncate">
+                      {session.user.email}
+                    </p>
+                  </div>
+                  <div className="h-px bg-white/5 my-2" />
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-md bg-destructive text-destructive-foreground border border-[var(--color-destructive-border)] hover:bg-[var(--color-destructive-hover-bg)] hover:text-[var(--color-destructive-hover-fg)] shadow-md active:scale-95 transition-all text-left"
+                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-xs font-bold rounded-lg bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive hover:text-white transition-all duration-300 group"
                   >
-                    <LogOut size={14} />
-                    Log out
+                    <LogOut
+                      size={14}
+                      className="group-hover:-translate-x-0.5 transition-transform"
+                    />
+                    SIGN OUT
                   </button>
                 </PopoverContent>
               </Popover>
             </div>
           </header>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 bg-card/40 backdrop-blur-md border border-white/10 p-1 rounded-xl">
-              <TabsTrigger value="dashboard">
-                <LayoutDashboard className="mr-2" size={16} />
-                Dashboard
-              </TabsTrigger>
-              <TabsTrigger value="chart">
-                <BarChartIcon className="mr-2" size={16} />
-                Chart
-              </TabsTrigger>
-              <DockerTabTrigger />
-              <TabsTrigger value="history">
-                <History className="mr-2" size={16} />
-                History
-              </TabsTrigger>
-              <TabsTrigger value="monetize">
-                <DollarSign className="mr-2" size={16} />
-                Monetize
-              </TabsTrigger>
-              <TabsTrigger value="logs">
-                <Terminal className="mr-2" size={16} />
-                Logs
-              </TabsTrigger>
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="relative z-10"
+          >
+            <TabsList className="mb-6 bg-surface/20 backdrop-blur-xl border border-white/10 p-1 rounded-2xl h-11 overflow-x-auto no-scrollbar justify-start">
+              <TabTrigger
+                value="dashboard"
+                icon={LayoutDashboard}
+                label="Dashboard"
+              />
+              <TabTrigger value="chart" icon={BarChartIcon} label="Chart" />
+              <TabTrigger value="docker" label="Docker" />
+              <TabTrigger value="history" icon={History} label="History" />
+              <TabTrigger value="monetize" icon={DollarSign} label="Monetize" />
+              <TabTrigger value="logs" icon={Terminal} label="Logs" />
             </TabsList>
 
-            <TabsContent value="dashboard">
-              <Dashboard />
-            </TabsContent>
-            <TabsContent value="chart">
-              <Chart />
-            </TabsContent>
-            <TabsContent value="logs">
-              <LogViewer />
-            </TabsContent>
-            <TabsContent value="docker">
-              <DockerManagement />
-            </TabsContent>
-            <TabsContent value="history">
-              <JobHistory />
-            </TabsContent>
-            <TabsContent value="monetize">
-              <Monetize />
-            </TabsContent>
+            <div className="mt-8 transition-all duration-500">
+              <TabsContent
+                value="dashboard"
+                className="mt-0 focus-visible:outline-none"
+              >
+                <Dashboard />
+              </TabsContent>
+              <TabsContent
+                value="chart"
+                className="mt-0 focus-visible:outline-none"
+              >
+                <Chart />
+              </TabsContent>
+              <TabsContent
+                value="logs"
+                className="mt-0 focus-visible:outline-none"
+              >
+                <LogViewer />
+              </TabsContent>
+              <TabsContent
+                value="docker"
+                className="mt-0 focus-visible:outline-none"
+              >
+                <DockerManagement />
+              </TabsContent>
+              <TabsContent
+                value="history"
+                className="mt-0 focus-visible:outline-none"
+              >
+                <JobHistory />
+              </TabsContent>
+              <TabsContent
+                value="monetize"
+                className="mt-0 focus-visible:outline-none"
+              >
+                <Monetize />
+              </TabsContent>
+            </div>
           </Tabs>
         </div>
       </div>
