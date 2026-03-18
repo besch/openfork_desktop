@@ -60,7 +60,7 @@ export function Modal({
   return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md transition-all duration-200"
-      style={{ 
+      style={{
         background: "rgba(20, 16, 12, 0.6)",
       }}
       onMouseDown={(e) => {
@@ -70,15 +70,19 @@ export function Modal({
       }}
     >
       <div
-        className={`relative w-full ${sizeClasses[size]} max-h-[90vh] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col text-foreground border border-white/10 bg-surface`}
+        className={`relative w-full ${sizeClasses[size]} max-h-[90vh] rounded-lg shadow-2xl shadow-black/80 overflow-hidden flex flex-col text-foreground border border-white/10 bg-surface`}
       >
         {/* Header */}
         <div className="flex-shrink-0 px-6 py-4 bg-surface border-b border-white/5">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight truncate max-w-[calc(100vw-120px)]">{title}</h2>
+              <h2 className="text-lg font-bold text-white tracking-tight truncate max-w-[calc(100vw-120px)]">
+                {title}
+              </h2>
               {description && (
-                <p className="text-sm mt-1 text-zinc-400 break-words">{description}</p>
+                <p className="text-sm mt-1 text-zinc-400 break-words">
+                  {description}
+                </p>
               )}
             </div>
             <Button
@@ -94,13 +98,14 @@ export function Modal({
 
         {/* Content */}
         {hasChildren(children) && (
-          <div 
+          <div
             className={cn(
               "flex-1 overflow-y-auto p-6 scrollbar-thin",
-              scrollbarVariant === "primary" && "scrollbar-primary"
+              scrollbarVariant === "primary" && "scrollbar-primary",
             )}
             style={{
-              background: "linear-gradient(to bottom, transparent, rgba(0,0,0,0.1))"
+              background:
+                "linear-gradient(to bottom, transparent, rgba(0,0,0,0.1))",
             }}
           >
             {children}
@@ -115,6 +120,6 @@ export function Modal({
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

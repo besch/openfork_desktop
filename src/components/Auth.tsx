@@ -13,7 +13,7 @@ export function Auth() {
       <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-background)_96%,var(--color-foreground)_4%),var(--color-background))]" />
 
       <div className="w-full max-w-md relative z-10">
-        <Card className="bg-surface/30 backdrop-blur-2xl border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.5)] rounded-[2.5rem] overflow-hidden group">
+        <Card className="bg-surface/30 backdrop-blur-2xl border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.5)] rounded-lg overflow-hidden group">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
           <CardHeader className="text-center py-8 relative z-10">
             <div className="relative mb-6 inline-block select-none">
@@ -38,7 +38,7 @@ export function Auth() {
               variant="primary"
               onClick={handleLogin}
               size="lg"
-              className="w-full h-14 text-sm font-black uppercase tracking-widest rounded-2xl shadow-2xl shadow-primary/20 group/btn transition-all duration-500 hover:scale-[1.02] active:scale-95"
+              className="w-full h-14 text-sm font-black uppercase tracking-widest rounded-lg shadow-2xl shadow-primary/20 group/btn transition-all duration-500 hover:scale-[1.02] active:scale-95"
             >
               <svg
                 className="w-5 h-5 mr-3 group-hover/btn:scale-110 transition-transform duration-300"

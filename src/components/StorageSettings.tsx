@@ -10,28 +10,45 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "framer-motion";
-import { HardDrive, RefreshCw, AlertTriangle, Loader2, ArrowRightLeft } from "lucide-react";
+import {
+  HardDrive,
+  RefreshCw,
+  AlertTriangle,
+  Loader2,
+  ArrowRightLeft,
+} from "lucide-react";
 
 export function StorageSettings() {
-  const [diskInfo, setDiskInfo] = useState<{free_gb: string, used_gb: string, total_gb: string, path: string} | null>(null);
-  const [availableDrives, setAvailableDrives] = useState<{name: string, freeGB: number}[]>([]);
+  const [diskInfo, setDiskInfo] = useState<{
+    free_gb: string;
+    used_gb: string;
+    total_gb: string;
+    path: string;
+  } | null>(null);
+  const [availableDrives, setAvailableDrives] = useState<
+    { name: string; freeGB: number }[]
+  >([]);
   const [selectedDrive, setSelectedDrive] = useState<string>("");
   const [isReclaiming, setIsReclaiming] = useState(false);
   const [isRelocating, setIsRelocating] = useState(false);
-  const [dockerStatus, setDockerStatus] = useState<{installed: boolean, running: boolean, installDrive?: string} | null>(null);
+  const [dockerStatus, setDockerStatus] = useState<{
+    installed: boolean;
+    running: boolean;
+    installDrive?: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshData = async () => {
     try {
       const info = await window.electronAPI.getDiskSpace();
       if (info.success) setDiskInfo(info.data);
-      
+
       const drives = await window.electronAPI.getAvailableDrives();
       setAvailableDrives(drives);
 
       const status = await window.electronAPI.checkDocker();
       setDockerStatus(status);
-      
+
       // Default to current install drive if known
       if (status?.installDrive) {
         setSelectedDrive(status.installDrive);
@@ -60,9 +77,9 @@ export function StorageSettings() {
 
   const handleRelocate = async () => {
     if (!selectedDrive || isRelocating) return;
-    
+
     const confirm = window.confirm(
-      `WARNING: This will reinstall the OpenFork engine on ${selectedDrive}: drive and remove the current engine images so they can be downloaded again.\n\nAre you sure you want to proceed?`
+      `WARNING: This will reinstall the OpenFork engine on ${selectedDrive}: drive and remove the current engine images so they can be downloaded again.\n\nAre you sure you want to proceed?`,
     );
     if (!confirm) return;
 
@@ -87,12 +104,16 @@ export function StorageSettings() {
       <CardContent className="p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
           <div className="flex items-center gap-4">
-            <div className="p-2.5 rounded-xl bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
+            <div className="p-2.5 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
               <HardDrive className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-xs font-black uppercase tracking-widest text-white">Storage Management</h3>
-              <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">WSL Partition Configuration</p>
+              <h3 className="text-xs font-black uppercase tracking-widest text-white">
+                Storage Management
+              </h3>
+              <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">
+                WSL Partition Configuration
+              </p>
             </div>
           </div>
           {diskInfo && (
@@ -119,9 +140,9 @@ export function StorageSettings() {
                 Reclaim unused space from the WSL disk file.
               </p>
             </div>
-            <Button 
-              variant="primary" 
-              size="sm" 
+            <Button
+              variant="primary"
+              size="sm"
               className="px-4 h-8 text-[11px]"
               onClick={handleReclaim}
               disabled={isReclaiming || isRelocating}
@@ -143,13 +164,16 @@ export function StorageSettings() {
                 Relocate Engine
               </Label>
               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Reinstall the engine on another drive. <span className="text-orange-400 font-medium italic">Requires re-downloading images.</span>
+                Reinstall the engine on another drive.{" "}
+                <span className="text-orange-400 font-medium italic">
+                  Requires re-downloading images.
+                </span>
               </p>
             </div>
-            
+
             <div className="flex gap-2 items-center">
               <div className="flex-1 min-w-0">
-                <Select 
+                <Select
                   value={selectedDrive}
                   onValueChange={setSelectedDrive}
                   disabled={isRelocating}
@@ -158,19 +182,26 @@ export function StorageSettings() {
                     <SelectValue placeholder="Select Drive" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableDrives.map(d => {
-                      const isInstalledHere = dockerStatus?.installDrive === d.name;
+                    {availableDrives.map((d) => {
+                      const isInstalledHere =
+                        dockerStatus?.installDrive === d.name;
                       return (
-                        <SelectItem 
-                          key={d.name} 
-                          value={d.name} 
+                        <SelectItem
+                          key={d.name}
+                          value={d.name}
                           disabled={isInstalledHere}
                           className="text-[11px]"
                         >
                           <div className="flex items-center justify-between w-full gap-4">
                             <span>{d.name}: Drive</span>
-                            <span className="text-[10px] opacity-50">({d.freeGB} GB free)</span>
-                            {isInstalledHere && <span className="text-[9px] text-primary font-bold ml-auto">ACTIVE</span>}
+                            <span className="text-[10px] opacity-50">
+                              ({d.freeGB} GB free)
+                            </span>
+                            {isInstalledHere && (
+                              <span className="text-[9px] text-primary font-bold ml-auto">
+                                ACTIVE
+                              </span>
+                            )}
                           </div>
                         </SelectItem>
                       );
@@ -179,21 +210,30 @@ export function StorageSettings() {
                 </Select>
               </div>
 
-              <Button 
-                variant="primary" 
+              <Button
+                variant="primary"
                 size="sm"
                 className="px-4 h-8 text-[11px] flex-shrink-0"
                 onClick={handleRelocate}
-                disabled={!selectedDrive || selectedDrive === dockerStatus?.installDrive || isRelocating || isReclaiming}
+                disabled={
+                  !selectedDrive ||
+                  selectedDrive === dockerStatus?.installDrive ||
+                  isRelocating ||
+                  isReclaiming
+                }
               >
-                {isRelocating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Move"}
+                {isRelocating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  "Move"
+                )}
               </Button>
             </div>
           </div>
         </div>
 
         {error && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             className="p-2 rounded-md bg-destructive-foreground border border-destructive/20 flex items-center gap-2 text-destructive"

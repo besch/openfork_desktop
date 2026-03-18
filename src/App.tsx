@@ -62,7 +62,7 @@ const TabTrigger = memo(
     return (
       <TabsTrigger
         value={value}
-        className="relative h-9 px-4 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5"
+        className="relative h-9 px-4 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5"
       >
         {isDownloading ? (
           <Download className="mr-2 animate-bounce text-inherit" size={14} />
@@ -240,7 +240,7 @@ function App() {
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-background)_96%,var(--color-foreground)_4%),var(--color-background))]" />
 
         <div className="relative container mx-auto px-4 py-6 max-w-7xl">
-          <header className="relative z-20 flex items-center justify-between mb-6 p-4 rounded-3xl border border-white/20 bg-surface/60 backdrop-blur-md shadow-2xl overflow-hidden shadow-black/20">
+          <header className="relative z-20 flex items-center justify-between mb-6 p-4 rounded-lg border border-white/20 bg-surface/60 backdrop-blur-md shadow-2xl overflow-hidden shadow-black/20">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
             <div className="relative z-10 flex items-center gap-4">
               <img
@@ -297,7 +297,7 @@ function App() {
             onValueChange={setActiveTab}
             className="relative z-10"
           >
-            <TabsList className="mb-6 bg-surface/40 backdrop-blur-xl border border-white/20 p-1 rounded-2xl h-11 overflow-x-auto no-scrollbar justify-start shadow-lg">
+            <TabsList className="mb-6 bg-surface/40 backdrop-blur-xl border border-white/20 p-1 rounded-lg h-11 overflow-x-auto no-scrollbar justify-start shadow-lg">
               <TabTrigger
                 value="dashboard"
                 icon={LayoutDashboard}

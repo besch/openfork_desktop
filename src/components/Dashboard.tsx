@@ -35,7 +35,7 @@ const StatCard = memo(
         <CardTitle className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60 group-hover:text-white/90 transition-colors duration-300">
           {title}
         </CardTitle>
-        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all duration-300 group-hover:scale-110">
+        <div className="p-2.5 rounded-lg bg-white/5 border border-white/5 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all duration-300 group-hover:scale-110">
           {icon}
         </div>
       </CardHeader>
@@ -89,7 +89,7 @@ export const StatusIndicator = memo(() => {
 
   return (
     <div
-      className={`flex items-center space-x-2.5 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest border transition-all duration-500 backdrop-blur-md ${className}`}
+      className={`flex items-center space-x-2.5 px-4 py-2 rounded-lg text-[10px] font-black tracking-widest border transition-all duration-500 backdrop-blur-md ${className}`}
     >
       <div className="flex-shrink-0">{icon}</div>
       <span>{text}</span>
@@ -230,7 +230,7 @@ export const Dashboard = memo(() => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header className="bg-surface/50 backdrop-blur-md border border-white/20 rounded-xl p-3 shadow-xl">
+      <header className="bg-surface/50 backdrop-blur-md border border-white/20 rounded-lg p-3 shadow-xl">
         <div className="flex flex-wrap items-center content-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <PowerButton

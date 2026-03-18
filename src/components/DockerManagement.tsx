@@ -50,7 +50,9 @@ export const DockerManagement = memo(() => {
   } | null>(null);
   const [showStorageSettings, setShowStorageSettings] = useState(false);
 
-  const dockerPullProgress = useClientStore((state) => state.dockerPullProgress);
+  const dockerPullProgress = useClientStore(
+    (state) => state.dockerPullProgress,
+  );
   const status = useClientStore((state) => state.status);
 
   const fetchData = useCallback(async () => {
@@ -72,7 +74,9 @@ export const DockerManagement = memo(() => {
         setContainers(containersResult.data);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch Docker data");
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch Docker data",
+      );
     } finally {
       setLoading(false);
     }
@@ -110,9 +114,11 @@ export const DockerManagement = memo(() => {
 
   // Subscribe to app-wide Docker monitoring updates.
   useEffect(() => {
-    const cleanupContainers = window.electronAPI.onDockerContainersUpdate((data) => {
-      setContainers(data);
-    });
+    const cleanupContainers = window.electronAPI.onDockerContainersUpdate(
+      (data) => {
+        setContainers(data);
+      },
+    );
 
     const cleanupImages = window.electronAPI.onDockerImagesUpdate((data) => {
       setImages(data);
@@ -127,7 +133,7 @@ export const DockerManagement = memo(() => {
   const showConfirmDialog = (
     title: string,
     description: string,
-    onConfirm: () => void
+    onConfirm: () => void,
   ) => {
     setConfirmDialog({
       isOpen: true,
@@ -156,11 +162,14 @@ export const DockerManagement = memo(() => {
         } finally {
           setActionLoading(null);
         }
-      }
+      },
     );
   };
 
-  const handleStopContainer = async (containerId: string, containerName: string) => {
+  const handleStopContainer = async (
+    containerId: string,
+    containerName: string,
+  ) => {
     showConfirmDialog(
       "Stop Container",
       `Are you sure you want to stop and remove container "${containerName}"?`,
@@ -176,13 +185,13 @@ export const DockerManagement = memo(() => {
         } finally {
           setActionLoading(null);
         }
-      }
+      },
     );
   };
 
   const handleCancelDownload = () => {
     const serviceType = dockerPullProgress?.service_type;
-    
+
     if (!serviceType) {
       // Fallback to legacy behavior if service_type is missing
       showConfirmDialog(
@@ -190,7 +199,7 @@ export const DockerManagement = memo(() => {
         "Are you sure you want to cancel the Docker image download? This will stop the client.",
         async () => {
           window.electronAPI.stopClient();
-        }
+        },
       );
       return;
     }
@@ -200,7 +209,7 @@ export const DockerManagement = memo(() => {
       "Are you sure you want to cancel the Docker image download?",
       async () => {
         window.electronAPI.cancelDownload(serviceType);
-      }
+      },
     );
   };
 
@@ -220,7 +229,7 @@ export const DockerManagement = memo(() => {
         } finally {
           setActionLoading(null);
         }
-      }
+      },
     );
   };
 
@@ -243,11 +252,13 @@ export const DockerManagement = memo(() => {
         } finally {
           setActionLoading(null);
         }
-      }
+      },
     );
   };
 
-  const isDownloading = dockerPullProgress !== null && (status === "starting" || status === "running");
+  const isDownloading =
+    dockerPullProgress !== null &&
+    (status === "starting" || status === "running");
 
   if (loading) {
     return (
@@ -255,7 +266,9 @@ export const DockerManagement = memo(() => {
         <div className="p-4 rounded-full bg-primary shadow-2xl shadow-primary/40 animate-pulse">
           <Loader2 className="h-8 w-8 animate-spin text-white" />
         </div>
-        <span className="text-xs font-black uppercase tracking-[0.2em] text-white/50">Initializing Docker Engine...</span>
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
+          Initializing Docker Engine...
+        </span>
       </div>
     );
   }
@@ -273,7 +286,7 @@ export const DockerManagement = memo(() => {
       />
 
       {error && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
@@ -305,15 +318,26 @@ export const DockerManagement = memo(() => {
                   Insufficient Disk Space
                 </h3>
                 <div className="text-sm space-y-1">
-                  <p>Cannot download <span className="font-mono font-medium">{diskSpaceError.image_name}</span></p>
+                  <p>
+                    Cannot download{" "}
+                    <span className="font-mono font-medium">
+                      {diskSpaceError.image_name}
+                    </span>
+                  </p>
                   <p>
                     <span className="text-destructive/80">Need:</span>{" "}
-                    <span className="font-semibold">{diskSpaceError.required_gb} GB</span>
-                    {" "}<span className="text-muted-foreground">(including 5 GB safety buffer)</span>
+                    <span className="font-semibold">
+                      {diskSpaceError.required_gb} GB
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      (including 5 GB safety buffer)
+                    </span>
                   </p>
                   <p>
                     <span className="text-destructive/80">Available:</span>{" "}
-                    <span className="font-semibold">{diskSpaceError.available_gb} GB</span>
+                    <span className="font-semibold">
+                      {diskSpaceError.available_gb} GB
+                    </span>
                   </p>
                 </div>
                 <p className="text-sm text-muted-foreground pt-2">
@@ -335,20 +359,25 @@ export const DockerManagement = memo(() => {
 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-primary border border-white/10 shadow-lg shadow-primary/30 flex items-center justify-center shrink-0">
+          <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 flex items-center justify-center shrink-0">
             <Container className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-black tracking-tight text-white uppercase">Docker Management</h2>
-            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mt-0.5">Engine & Container Runtime</p>
+            <h2 className="text-lg font-black tracking-tight text-white uppercase">
+              Docker Management
+            </h2>
+            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mt-0.5">
+              Engine & Container Runtime
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {diskSpace && (
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md transition-all duration-300 ${
-              diskSpaceError 
-                ? 'bg-destructive border border-destructive/50 text-white shadow-lg shadow-destructive/20'  
-                : 'bg-primary border border-white/10 text-white shadow-lg shadow-primary/20'
+            <div
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 ${
+                diskSpaceError
+                  ? "bg-destructive border border-destructive/50 text-white shadow-lg shadow-destructive/20"
+                  : "bg-primary border border-white/10 text-white shadow-lg shadow-primary/20"
               }`}
             >
               <HardDrive className="h-3.5 w-3.5" />
@@ -362,15 +391,17 @@ export const DockerManagement = memo(() => {
             size="sm"
             onClick={fetchData}
             disabled={loading}
-            className="rounded-xl bg-white/5 hover:bg-white/10 h-8 w-8 p-0 border border-white/5 transition-all text-white shadow-sm"
+            className="rounded-lg bg-white/5 hover:bg-white/10 h-8 w-8 p-0 border border-white/5 transition-all text-white shadow-sm"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />
           </Button>
           <Button
             variant="destructive"
             onClick={handlePurgeOpenFork}
             disabled={actionLoading !== null}
-            className="rounded-xl h-8 text-[10px] font-black uppercase tracking-widest px-4"
+            className="rounded-lg h-8 text-[10px] font-black uppercase tracking-widest px-4"
           >
             {actionLoading === "purge-openfork" ? (
               <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
@@ -383,7 +414,7 @@ export const DockerManagement = memo(() => {
       </header>
 
       <Card className="group relative overflow-hidden transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md shadow-lg">
-        <button 
+        <button
           onClick={() => setShowStorageSettings(!showStorageSettings)}
           className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
         >
@@ -392,8 +423,12 @@ export const DockerManagement = memo(() => {
               <HardDrive className="h-4 w-4" />
             </div>
             <div className="text-left">
-              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white">Storage & Engine Settings</span>
-              <p className="text-[9px] text-white/50 font-black uppercase tracking-[0.1em] mt-0.5">Configure Location & Performance</p>
+              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white">
+                Storage & Engine Settings
+              </span>
+              <p className="text-[9px] text-white/50 font-black uppercase tracking-[0.1em] mt-0.5">
+                Configure Location & Performance
+              </p>
             </div>
           </div>
           <motion.div
@@ -401,18 +436,18 @@ export const DockerManagement = memo(() => {
             transition={{ duration: 0.3, ease: "anticipate" }}
             className="text-white/20 group-hover:text-white transition-colors"
           >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              width="16" 
-              height="16" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="3" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <path d="m6 9 6 6 6-6"/>
+              <path d="m6 9 6 6 6-6" />
             </svg>
           </motion.div>
         </button>
@@ -435,21 +470,23 @@ export const DockerManagement = memo(() => {
           <CardHeader className="pb-4 relative z-10">
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-2.5 rounded-xl bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center shrink-0">
+                <div className="p-2.5 rounded-lg bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center shrink-0">
                   <Download className="h-5 w-5 animate-bounce" />
                 </div>
                 <div>
                   <span className="font-black text-xs uppercase tracking-widest text-primary">
                     {dockerPullProgress?.status || "Downloading"}
                   </span>
-                  <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">Docker Engine Component</p>
+                  <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">
+                    Docker Engine Component
+                  </p>
                 </div>
               </div>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleCancelDownload}
-                className="rounded-xl h-9 px-4 text-[10px] font-black uppercase tracking-widest"
+                className="rounded-lg h-9 px-4 text-[10px] font-black uppercase tracking-widest"
               >
                 Abort
               </Button>
@@ -490,8 +527,12 @@ export const DockerManagement = memo(() => {
               <Container className="h-5 w-5" />
             </div>
             <div>
-              <span className="font-black text-[10px] uppercase tracking-widest text-white/90">Running Containers</span>
-              <p className="text-[9px] text-muted/30 font-bold uppercase tracking-[0.2em] mt-0.5">{containers.length} Instances</p>
+              <span className="font-black text-[10px] uppercase tracking-widest text-white/90">
+                Running Containers
+              </span>
+              <p className="text-[9px] text-muted/30 font-bold uppercase tracking-[0.2em] mt-0.5">
+                {containers.length} Instances
+              </p>
             </div>
           </CardTitle>
         </CardHeader>
@@ -499,31 +540,35 @@ export const DockerManagement = memo(() => {
           {containers.length === 0 ? (
             <div className="text-center py-12 opacity-30 select-none">
               <Container className="h-10 w-10 mx-auto mb-3 opacity-20" />
-              <p className="text-[10px] font-black uppercase tracking-widest">No active containers found</p>
+              <p className="text-[10px] font-black uppercase tracking-widest">
+                No active containers found
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
               {containers.map((container) => (
                 <div
                   key={container.id}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
+                  className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-xs text-white/90 truncate tracking-tight">{container.name}</p>
+                    <p className="font-black text-xs text-white/90 truncate tracking-tight">
+                      {container.name}
+                    </p>
                     <p className="text-[10px] text-muted-foreground/60 truncate font-medium mt-0.5">
                       {container.image}
                     </p>
                   </div>
                   <div className="flex items-center gap-4 ml-4">
-                    <span
-                      className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-400/20 bg-emerald-400/5 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]"
-                    >
+                    <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-400/20 bg-emerald-400/5 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                       {container.status}
                     </span>
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleStopContainer(container.id, container.name)}
+                      onClick={() =>
+                        handleStopContainer(container.id, container.name)
+                      }
                       disabled={actionLoading !== null}
                       className="rounded-lg h-9 w-9 p-0 bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white"
                     >
@@ -549,7 +594,9 @@ export const DockerManagement = memo(() => {
               <Loader2 className="h-8 w-8 animate-spin text-white" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
-              {actionLoading === "remove-all" ? "Purging Repository..." : "Surgically Removing Image..."}
+              {actionLoading === "remove-all"
+                ? "Purging Repository..."
+                : "Surgically Removing Image..."}
             </p>
           </div>
         )}
@@ -605,7 +652,10 @@ export const DockerManagement = memo(() => {
                     variant="destructive"
                     size="sm"
                     onClick={() =>
-                      handleRemoveImage(image.id, `${image.repository}:${image.tag}`)
+                      handleRemoveImage(
+                        image.id,
+                        `${image.repository}:${image.tag}`,
+                      )
                     }
                     disabled={actionLoading !== null}
                   >

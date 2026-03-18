@@ -337,7 +337,7 @@ export function Monetize() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
         <CardHeader className="pb-3 relative z-10">
           <CardTitle className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary text-white shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
+            <div className="p-2 rounded-lg bg-primary text-white shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
               <Gauge size={14} />
             </div>
             <span className="font-black tracking-widest uppercase text-[10px] text-white">

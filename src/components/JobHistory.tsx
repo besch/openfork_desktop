@@ -131,7 +131,7 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl bg-surface/40 border border-white/20 hover:border-white/30 hover:bg-surface/50 transition-all duration-500 group relative overflow-hidden shadow-sm">
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-surface/40 border border-white/20 hover:border-white/30 hover:bg-surface/50 transition-all duration-500 group relative overflow-hidden shadow-sm">
       <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <div className="relative z-10 p-2 rounded-lg bg-white/5 border border-white/5 text-white/70 group-hover:text-white group-hover:scale-105 transition-all duration-500">
         {getWorkflowIcon(job.workflow_type)}
@@ -459,36 +459,14 @@ export const JobHistory = memo(() => {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge
-          variant="secondary"
-          className="bg-primary/20 text-white border-primary/30 px-3 py-1"
-        >
-          {stats.completed} Completed
-        </Badge>
-        <Badge
-          variant="secondary"
-          className="bg-destructive/20 text-white border-destructive/30 px-3 py-1"
-        >
-          {stats.failed} Failed
-        </Badge>
-        <Badge
-          variant="secondary"
-          className="bg-merged-status/20 text-white border-merged-status/30 px-3 py-1"
-        >
-          {stats.cancelled} Cancelled
-        </Badge>
-        <Badge
-          variant="secondary"
-          className="bg-secondary/20 text-white border-secondary/30 px-3 py-1"
-        >
-          {stats.processing} Active
-        </Badge>
+        <Badge variant="primary">{stats.completed} Completed</Badge>
+        <Badge variant="secondary">{stats.failed} Failed</Badge>
         <Button
           variant="primary"
           size="sm"
           onClick={() => fetchJobHistory(true)}
           disabled={loading}
-          className="ml-2 rounded-xl"
+          className="ml-2 rounded-lg"
         >
           <RefreshCw
             className={`h-4 w-4 mr-2 ${loading && jobs.length === 0 ? "animate-spin" : ""}`}
@@ -506,7 +484,7 @@ export const JobHistory = memo(() => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 group-focus-within/search:text-white transition-colors" />
               <input
                 placeholder="Search by prompt, workflow or username..."
-                className="flex h-10 w-full rounded-xl border border-white/5 bg-muted/20 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 pl-9"
+                className="flex h-10 w-full rounded-lg border border-white/5 bg-muted/20 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 pl-9"
                 value={searchQuery}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setSearchQuery(e.target.value)
@@ -523,7 +501,7 @@ export const JobHistory = memo(() => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1 p-1 bg-muted/20 border border-white/5 rounded-xl">
+              <div className="flex items-center gap-1 p-1 bg-muted/20 border border-white/5 rounded-lg">
                 {[
                   { id: "all", label: "All" },
                   { id: "completed", label: "Completed" },
@@ -547,7 +525,7 @@ export const JobHistory = memo(() => {
                 ))}
               </div>
 
-              <div className="flex items-center gap-1 p-1 bg-muted/20 border border-white/5 rounded-xl">
+              <div className="flex items-center gap-1 p-1 bg-muted/20 border border-white/5 rounded-lg">
                 <button
                   onClick={() => setTypeFilter("all")}
                   className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
@@ -578,10 +556,10 @@ export const JobHistory = memo(() => {
       </Card>
 
       {/* List Card */}
-      <Card className="bg-surface/20 backdrop-blur-3xl border-white/20 shadow-3xl min-h-[400px] flex flex-col rounded-2xl overflow-hidden">
+      <Card className="bg-surface/20 backdrop-blur-3xl border-white/20 shadow-3xl min-h-[400px] flex flex-col rounded-lg overflow-hidden">
         <CardContent className="p-8 flex-1 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-primary">
           {error && (
-            <div className="mb-6 bg-destructive-foreground/10 border border-destructive-foreground/20 text-destructive-foreground rounded-2xl p-5 flex items-start gap-4">
+            <div className="mb-6 bg-destructive-foreground/10 border border-destructive-foreground/20 text-destructive-foreground rounded-lg p-5 flex items-start gap-4">
               <div className="p-2 rounded-lg bg-destructive-foreground/20 text-destructive-foreground">
                 <XCircle className="h-5 w-5" />
               </div>
