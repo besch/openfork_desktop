@@ -260,26 +260,6 @@ function App() {
 
             {/* Status dot + avatar profile menu */}
             <div className="relative z-10 flex items-center gap-4">
-              <div className="flex flex-col items-end mr-2 hidden md:flex">
-                <span className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-0.5">
-                  Status
-                </span>
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`h-2 w-2 rounded-full ${
-                      status === "running"
-                        ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse"
-                        : status === "starting" || status === "stopping"
-                          ? "bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)] animate-pulse"
-                          : "bg-muted-foreground/30"
-                    }`}
-                  />
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    {status}
-                  </span>
-                </div>
-              </div>
-
               <Popover>
                 <PopoverTrigger asChild>
                   <Button>{avatarInitial}</Button>

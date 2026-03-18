@@ -84,23 +84,23 @@ const formatTimeAgo = (dateString: string): string => {
 const StatusBadge = memo(({ status }: { status: string }) => {
   const config = {
     completed: {
-      icon: <CheckCircle className="h-3 w-3 text-emerald-400" />,
-      className: "border-emerald-400/20 bg-emerald-400/5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.05)]",
+      icon: <CheckCircle className="h-3 w-3 text-white" />,
+      className: "border-primary bg-primary/70 text-white",
     },
     failed: {
-      icon: <XCircle className="h-3 w-3 text-destructive" />,
-      className: "border-destructive/20 bg-destructive/5 text-destructive shadow-[0_0_10px_rgba(239,68,68,0.05)]",
+      icon: <XCircle className="h-3 w-3 text-white" />,
+      className: "border-destructive bg-destructive/70 text-white",
     },
     cancelled: {
-      icon: <XCircle className="h-3 w-3 text-muted/40" />,
-      className: "border-white/5 bg-white/20 text-muted/50",
+      icon: <XCircle className="h-3 w-3 text-white" />,
+      className: "border-merged-status bg-merged-status/70 text-white-status",
     },
     processing: {
-      icon: <Loader2 className="h-3 w-3 animate-spin text-amber-400" />,
-      className: "border-amber-400/20 bg-amber-400/5 text-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.05)]",
+      icon: <Loader2 className="h-3 w-3 animate-spin text-merged-status" />,
+      className: "border-merged-status bg-merged-status/70 text-white-status",
     },
     pending: {
-      icon: <Clock className="h-3 w-3 text-muted/40" />,
+      icon: <Clock className="h-3 w-3 text-white" />,
       className: "border-white/5 bg-white/20 text-muted/50",
     },
   };
@@ -293,74 +293,74 @@ export const JobHistory = memo(() => {
         const from = targetPage * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        query = query
-          .order("updated_at", { ascending: false })
-          .range(from, to);
+        query = query.order("updated_at", { ascending: false }).range(from, to);
 
         const { data, error: fetchError } = await query;
 
-      if (fetchError) throw fetchError;
+        if (fetchError) throw fetchError;
 
-      // 3. Fetch profiles for user mapping
-      const userIds = [
-        ...new Set((data || []).map((j) => j.user_id).filter(Boolean)),
-      ];
-      let profileMap: Record<
-        string,
-        { username: string; avatar_url: string | null }
-      > = {};
+        // 3. Fetch profiles for user mapping
+        const userIds = [
+          ...new Set((data || []).map((j) => j.user_id).filter(Boolean)),
+        ];
+        let profileMap: Record<
+          string,
+          { username: string; avatar_url: string | null }
+        > = {};
 
-      if (userIds.length > 0) {
-        const { data: profiles, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, username")
-          .in("id", userIds);
+        if (userIds.length > 0) {
+          const { data: profiles, error: profileError } = await supabase
+            .from("profiles")
+            .select("id, username")
+            .in("id", userIds);
 
-        if (profileError) {
-          console.warn(
-            "Could not fetch profiles, usernames will be unknown:",
-            profileError,
-          );
-        } else {
-          profileMap = (profiles || []).reduce(
-            (acc, p) => {
-              acc[p.id] = { username: p.username, avatar_url: null };
-              return acc;
-            },
-            {} as typeof profileMap,
-          );
+          if (profileError) {
+            console.warn(
+              "Could not fetch profiles, usernames will be unknown:",
+              profileError,
+            );
+          } else {
+            profileMap = (profiles || []).reduce(
+              (acc, p) => {
+                acc[p.id] = { username: p.username, avatar_url: null };
+                return acc;
+              },
+              {} as typeof profileMap,
+            );
+          }
         }
-      }
 
-      const mergedJobs: ProcessedJob[] = (data || []).map((job) => ({
-        ...job,
-        user: job.user_id ? profileMap[job.user_id] || null : null,
-      }));
+        const mergedJobs: ProcessedJob[] = (data || []).map((job) => ({
+          ...job,
+          user: job.user_id ? profileMap[job.user_id] || null : null,
+        }));
 
-      if (isInitial) {
-        setJobs(mergedJobs);
-        pageRef.current = 1;
-      } else {
-        setJobs((prev) => {
-          const existingIds = new Set(prev.map((j) => j.id));
-          const newJobs = mergedJobs.filter((j) => !existingIds.has(j.id));
-          return [...prev, ...newJobs];
-        });
-        pageRef.current = pageRef.current + 1;
+        if (isInitial) {
+          setJobs(mergedJobs);
+          pageRef.current = 1;
+        } else {
+          setJobs((prev) => {
+            const existingIds = new Set(prev.map((j) => j.id));
+            const newJobs = mergedJobs.filter((j) => !existingIds.has(j.id));
+            return [...prev, ...newJobs];
+          });
+          pageRef.current = pageRef.current + 1;
+        }
+        const hasMoreData = mergedJobs.length === PAGE_SIZE;
+        setHasMore(hasMoreData);
+        hasMoreRef.current = hasMoreData;
+      } catch (err) {
+        console.error("Error fetching job history:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch job history",
+        );
+      } finally {
+        setLoading(false);
+        loadingRef.current = false;
       }
-      const hasMoreData = mergedJobs.length === PAGE_SIZE;
-      setHasMore(hasMoreData);
-      hasMoreRef.current = hasMoreData;
-    } catch (err) {
-      console.error("Error fetching job history:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch job history",
-      );
-    } finally {
-      setLoading(false);
-      loadingRef.current = false;
-    }
-  }, [session?.user?.id, statusFilter, typeFilter, debouncedSearchQuery]);
+    },
+    [session?.user?.id, statusFilter, typeFilter, debouncedSearchQuery],
+  );
 
   // Initial load or when filters change
   useEffect(() => {
@@ -461,37 +461,37 @@ export const JobHistory = memo(() => {
       <div className="flex flex-wrap items-center gap-2">
         <Badge
           variant="secondary"
-          className="bg-primary/10 text-primary border-primary/20 px-3 py-1"
+          className="bg-primary/20 text-white border-primary/30 px-3 py-1"
         >
           {stats.completed} Completed
         </Badge>
         <Badge
           variant="secondary"
-          className="bg-destructive-foreground/10 text-destructive-foreground border-destructive-foreground/20 px-3 py-1"
+          className="bg-destructive/20 text-white border-destructive/30 px-3 py-1"
         >
           {stats.failed} Failed
         </Badge>
         <Badge
           variant="secondary"
-          className="bg-merged-status/10 text-merged-status border-merged-status/20 px-3 py-1"
+          className="bg-merged-status/20 text-white border-merged-status/30 px-3 py-1"
         >
           {stats.cancelled} Cancelled
         </Badge>
         <Badge
           variant="secondary"
-          className="bg-secondary/10 text-secondary border-secondary/20 px-3 py-1"
+          className="bg-secondary/20 text-white border-secondary/30 px-3 py-1"
         >
           {stats.processing} Active
         </Badge>
         <Button
-          variant="ghost"
+          variant="primary"
           size="sm"
           onClick={() => fetchJobHistory(true)}
           disabled={loading}
-          className="ml-2 hover:bg-primary/10 hover:text-primary transition-all rounded-full"
+          className="ml-2 rounded-xl"
         >
           <RefreshCw
-            className={`h-4 w-4 mr-2 text-white ${loading && jobs.length === 0 ? "animate-spin" : ""}`}
+            className={`h-4 w-4 mr-2 ${loading && jobs.length === 0 ? "animate-spin" : ""}`}
           />
           Refresh
         </Button>
@@ -578,7 +578,7 @@ export const JobHistory = memo(() => {
       </Card>
 
       {/* List Card */}
-      <Card className="bg-surface/20 backdrop-blur-3xl border-white/20 shadow-3xl min-h-[400px] flex flex-col rounded-[2.5rem] overflow-hidden">
+      <Card className="bg-surface/20 backdrop-blur-3xl border-white/20 shadow-3xl min-h-[400px] flex flex-col rounded-2xl overflow-hidden">
         <CardContent className="p-8 flex-1 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-primary">
           {error && (
             <div className="mb-6 bg-destructive-foreground/10 border border-destructive-foreground/20 text-destructive-foreground rounded-2xl p-5 flex items-start gap-4">
