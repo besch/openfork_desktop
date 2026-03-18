@@ -333,14 +333,16 @@ export function Monetize() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* GPU Pricing */}
-      <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl border-white/5 bg-surface/30 backdrop-blur-md">
+      <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl border-white/20 bg-surface/40 backdrop-blur-md">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
         <CardHeader className="pb-3 relative z-10">
           <CardTitle className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-primary text-white shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
               <Gauge size={14} />
             </div>
-            <span className="font-black tracking-widest uppercase text-[10px] text-white">GPU Pricing</span>
+            <span className="font-black tracking-widest uppercase text-[10px] text-white">
+              GPU Pricing
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -556,18 +558,43 @@ export function Monetize() {
       {/* Wallet Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Pending Earnings", value: wallet ? formatCents(wallet.pending_earnings_cents) : "—", color: "text-amber-400" },
-          { label: "Available to Withdraw", value: wallet ? formatCents(wallet.available_to_withdraw_cents) : "—", color: "text-emerald-400" },
-          { label: "Lifetime Earned", value: wallet ? formatCents(wallet.total_earned_lifetime_cents) : "—", color: "text-white" },
-          { label: "Total Withdrawn", value: wallet ? formatCents(wallet.total_withdrawn_cents) : "—", color: "text-muted/60" },
+          {
+            label: "Pending Earnings",
+            value: wallet ? formatCents(wallet.pending_earnings_cents) : "—",
+            color: "text-amber-400",
+          },
+          {
+            label: "Available to Withdraw",
+            value: wallet
+              ? formatCents(wallet.available_to_withdraw_cents)
+              : "—",
+            color: "text-emerald-400",
+          },
+          {
+            label: "Lifetime Earned",
+            value: wallet
+              ? formatCents(wallet.total_earned_lifetime_cents)
+              : "—",
+            color: "text-white",
+          },
+          {
+            label: "Total Withdrawn",
+            value: wallet ? formatCents(wallet.total_withdrawn_cents) : "—",
+            color: "text-muted/60",
+          },
         ].map((item, i) => (
-          <Card key={i} className="relative overflow-hidden group hover:shadow-xl transition-all duration-500 border-white/5 bg-surface/30 backdrop-blur-md">
+          <Card
+            key={i}
+            className="relative overflow-hidden group hover:shadow-xl transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md"
+          >
             <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <CardContent className="pt-6 pb-5 relative z-10">
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted/40 font-black mb-2 group-hover:text-muted/60 transition-colors">
                 {item.label}
               </p>
-              <p className={`text-2xl font-black tracking-tighter ${item.color} drop-shadow-2xl`}>
+              <p
+                className={`text-2xl font-black tracking-tighter ${item.color} drop-shadow-2xl`}
+              >
                 {item.value}
               </p>
             </CardContent>
@@ -594,14 +621,16 @@ export function Monetize() {
                   <span>Bank account connected &amp; verified</span>
                 </div>
                 <Button
-                  variant="outline"
+                  variant="primary"
                   size="sm"
                   onClick={handleStripeDashboard}
                   disabled={stripeLoading}
-                  className="w-full"
                 >
                   {stripeLoading ? (
-                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
+                    <Loader2
+                      size={14}
+                      className="mr-2 animate-spin text-white"
+                    />
                   ) : (
                     <ExternalLink size={14} className="mr-2 text-white" />
                   )}
@@ -622,7 +651,10 @@ export function Monetize() {
                   className="w-full"
                 >
                   {stripeLoading ? (
-                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
+                    <Loader2
+                      size={14}
+                      className="mr-2 animate-spin text-white"
+                    />
                   ) : (
                     <ExternalLink size={14} className="mr-2 text-white" />
                   )}
@@ -641,7 +673,10 @@ export function Monetize() {
                   variant="primary"
                 >
                   {stripeLoading ? (
-                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
+                    <Loader2
+                      size={14}
+                      className="mr-2 animate-spin text-white"
+                    />
                   ) : (
                     <Building2 size={14} className="mr-2 text-white" />
                   )}
@@ -653,7 +688,7 @@ export function Monetize() {
         </Card>
 
         {/* Withdraw */}
-        <Card>
+        <Card className="bg-surface/40 border-white/20 shadow-xl overflow-hidden group">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
@@ -706,7 +741,10 @@ export function Monetize() {
                   className="w-full"
                 >
                   {withdrawing ? (
-                    <Loader2 size={14} className="mr-2 animate-spin text-white" />
+                    <Loader2
+                      size={14}
+                      className="mr-2 animate-spin text-white"
+                    />
                   ) : (
                     <ArrowDownToLine size={14} className="mr-2 text-white" />
                   )}
@@ -720,7 +758,7 @@ export function Monetize() {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Recent Earnings */}
-        <Card>
+        <Card className="bg-surface/40 border-white/20 shadow-xl overflow-hidden group">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
@@ -767,7 +805,9 @@ export function Monetize() {
                       </Badge>
                       <span
                         className={`text-sm font-medium ${
-                          txn.amount_cents < 0 ? "text-destructive-foreground" : "text-primary"
+                          txn.amount_cents < 0
+                            ? "text-destructive-foreground"
+                            : "text-primary"
                         }`}
                       >
                         {txn.amount_cents >= 0 ? "+" : ""}
@@ -782,7 +822,7 @@ export function Monetize() {
         </Card>
 
         {/* Docker Auto-Cleanup */}
-        <Card>
+        <Card className="bg-surface/40 border-white/20 shadow-xl overflow-hidden group">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Trash2 size={16} />

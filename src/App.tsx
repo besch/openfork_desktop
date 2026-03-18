@@ -240,7 +240,7 @@ function App() {
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-background)_96%,var(--color-foreground)_4%),var(--color-background))]" />
 
         <div className="relative container mx-auto px-4 py-6 max-w-7xl">
-          <header className="relative z-20 flex items-center justify-between mb-6 p-4 rounded-3xl border border-white/10 bg-surface/30 backdrop-blur-md shadow-2xl overflow-hidden">
+          <header className="relative z-20 flex items-center justify-between mb-6 p-4 rounded-3xl border border-white/20 bg-surface/60 backdrop-blur-md shadow-2xl overflow-hidden shadow-black/20">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
             <div className="relative z-10 flex items-center gap-4">
               <img
@@ -317,14 +317,14 @@ function App() {
             onValueChange={setActiveTab}
             className="relative z-10"
           >
-            <TabsList className="mb-6 bg-surface/20 backdrop-blur-xl border border-white/10 p-1 rounded-2xl h-11 overflow-x-auto no-scrollbar justify-start">
+            <TabsList className="mb-6 bg-surface/40 backdrop-blur-xl border border-white/20 p-1 rounded-2xl h-11 overflow-x-auto no-scrollbar justify-start shadow-lg">
               <TabTrigger
                 value="dashboard"
                 icon={LayoutDashboard}
                 label="Dashboard"
               />
               <TabTrigger value="chart" icon={BarChartIcon} label="Chart" />
-              <TabTrigger value="docker" label="Docker" />
+              <TabTrigger value="docker" icon={Container} label="Docker" />
               <TabTrigger value="history" icon={History} label="History" />
               <TabTrigger value="monetize" icon={DollarSign} label="Monetize" />
               <TabTrigger value="logs" icon={Terminal} label="Logs" />

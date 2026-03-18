@@ -251,9 +251,11 @@ export const DockerManagement = memo(() => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2 text-muted-foreground">Loading Docker data...</span>
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="p-4 rounded-full bg-primary shadow-2xl shadow-primary/40 animate-pulse">
+          <Loader2 className="h-8 w-8 animate-spin text-white" />
+        </div>
+        <span className="text-xs font-black uppercase tracking-[0.2em] text-white/50">Initializing Docker Engine...</span>
       </div>
     );
   }
@@ -333,8 +335,8 @@ export const DockerManagement = memo(() => {
 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-surface/50 border border-white/5 shadow-xl">
-            <Container className="h-4 w-4 text-primary" />
+          <div className="p-2 rounded-xl bg-primary border border-white/10 shadow-lg shadow-primary/30 flex items-center justify-center shrink-0">
+            <Container className="h-4 w-4 text-white" />
           </div>
           <div>
             <h2 className="text-lg font-black tracking-tight text-white uppercase">Docker Management</h2>
@@ -345,8 +347,8 @@ export const DockerManagement = memo(() => {
           {diskSpace && (
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md transition-all duration-300 ${
               diskSpaceError 
-                ? 'bg-destructive/10 border border-destructive/20 text-destructive'  
-                : 'bg-white/5 border border-white/5 text-white/60'
+                ? 'bg-destructive border border-destructive/50 text-white shadow-lg shadow-destructive/20'  
+                : 'bg-primary border border-white/10 text-white shadow-lg shadow-primary/20'
               }`}
             >
               <HardDrive className="h-3.5 w-3.5" />
@@ -360,7 +362,7 @@ export const DockerManagement = memo(() => {
             size="sm"
             onClick={fetchData}
             disabled={loading}
-            className="rounded-lg hover:bg-white/5 h-8 w-8 p-0"
+            className="rounded-xl bg-white/5 hover:bg-white/10 h-8 w-8 p-0 border border-white/5 transition-all text-white shadow-sm"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
@@ -380,13 +382,13 @@ export const DockerManagement = memo(() => {
         </div>
       </header>
 
-      <Card className="group relative overflow-hidden transition-all duration-500 border-white/5 bg-surface/30 backdrop-blur-md">
+      <Card className="group relative overflow-hidden transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md shadow-lg">
         <button 
           onClick={() => setShowStorageSettings(!showStorageSettings)}
           className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-primary group-hover:scale-110 transition-transform duration-500">
+            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white group-hover:scale-110 transition-transform duration-500 flex items-center justify-center shrink-0">
               <HardDrive className="h-4 w-4" />
             </div>
             <div className="text-left">
@@ -433,7 +435,7 @@ export const DockerManagement = memo(() => {
           <CardHeader className="pb-4 relative z-10">
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-2.5 rounded-xl bg-primary text-white shadow-lg shadow-primary/30">
+                <div className="p-2.5 rounded-xl bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center shrink-0">
                   <Download className="h-5 w-5 animate-bounce" />
                 </div>
                 <div>
@@ -480,11 +482,11 @@ export const DockerManagement = memo(() => {
       )}
 
       {/* Containers Card */}
-      <Card className="group relative overflow-hidden transition-all duration-500 border-white/5 bg-surface/30 backdrop-blur-md">
+      <Card className="group relative overflow-hidden transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md shadow-lg">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-        <CardHeader className="flex flex-row items-center justify-between relative z-10 pb-4">
-          <CardTitle className="flex items-center gap-4">
-            <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-primary">
+        <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
+          <CardTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
               <Container className="h-5 w-5" />
             </div>
             <div>
@@ -493,7 +495,7 @@ export const DockerManagement = memo(() => {
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="relative z-10">
+        <CardContent className="relative z-10 px-4 overflow-hidden pb-4">
           {containers.length === 0 ? (
             <div className="text-center py-12 opacity-30 select-none">
               <Container className="h-10 w-10 mx-auto mb-3 opacity-20" />
@@ -504,7 +506,7 @@ export const DockerManagement = memo(() => {
               {containers.map((container) => (
                 <div
                   key={container.id}
-                  className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
+                  className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-black text-xs text-white/90 truncate tracking-tight">{container.name}</p>
@@ -542,17 +544,21 @@ export const DockerManagement = memo(() => {
       {/* Images Card */}
       <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-white/10">
         {actionLoading?.startsWith("remove-") && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-sm">
-            <Loader2 className="h-8 w-8 animate-spin text-primary drop-shadow-md mb-2" />
-            <p className="text-sm font-medium">
-              {actionLoading === "remove-all" ? "Removing all images..." : "Removing image..."}
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md">
+            <div className="p-4 rounded-full bg-primary shadow-2xl shadow-primary/40 mb-4">
+              <Loader2 className="h-8 w-8 animate-spin text-white" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
+              {actionLoading === "remove-all" ? "Purging Repository..." : "Surgically Removing Image..."}
             </p>
           </div>
         )}
-        <CardHeader className="flex flex-row items-center justify-between relative z-10">
-          <CardTitle className="flex items-center gap-2">
-            <HardDrive className="h-5 w-5 text-primary" />
-            Docker Images ({images.length})
+        <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
+          <CardTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
+              <HardDrive className="h-5 w-5" />
+            </div>
+            <span>Docker Images ({images.length})</span>
           </CardTitle>
           {images.length > 0 && (
             <Button
@@ -570,7 +576,7 @@ export const DockerManagement = memo(() => {
             </Button>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4">
           {images.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">
               No OpenFork Docker images found
@@ -580,7 +586,7 @@ export const DockerManagement = memo(() => {
               {images.map((image) => (
                 <div
                   key={image.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">

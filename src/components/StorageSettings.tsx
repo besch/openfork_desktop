@@ -87,7 +87,7 @@ export function StorageSettings() {
       <CardContent className="p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
           <div className="flex items-center gap-4">
-            <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-primary">
+            <div className="p-2.5 rounded-xl bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
               <HardDrive className="h-5 w-5" />
             </div>
             <div>

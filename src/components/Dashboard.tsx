@@ -29,7 +29,7 @@ const StatCard = memo(
     icon: React.ReactNode;
     className?: string;
   }) => (
-    <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 border-white/5 bg-surface/30 backdrop-blur-md">
+    <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 border-white/15 bg-surface/40 backdrop-blur-md">
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
         <CardTitle className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60 group-hover:text-white/90 transition-colors duration-300">
@@ -230,7 +230,7 @@ export const Dashboard = memo(() => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header className="bg-surface/30 backdrop-blur-md border border-white/5 rounded-xl p-3 shadow-xl">
+      <header className="bg-surface/50 backdrop-blur-md border border-white/20 rounded-xl p-3 shadow-xl">
         <div className="flex flex-wrap items-center content-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <PowerButton

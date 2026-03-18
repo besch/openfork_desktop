@@ -131,7 +131,7 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl bg-surface/20 border border-white/5 hover:border-white/10 hover:bg-surface/30 transition-all duration-500 group relative overflow-hidden">
+    <div className="flex items-center gap-3 p-3 rounded-xl bg-surface/40 border border-white/20 hover:border-white/30 hover:bg-surface/50 transition-all duration-500 group relative overflow-hidden shadow-sm">
       <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <div className="relative z-10 p-2 rounded-lg bg-white/5 border border-white/5 text-white/70 group-hover:text-white group-hover:scale-105 transition-all duration-500">
         {getWorkflowIcon(job.workflow_type)}
@@ -498,7 +498,7 @@ export const JobHistory = memo(() => {
       </div>
 
       {/* Filters Card */}
-      <Card className="bg-card/30 backdrop-blur-xl border-white/5 shadow-2xl overflow-hidden group">
+      <Card className="bg-card/40 backdrop-blur-xl border-white/20 shadow-2xl overflow-hidden group">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         <CardContent className="p-4 space-y-4">
           <div className="flex flex-col lg:flex-row gap-4">
@@ -578,7 +578,7 @@ export const JobHistory = memo(() => {
       </Card>
 
       {/* List Card */}
-      <Card className="bg-surface/10 backdrop-blur-3xl border-white/10 shadow-3xl min-h-[400px] flex flex-col rounded-[2.5rem] overflow-hidden">
+      <Card className="bg-surface/20 backdrop-blur-3xl border-white/20 shadow-3xl min-h-[400px] flex flex-col rounded-[2.5rem] overflow-hidden">
         <CardContent className="p-8 flex-1 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-primary">
           {error && (
             <div className="mb-6 bg-destructive-foreground/10 border border-destructive-foreground/20 text-destructive-foreground rounded-2xl p-5 flex items-start gap-4">
