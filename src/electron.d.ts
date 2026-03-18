@@ -95,6 +95,9 @@ interface ProviderRateInfo {
   effective_rate_hourly_dollars: number;
   market_avg_rate: number | null;
   market_avg_rate_hourly_dollars: number | null;
+  online_monetize_providers_count: number;
+  suggested_rate_cents_per_vram_gb_min: number;
+  suggested_rate_hourly_dollars: number;
   display_vram_gb: number;
   error?: string;
 }
@@ -111,27 +114,34 @@ interface ElectronAPI {
 
   onLog: (callback: (log: Omit<LogEntry, "timestamp">) => void) => CleanupFn;
   onStatusChange: (callback: (status: DGNClientStatus) => void) => CleanupFn;
-  onDockerProgress: (callback: (progress: DockerPullProgress | null) => void) => CleanupFn;
-  onDiskSpaceError: (callback: (data: {
-    image_name: string;
-    required_gb: number;
-    available_gb: number;
-    message: string;
-  }) => void) => CleanupFn;
+  onDockerProgress: (
+    callback: (progress: DockerPullProgress | null) => void,
+  ) => CleanupFn;
+  onDiskSpaceError: (
+    callback: (data: {
+      image_name: string;
+      required_gb: number;
+      available_gb: number;
+      message: string;
+    }) => void,
+  ) => CleanupFn;
 
   // Authentication
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   onSession: (callback: (session: Session | null) => void) => CleanupFn;
   onAuthCallback: (callback: (url: string) => void) => CleanupFn;
-  setSessionFromTokens: (accessToken: string, refreshToken: string) => Promise<SessionResult>;
+  setSessionFromTokens: (
+    accessToken: string,
+    refreshToken: string,
+  ) => Promise<SessionResult>;
 
   // Window controls
   setWindowClosable: (closable: boolean) => void;
 
   // Force refresh handling
   onForceRefresh: (callback: () => void) => CleanupFn;
-  
+
   // Force logout handling (permanent auth failure)
   onForceLogout: (callback: () => void) => CleanupFn;
 
@@ -146,10 +156,14 @@ interface ElectronAPI {
   searchProjects: (term: string) => Promise<SearchProjectsResult>;
 
   // Config
-  fetchConfig: () => Promise<Record<string, { service_name: string; label: string }>>;
+  fetchConfig: () => Promise<
+    Record<string, { service_name: string; label: string }>
+  >;
 
   // General Search
-  searchGeneral: (query: string) => Promise<Array<{ id: string; title: string }>>;
+  searchGeneral: (
+    query: string,
+  ) => Promise<Array<{ id: string; title: string }>>;
 
   // Docker Management
   listDockerImages: () => Promise<DockerImagesResult>;
@@ -174,22 +188,32 @@ interface ElectronAPI {
   // Docker Monitoring
   startDockerMonitoring: () => void;
   stopDockerMonitoring: () => void;
-  onDockerContainersUpdate: (callback: (containers: DockerContainer[]) => void) => CleanupFn;
-  onDockerImagesUpdate: (callback: (images: DockerImage[]) => void) => CleanupFn;
+  onDockerContainersUpdate: (
+    callback: (containers: DockerContainer[]) => void,
+  ) => CleanupFn;
+  onDockerImagesUpdate: (
+    callback: (images: DockerImage[]) => void,
+  ) => CleanupFn;
 
   // Dependency Detection
   checkDocker: () => Promise<DockerStatus>;
   checkNvidia: () => Promise<NvidiaStatus>;
   openDockerDownload: () => Promise<{ success: boolean }>;
-  installEngine: (installPath?: string) => Promise<{ success: boolean; error?: string }>;
-  onInstallProgress: (callback: (data: InstallProgressEvent) => void) => CleanupFn;
+  installEngine: (
+    installPath?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  onInstallProgress: (
+    callback: (data: InstallProgressEvent) => void,
+  ) => CleanupFn;
   cancelInstall: () => Promise<{ success: boolean; error?: string }>;
-  
+
   // Disk Management
   getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
   reclaimDiskSpace: () => Promise<{ success: boolean; error?: string }>;
-  relocateStorage: (newDrivePath: string) => Promise<{ success: boolean; error?: string }>;
-  
+  relocateStorage: (
+    newDrivePath: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+
   // Auto Updater - return cleanup functions
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => CleanupFn;
@@ -205,10 +229,12 @@ interface ElectronAPI {
   getScheduleConfig: () => Promise<ScheduleConfig>;
   setScheduleConfig: (config: ScheduleConfig) => Promise<SettingsResult>;
   getScheduleStatus: () => Promise<ScheduleStatus>;
-  getSchedulePresets: () => Promise<Array<{ id: string; label: string; config: ScheduleConfig }>>;
+  getSchedulePresets: () => Promise<
+    Array<{ id: string; label: string; config: ScheduleConfig }>
+  >;
   getSystemIdleTime: () => Promise<number>;
   onScheduleStatus: (callback: (status: ScheduleStatus) => void) => CleanupFn;
-  
+
   // Versions and Environment
   getProcessInfo: () => Promise<ProcessInfo>;
 
@@ -218,14 +244,19 @@ interface ElectronAPI {
   startMonetizeCleanup: () => void;
   stopMonetizeCleanup: () => void;
   setMonetizeIdleTimeout: (minutes: number) => Promise<{ success: boolean }>;
-  getMonetizeConfig: () => Promise<{ idleTimeoutMinutes: number; enabled: boolean }>;
-  onMonetizeCleanupEvent: (callback: (event: {
-    service_type: string;
-    image: string;
-    action: string;
-    reason: string;
-    timestamp: string;
-  }) => void) => CleanupFn;
+  getMonetizeConfig: () => Promise<{
+    idleTimeoutMinutes: number;
+    enabled: boolean;
+  }>;
+  onMonetizeCleanupEvent: (
+    callback: (event: {
+      service_type: string;
+      image: string;
+      action: string;
+      reason: string;
+      timestamp: string;
+    }) => void,
+  ) => CleanupFn;
 
   // Provider custom pricing
   getProviderRate: () => Promise<ProviderRateInfo>;

@@ -20,7 +20,6 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
-  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/supabase";
 
@@ -121,8 +120,6 @@ export function Monetize() {
   const [rateLoading, setRateLoading] = useState(false);
   const [rateInput, setRateInput] = useState<string>("");
   const [rateSaving, setRateSaving] = useState(false);
-  const [rateError, setRateError] = useState<string | null>(null);
-  const [rateSaved, setRateSaved] = useState(false);
 
   // Fetch wallet + transactions + rate on mount
   useEffect(() => {
@@ -263,36 +260,23 @@ export function Monetize() {
       if (!rateInfo) return;
       const dollars = parseFloat(valueStr ?? rateInput);
       if (isNaN(dollars) || dollars < 0) {
-        setRateError("Enter a valid rate.");
         return;
       }
       const centsPerVramGbMin = hourlyToRate(dollars);
       if (centsPerVramGbMin < rateInfo.floor_rate) {
-        setRateError(
-          `Minimum rate is $${rateToHourly(rateInfo.floor_rate).toFixed(3)}/hr (50% of platform rate).`,
-        );
         return;
       }
       if (centsPerVramGbMin > rateInfo.ceiling_rate) {
-        setRateError(
-          `Maximum rate is $${rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr (300% of platform rate).`,
-        );
         return;
       }
       setRateSaving(true);
-      setRateError(null);
       try {
         const result =
           await window.electronAPI.setProviderRate(centsPerVramGbMin);
-        if (result.error) {
-          setRateError(result.error);
-        } else {
+        if (!result.error) {
           setRateInfo(result);
-          setRateSaved(true);
-          setTimeout(() => setRateSaved(false), 3000);
         }
       } catch {
-        setRateError("Network error. Please try again.");
       } finally {
         setRateSaving(false);
       }
@@ -306,7 +290,6 @@ export function Monetize() {
       const newRate = rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
       const valueStr = rateToHourly(newRate).toFixed(3);
       setRateInput(valueStr);
-      setRateError(null);
       handleSaveRate(valueStr);
     },
     [rateInfo, handleSaveRate],
@@ -315,19 +298,13 @@ export function Monetize() {
   const handleResetRate = useCallback(async () => {
     if (!rateInfo) return;
     setRateSaving(true);
-    setRateError(null);
     try {
       const result = await window.electronAPI.setProviderRate(null);
-      if (result.error) {
-        setRateError(result.error);
-      } else {
+      if (!result.error) {
         setRateInfo(result);
         setRateInput(rateToHourly(result.effective_rate).toFixed(3));
-        setRateSaved(true);
-        setTimeout(() => setRateSaved(false), 3000);
       }
     } catch {
-      setRateError("Network error. Please try again.");
     } finally {
       setRateSaving(false);
     }
@@ -388,7 +365,6 @@ export function Monetize() {
                       value={rateInput}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         setRateInput(e.target.value);
-                        setRateError(null);
                       }}
                       onBlur={() => handleSaveRate()}
                       className="pl-7 pr-12 font-mono"

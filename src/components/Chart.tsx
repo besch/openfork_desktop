@@ -1,5 +1,5 @@
 import { useClientStore } from "@/store";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   BarChart,
   Bar,
@@ -46,7 +46,10 @@ export const Chart = () => {
             data={chartData}
             margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(255,255,255,0.1)"
+            />
             <XAxis dataKey="name" stroke="#a1a1aa" />
             <YAxis allowDecimals={false} stroke="#a1a1aa" />
             <Tooltip

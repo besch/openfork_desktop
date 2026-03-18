@@ -29,7 +29,9 @@ const StatCard = memo(
     icon: React.ReactNode;
     className?: string;
   }) => (
-    <Card className="group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 border-white/15 bg-surface/40 backdrop-blur-md">
+    <Card
+      className={`group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 border-white/15 bg-surface/40 backdrop-blur-md ${className || ""}`}
+    >
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
         <CardTitle className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60 group-hover:text-white/90 transition-colors duration-300">
