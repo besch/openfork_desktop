@@ -1,13 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Loader } from "@/components/ui/loader";
 import {
   CheckCircle2,
   XCircle,
   AlertCircle,
   Download,
   RefreshCw,
-  Loader2,
   Cpu,
   HardDrive,
 } from "lucide-react";
@@ -355,7 +355,7 @@ export function DependencySetup({
                       >
                         {isCancelling ? (
                           <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            <Loader size="xs" className="mr-2" />
                             Cancelling…
                           </>
                         ) : (
@@ -431,7 +431,7 @@ export function DependencySetup({
               className="w-full"
             >
               {isChecking ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader size="xs" className="mr-2" />
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}

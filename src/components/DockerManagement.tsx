@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Loader } from "@/components/ui/loader";
 import {
   Trash2,
   X,
   RefreshCw,
-  Loader2,
   HardDrive,
   Container,
   Download,
@@ -263,9 +263,7 @@ export const DockerManagement = memo(() => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <div className="p-4 rounded-full bg-primary shadow-2xl shadow-primary/40 animate-pulse">
-          <Loader2 className="h-8 w-8 animate-spin text-white" />
-        </div>
+        <Loader size="lg" variant="white" />
         <span className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
           Initializing Docker Engine...
         </span>
@@ -404,7 +402,7 @@ export const DockerManagement = memo(() => {
             className="rounded-lg h-8 text-[10px] font-black uppercase tracking-widest px-4"
           >
             {actionLoading === "purge-openfork" ? (
-              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              <Loader size="xs" className="mr-2" />
             ) : (
               <Trash2 className="h-3.5 w-3.5 mr-2" />
             )}
@@ -573,7 +571,7 @@ export const DockerManagement = memo(() => {
                       className="rounded-lg h-9 w-9 p-0 bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white"
                     >
                       {actionLoading === `stop-${container.id}` ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader size="xs" />
                       ) : (
                         <X className="h-4 w-4" />
                       )}
@@ -590,9 +588,7 @@ export const DockerManagement = memo(() => {
       <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-white/10">
         {actionLoading?.startsWith("remove-") && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md">
-            <div className="p-4 rounded-full bg-primary shadow-2xl shadow-primary/40 mb-4">
-              <Loader2 className="h-8 w-8 animate-spin text-white" />
-            </div>
+            <Loader size="lg" variant="white" className="mb-4" />
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
               {actionLoading === "remove-all"
                 ? "Purging Repository..."
@@ -615,7 +611,7 @@ export const DockerManagement = memo(() => {
               disabled={actionLoading !== null}
             >
               {actionLoading === "remove-all" ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader size="xs" className="mr-2" />
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
@@ -660,7 +656,7 @@ export const DockerManagement = memo(() => {
                     disabled={actionLoading !== null}
                   >
                     {actionLoading === `remove-${image.id}` ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader size="xs" />
                     ) : (
                       <Trash2 className="h-4 w-4" />
                     )}

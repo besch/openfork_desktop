@@ -2,16 +2,17 @@ import React, { useState, useCallback, memo, useMemo, useEffect } from "react";
 import { useClientStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader } from "@/components/ui/loader";
 import {
   CheckCircle,
   XCircle,
-  Loader,
   Server,
   Power,
   AlertCircle,
   Play,
   Pause,
   Settings,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobPolicySettings } from "./JobPolicySettings";
@@ -30,21 +31,19 @@ const StatCard = memo(
     className?: string;
   }) => (
     <Card
-      className={`group relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-1 border-white/15 bg-surface/40 backdrop-blur-md ${className || ""}`}
+      className={`relative overflow-hidden border-white/15 bg-surface/40 backdrop-blur-md ${className || ""}`}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-        <CardTitle className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60 group-hover:text-white/90 transition-colors duration-300">
+        <CardTitle className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60">
           {title}
         </CardTitle>
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/5 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all duration-300 group-hover:scale-110">
+        <div className="p-2.5 rounded-lg bg-white/5 border border-white/5">
           {icon}
         </div>
       </CardHeader>
       <CardContent className="relative z-10 pb-3">
-        <div
-          className={`text-xl font-black tracking-tighter text-white transition-all duration-500 group-hover:scale-[1.02] drop-shadow-2xl`}
-        >
+        <div className="text-xl font-black tracking-tighter text-white drop-shadow-2xl">
           {value.toLocaleString()}
         </div>
       </CardContent>
@@ -71,13 +70,13 @@ export const StatusIndicator = memo(() => {
       text: "INITIALIZING",
       className:
         "text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_15px_rgba(251,191,36,0.1)]",
-      icon: <Loader size={14} className="animate-spin" />,
+      icon: <Loader size="sm" />,
     },
     stopping: {
       text: "TERMINATING",
       className:
         "text-orange-400 border-orange-400/20 bg-orange-400/5 shadow-[0_0_15px_rgba(251,146,60,0.1)]",
-      icon: <Loader size={14} className="animate-spin" />,
+      icon: <Loader size="sm" />,
     },
     error: {
       text: "ERROR",
@@ -150,7 +149,7 @@ const PowerButton = memo(
         <AnimatePresence mode="wait" initial={false}>
           {isDisabled ? (
             <motion.div key="loader" {...iconAnimation}>
-              <Loader size={24} className="animate-spin" />
+              <Loader size="md" />
             </motion.div>
           ) : isRunning ? (
             <motion.div key="pause" {...iconAnimation}>
@@ -294,7 +293,7 @@ export const Dashboard = memo(() => {
           title="In Progress"
           value={isProcessingAndRunning ? 1 : 0}
           icon={
-            <Loader
+            <RefreshCw
               size={20}
               className={`text-muted-foreground ${
                 isProcessingAndRunning ? "animate-spin" : ""

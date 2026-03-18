@@ -13,11 +13,11 @@ import { DependencySetup } from "@/components/DependencySetup";
 import { UpdateNotification } from "@/components/UpdateNotification";
 import { JobHistory } from "@/components/JobHistory";
 import { Monetize } from "@/components/Monetize";
+import { Loader } from "@/components/ui/loader";
 import {
   LayoutDashboard,
   Terminal,
   LogOut,
-  Loader2,
   BarChart as BarChartIcon,
   Container,
   Download,
@@ -187,10 +187,7 @@ function App() {
   if (checkingDeps) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
-        <div className="relative">
-          <Loader2 className="h-16 w-16 animate-spin text-primary" />
-          <div className="absolute inset-0 h-16 w-16 animate-ping bg-primary/20 rounded-full" />
-        </div>
+        <Loader size="xl" variant="primary" />
         <p className="mt-4 text-muted-foreground animate-pulse">
           Checking system requirements...
         </p>
@@ -213,10 +210,7 @@ function App() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
-        <div className="relative">
-          <Loader2 className="h-16 w-16 animate-spin text-primary" />
-          <div className="absolute inset-0 h-16 w-16 animate-ping bg-primary/20 rounded-full" />
-        </div>
+        <Loader size="xl" variant="primary" />
         <p className="mt-4 text-muted-foreground animate-pulse">
           Loading Openfork Client...
         </p>

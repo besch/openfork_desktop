@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import type { ProviderRateInfo } from "@/types";
+import { Loader } from "@/components/ui/loader";
 import {
   DollarSign,
   Building2,
@@ -13,7 +14,6 @@ import {
   Clock,
   Trash2,
   ExternalLink,
-  Loader2,
   CheckCircle2,
   AlertCircle,
   Gauge,
@@ -345,7 +345,7 @@ export function Monetize() {
         <CardContent className="space-y-4">
           {rateLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 size={14} className="animate-spin text-white" />
+              <Loader size="xs" className="text-white" />
               Loading rate info…
             </div>
           ) : rateInfo ? (
@@ -371,10 +371,7 @@ export function Monetize() {
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
                       {rateSaving ? (
-                        <Loader2
-                          size={12}
-                          className="animate-spin text-white"
-                        />
+                        <Loader size="xs" className="text-white" />
                       ) : (
                         "/hr"
                       )}
@@ -609,8 +606,8 @@ export function Monetize() {
                   disabled={stripeLoading}
                 >
                   {stripeLoading ? (
-                    <Loader2
-                      size={14}
+                    <Loader
+                      size="xs"
                       className="mr-2 animate-spin text-white"
                     />
                   ) : (
@@ -633,8 +630,8 @@ export function Monetize() {
                   className="w-full"
                 >
                   {stripeLoading ? (
-                    <Loader2
-                      size={14}
+                    <Loader
+                      size="xs"
                       className="mr-2 animate-spin text-white"
                     />
                   ) : (
@@ -655,8 +652,8 @@ export function Monetize() {
                   variant="primary"
                 >
                   {stripeLoading ? (
-                    <Loader2
-                      size={14}
+                    <Loader
+                      size="xs"
                       className="mr-2 animate-spin text-white"
                     />
                   ) : (
@@ -723,8 +720,8 @@ export function Monetize() {
                   className="w-full"
                 >
                   {withdrawing ? (
-                    <Loader2
-                      size={14}
+                    <Loader
+                      size="xs"
                       className="mr-2 animate-spin text-white"
                     />
                   ) : (
@@ -752,7 +749,7 @@ export function Monetize() {
           <CardContent>
             {loadingTxns ? (
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Loader2 size={14} className="animate-spin text-white" />
+                <Loader size="xs" className="text-white" />
                 Loading transactions...
               </div>
             ) : transactions.length === 0 ? (

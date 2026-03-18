@@ -2,13 +2,13 @@ import { useState, useEffect, memo, useCallback, useMemo, useRef } from "react";
 import { useClientStore } from "@/store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Loader } from "@/components/ui/loader";
 import {
   History,
   RefreshCw,
   CheckCircle,
   XCircle,
   Clock,
-  Loader2,
   Image as ImageIcon,
   Video,
   Music,
@@ -103,7 +103,7 @@ const StatusBadge = memo(({ status }: { status: string }) => {
       className: "border-merged-status bg-merged-status/70 text-white-status",
     },
     processing: {
-      icon: <Loader2 className="h-3 w-3 animate-spin text-merged-status" />,
+      icon: <Loader size="xs" className="text-merged-status" />,
       className: "border-merged-status bg-merged-status/70 text-white-status",
     },
     pending: {
@@ -452,10 +452,7 @@ export const JobHistory = memo(() => {
   if (loading && jobs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px] gap-4">
-        <div className="relative">
-          <Loader2 className="h-10 w-10 animate-spin text-white" />
-          <div className="absolute inset-0 blur-lg bg-white/20 animate-pulse" />
-        </div>
+        <Loader size="lg" variant="white" />
         <span className="text-muted-foreground font-medium animate-pulse">
           Synchronizing your work history...
         </span>
@@ -646,7 +643,7 @@ export const JobHistory = memo(() => {
 
               {loading && jobs.length > 0 && (
                 <div className="flex justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-white/50" />
+                  <Loader size="md" className="text-white/50" />
                 </div>
               )}
 

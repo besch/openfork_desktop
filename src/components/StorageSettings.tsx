@@ -10,11 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "framer-motion";
+import { Loader } from "@/components/ui/loader";
 import {
   HardDrive,
   RefreshCw,
   AlertTriangle,
-  Loader2,
   ArrowRightLeft,
 } from "lucide-react";
 
@@ -148,7 +148,7 @@ export function StorageSettings() {
               disabled={isReclaiming || isRelocating}
             >
               {isReclaiming ? (
-                <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                <Loader size="xs" className="mr-2" />
               ) : (
                 <RefreshCw className="h-3.5 w-3.5 mr-2" />
               )}
@@ -222,11 +222,7 @@ export function StorageSettings() {
                   isReclaiming
                 }
               >
-                {isRelocating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  "Move"
-                )}
+                {isRelocating ? <Loader size="xs" /> : "Move"}
               </Button>
             </div>
           </div>
