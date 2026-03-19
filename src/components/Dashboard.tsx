@@ -2,7 +2,6 @@ import React, { useState, useCallback, memo, useMemo, useEffect } from "react";
 import { useClientStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader } from "@/components/ui/loader";
 import {
   CheckCircle,
   XCircle,
