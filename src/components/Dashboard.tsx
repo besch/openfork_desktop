@@ -70,13 +70,13 @@ export const StatusIndicator = memo(() => {
       text: "INITIALIZING",
       className:
         "text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_15px_rgba(251,191,36,0.1)]",
-      icon: <Loader size="sm" />,
+      icon: <RefreshCw size={14} className="animate-spin" />,
     },
     stopping: {
       text: "TERMINATING",
       className:
         "text-orange-400 border-orange-400/20 bg-orange-400/5 shadow-[0_0_15px_rgba(251,146,60,0.1)]",
-      icon: <Loader size="sm" />,
+      icon: <RefreshCw size={14} className="animate-spin" />,
     },
     error: {
       text: "ERROR",
@@ -149,7 +149,7 @@ const PowerButton = memo(
         <AnimatePresence mode="wait" initial={false}>
           {isDisabled ? (
             <motion.div key="loader" {...iconAnimation}>
-              <Loader size="md" />
+              <RefreshCw size={24} className="animate-spin text-white" />
             </motion.div>
           ) : isRunning ? (
             <motion.div key="pause" {...iconAnimation}>
