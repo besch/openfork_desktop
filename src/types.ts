@@ -113,6 +113,8 @@ export interface DockerStatus {
 export interface NvidiaStatus {
   available: boolean;
   gpu: string | null;
+  cudaVersion?: string | null;
+  isOutdated?: boolean;
 }
 
 export interface DependencyStatus {

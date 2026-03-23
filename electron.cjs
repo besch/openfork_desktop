@@ -204,7 +204,6 @@ function createWindow() {
     return { action: "deny" };
   });
 
-
   // --- AUTO UPDATER ---
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -535,10 +534,15 @@ ipcMain.handle("monetize:get-provider-rate", async () => {
     request.setHeader("Authorization", `Bearer ${session.access_token}`);
     let body = "";
     request.on("response", (response) => {
-      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
       response.on("end", () => {
-        try { resolve(JSON.parse(body)); }
-        catch { resolve({ error: "Failed to parse response" }); }
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          resolve({ error: "Failed to parse response" });
+        }
       });
     });
     request.on("error", (err) => resolve({ error: err.message }));
@@ -546,28 +550,38 @@ ipcMain.handle("monetize:get-provider-rate", async () => {
   });
 });
 
-ipcMain.handle("monetize:set-provider-rate", async (event, rateCentsPerVramGbMin) => {
-  if (!session) return { error: "Not authenticated" };
-  return new Promise((resolve) => {
-    const request = net.request({
-      method: "PUT",
-      url: `${ORCHESTRATOR_API_URL}/api/dgn/provider/rate`,
-    });
-    request.setHeader("Authorization", `Bearer ${session.access_token}`);
-    request.setHeader("Content-Type", "application/json");
-    let body = "";
-    request.on("response", (response) => {
-      response.on("data", (chunk) => { body += chunk.toString(); });
-      response.on("end", () => {
-        try { resolve(JSON.parse(body)); }
-        catch { resolve({ error: "Failed to parse response" }); }
+ipcMain.handle(
+  "monetize:set-provider-rate",
+  async (event, rateCentsPerVramGbMin) => {
+    if (!session) return { error: "Not authenticated" };
+    return new Promise((resolve) => {
+      const request = net.request({
+        method: "PUT",
+        url: `${ORCHESTRATOR_API_URL}/api/dgn/provider/rate`,
       });
+      request.setHeader("Authorization", `Bearer ${session.access_token}`);
+      request.setHeader("Content-Type", "application/json");
+      let body = "";
+      request.on("response", (response) => {
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            resolve({ error: "Failed to parse response" });
+          }
+        });
+      });
+      request.on("error", (err) => resolve({ error: err.message }));
+      request.write(
+        JSON.stringify({ rate_cents_per_vram_gb_min: rateCentsPerVramGbMin }),
+      );
+      request.end();
     });
-    request.on("error", (err) => resolve({ error: err.message }));
-    request.write(JSON.stringify({ rate_cents_per_vram_gb_min: rateCentsPerVramGbMin }));
-    request.end();
-  });
-});
+  },
+);
 
 ipcMain.handle("monetize:open-stripe-onboard", async () => {
   try {
@@ -604,7 +618,6 @@ ipcMain.handle("monetize:open-stripe-dashboard", async () => {
 ipcMain.on("open-external", (event, url) => {
   shell.openExternal(url);
 });
-
 
 // Add persistence handlers for job policy settings
 ipcMain.handle("load-settings", async () => {
@@ -1767,11 +1780,12 @@ async function checkNativeDocker() {
 
   return new Promise((resolve) => {
     // Check if docker.exe is in PATH or common install location
-    const commonPath = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe';
+    const commonPath =
+      "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe";
     const hasDockerExe = fs.existsSync(commonPath);
-    const dockerCmd = hasDockerExe ? `"${commonPath}"` : 'docker.exe';
+    const dockerCmd = hasDockerExe ? `"${commonPath}"` : "docker.exe";
 
-    exec('where docker.exe', (error, stdout) => {
+    exec("where docker.exe", (error, stdout) => {
       const inPath = !error && stdout.trim().length > 0;
       if (!inPath && !hasDockerExe) {
         resolve({ installed: false, running: false });
@@ -1779,24 +1793,27 @@ async function checkNativeDocker() {
       }
 
       // Check if Docker Desktop process is running or pipe exists
-      exec('tasklist /FI "IMAGENAME eq Docker Desktop.exe" /NH', (err, stdout) => {
-        const processRunning = !err && stdout.includes("Docker Desktop.exe");
+      exec(
+        'tasklist /FI "IMAGENAME eq Docker Desktop.exe" /NH',
+        (err, stdout) => {
+          const processRunning = !err && stdout.includes("Docker Desktop.exe");
 
-        // Advanced check: verify if the Docker named pipe exists (most reliable indicator)
-        const pipePath = '\\\\.\\pipe\\docker_engine';
-        const pipeExists = fs.existsSync(pipePath);
+          // Advanced check: verify if the Docker named pipe exists (most reliable indicator)
+          const pipePath = "\\\\.\\pipe\\docker_engine";
+          const pipeExists = fs.existsSync(pipePath);
 
-        // If installed, check if it's responding to commands
-        // Use 'version' instead of 'info' (faster, less state-dependent)
-        exec(`${dockerCmd} version --format "{{.Server.Version}}"`, (err) => {
-          resolve({
-            installed: true,
-            running: !err || pipeExists, // Consider it running if pipe exists or version command works
-            isNative: true,
-            isProcessRunning: processRunning || pipeExists
+          // If installed, check if it's responding to commands
+          // Use 'version' instead of 'info' (faster, less state-dependent)
+          exec(`${dockerCmd} version --format "{{.Server.Version}}"`, (err) => {
+            resolve({
+              installed: true,
+              running: !err || pipeExists, // Consider it running if pipe exists or version command works
+              isNative: true,
+              isProcessRunning: processRunning || pipeExists,
+            });
           });
-        });
-      });
+        },
+      );
     });
   });
 }
@@ -1807,7 +1824,8 @@ async function startNativeDocker() {
   return new Promise((resolve) => {
     console.log("Attempting to start Docker Desktop...");
     // Attempt to start Docker Desktop using the default GUI executable
-    const dockerDesktopPath = 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe';
+    const dockerDesktopPath =
+      "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe";
     if (!fs.existsSync(dockerDesktopPath)) {
       console.error("Docker Desktop GUI executable not found at default path.");
       resolve({ success: false, error: "DOCKER_DESKTOP_NOT_FOUND" });
@@ -1841,17 +1859,19 @@ ipcMain.handle("deps:check-docker", async () => {
           installed: true,
           running: true,
           isNative: true,
-          installDrive: "C"
+          installDrive: "C",
         };
       } else if (native.isProcessRunning) {
         // Process is running but not responding yet -> it's starting
-        console.log("Docker Desktop process detected but not responding to API. Status: starting...");
+        console.log(
+          "Docker Desktop process detected but not responding to API. Status: starting...",
+        );
         return {
           installed: true,
           running: false,
           isNative: true,
           isStarting: true,
-          installDrive: "C"
+          installDrive: "C",
         };
       } else {
         // Installed but NOT running at all -> try to start it!
@@ -1862,7 +1882,7 @@ ipcMain.handle("deps:check-docker", async () => {
           running: false,
           isNative: true,
           isStarting: startResult.success,
-          installDrive: "C"
+          installDrive: "C",
         };
       }
     }
@@ -2190,9 +2210,14 @@ ipcMain.handle("deps:cancel-install", async () => {
 
 ipcMain.handle("deps:check-nvidia", async () => {
   try {
+    // Minimum CUDA version required for OpenFork AI models
+    const MIN_CUDA_VERSION = "11.8";
+
+    // Query GPU name and CUDA version using nvidia-smi
     const output = await new Promise((resolve, reject) => {
-      exec(
-        "nvidia-smi --query-gpu=name --format=csv,noheader",
+      execFile(
+        "nvidia-smi",
+        ["--query-gpu=name,cuda_version", "--format=csv,noheader"],
         { timeout: 10000 },
         (error, stdout) => {
           if (error) reject(error);
@@ -2200,9 +2225,47 @@ ipcMain.handle("deps:check-nvidia", async () => {
         },
       );
     });
-    return { available: true, gpu: output.toString().trim().split("\n")[0] };
+
+    const lines = output.toString().trim().split("\n");
+    if (lines.length === 0 || !lines[0].trim()) {
+      return {
+        available: false,
+        gpu: null,
+        cudaVersion: null,
+        isOutdated: false,
+      };
+    }
+
+    // Parse the first GPU's info (format: "GPU Name, CUDA Version")
+    const gpuInfo = lines[0].split(",").map((s) => s.trim());
+    const gpuName = gpuInfo[0] || null;
+    const cudaVersion = gpuInfo[1] || null;
+
+    // Check if CUDA version is outdated
+    let isOutdated = false;
+    if (cudaVersion) {
+      const [major, minor] = cudaVersion.split(".").map(Number);
+      const [minMajor, minMinor] = MIN_CUDA_VERSION.split(".").map(Number);
+
+      // Version comparison: major version must be >= minimum, or same major with >= minor
+      if (major < minMajor || (major === minMajor && minor < minMinor)) {
+        isOutdated = true;
+      }
+    }
+
+    return {
+      available: true,
+      gpu: gpuName,
+      cudaVersion: cudaVersion,
+      isOutdated: isOutdated,
+    };
   } catch {
-    return { available: false, gpu: null };
+    return {
+      available: false,
+      gpu: null,
+      cudaVersion: null,
+      isOutdated: false,
+    };
   }
 });
 

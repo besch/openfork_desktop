@@ -11,6 +11,7 @@ import { ShutdownOverlay } from "@/components/ShutdownOverlay";
 import { DockerManagement } from "@/components/DockerManagement";
 import { DependencySetup } from "@/components/DependencySetup";
 import { UpdateNotification } from "@/components/UpdateNotification";
+import { CudaUpdateNotification } from "@/components/CudaUpdateNotification";
 import { JobHistory } from "@/components/JobHistory";
 import { Monetize } from "@/components/Monetize";
 import { Loader } from "@/components/ui/loader";
@@ -346,6 +347,7 @@ function App() {
         </div>
       </div>
       <UpdateNotification />
+      <CudaUpdateNotification />
     </>
   );
 }
