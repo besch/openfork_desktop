@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { useClientStore } from "./store";
 import type { Session } from "@supabase/supabase-js";
 import type { DependencyStatus } from "./types";
@@ -171,6 +171,32 @@ function App() {
       }
     };
   }, [setSession]);
+
+  // Keep a ref so the WSL-missing handler always has the latest status
+  // without needing to re-register the listener on every status change.
+  const dependencyStatusRef = useRef(dependencyStatus);
+  useEffect(() => {
+    dependencyStatusRef.current = dependencyStatus;
+  }, [dependencyStatus]);
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onWslDistroMissing(() => {
+      const current = dependencyStatusRef.current;
+      setDependencyStatus({
+        docker: {
+          ...(current?.docker ?? {}),
+          installed: false,
+          running: false,
+          error: "WSL_DISTRO_MISSING",
+        },
+        nvidia: current?.nvidia ?? { available: false, gpu: null },
+        allReady: false,
+      });
+    });
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, [setDependencyStatus]);
 
   useEffect(() => {
     if (checkingDeps || !dependencyStatus?.allReady) {

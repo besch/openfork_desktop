@@ -106,6 +106,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   installEngine: (installPath) => ipcRenderer.invoke("deps:install-engine", installPath),
   onInstallProgress: (callback) => createListener("deps:install-progress", callback),
   cancelInstall: () => ipcRenderer.invoke("deps:cancel-install"),
+  resetWslDistro: () => ipcRenderer.invoke("deps:reset-wsl-distro"),
+  onWslDistroMissing: (callback) => createListener("docker:wsl-distro-missing", callback),
 
   // Disk Management
   relocateStorage: (newDrivePath) => ipcRenderer.invoke("docker:relocate-storage", newDrivePath),

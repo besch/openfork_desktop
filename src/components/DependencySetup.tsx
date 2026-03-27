@@ -232,13 +232,31 @@ export function DependencySetup({
                 <>
                   {!isInstalling && (
                     <div className="space-y-1">
-                      <p className="text-sm text-red-400 font-medium">
-                        Docker not found
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Docker is required to run OpenFork. It will be installed
-                        automatically using a dedicated WSL+Ubuntu environment.
-                      </p>
+                      {/* Only show installation message if Docker Desktop is NOT installed */}
+                      {/* If Docker Desktop is installed but not running, that case is handled above */}
+                      {!status?.docker.isNative &&
+                        (status?.docker.error === "WSL_DISTRO_MISSING" ? (
+                          <>
+                            <p className="text-sm text-red-400 font-medium">
+                              OpenFork engine was removed
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              The OpenFork WSL environment is no longer
+                              registered. Click below to reinstall it.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-red-400 font-medium">
+                              Docker not found
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Docker is required to run OpenFork. It will be
+                              installed automatically using a dedicated
+                              WSL+Ubuntu environment.
+                            </p>
+                          </>
+                        ))}
                     </div>
                   )}
 
@@ -253,8 +271,9 @@ export function DependencySetup({
                     </div>
                   )}
 
-                  {/* Drive selector — hidden while installing */}
+                  {/* Drive selector — hidden while installing or when Docker Desktop is installed */}
                   {!isInstalling &&
+                    !status?.docker.isNative &&
                     canChooseInstallDrive &&
                     availableDrives.length > 1 && (
                       <div className="space-y-2 pt-2">
@@ -287,14 +306,21 @@ export function DependencySetup({
                       </div>
                     )}
 
-                  {/* Install button — shown when not installing */}
-                  {!isInstalling && (
+                  {/* Install button — shown when not installing and Docker Desktop is NOT installed */}
+                  {!isInstalling && !status?.docker.isNative && (
                     <Button
                       onClick={handleInstallEngine}
                       className="w-full mt-2 relative overflow-hidden group"
                       disabled={status?.docker.isStarting}
                     >
-                      {status?.docker.isNative ? (
+                      {/* Show "Install Local AI Engine" if no Docker found (WSL distro missing or not installed) */}
+                      {/* Show "Retry Check" if Docker Desktop is installed but not running */}
+                      {!status?.docker.installed ? (
+                        <>
+                          <Download className="h-4 w-4 mr-2" />
+                          Install Local AI Engine
+                        </>
+                      ) : status?.docker.isNative ? (
                         <>
                           <RefreshCw
                             className={`h-4 w-4 mr-2 ${status?.docker.isStarting ? "animate-spin" : ""}`}
@@ -399,21 +425,20 @@ export function DependencySetup({
                     No NVIDIA GPU detected
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    An NVIDIA GPU is recommended for faster AI processing. If
-                    you have one, install the latest drivers.
+                    OpenFork requires an NVIDIA GPU with CUDA 12.8 or higher.
+                    Install or update your NVIDIA drivers to include CUDA 12.8+.
                   </p>
                   <Button
                     variant="outline"
                     onClick={() =>
-                      window.open(
-                        "https://www.nvidia.com/download/index.aspx",
-                        "_blank",
+                      window.electronAPI.openExternal(
+                        "https://www.nvidia.com/drivers",
                       )
                     }
                     className="w-full mt-2"
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    Download NVIDIA Drivers
+                    Install NVIDIA Drivers (CUDA 12.8+)
                   </Button>
                 </>
               )}

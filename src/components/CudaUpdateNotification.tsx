@@ -5,7 +5,7 @@ import { AlertTriangle, ExternalLink, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-const MIN_CUDA_VERSION = "12.7";
+const MIN_CUDA_VERSION = "12.8";
 
 export function CudaUpdateNotification() {
   const dependencyStatus = useClientStore((state) => state.dependencyStatus);

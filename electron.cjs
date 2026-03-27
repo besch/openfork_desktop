@@ -397,24 +397,30 @@ ipcMain.on(
 
     pendingClientStart = (async () => {
       if (process.platform === "win32") {
-        const dockerHost = await resolveWindowsDockerApiEndpoint();
-        if (!dockerHost) {
-          const message =
-            "Docker is installed in WSL, but its API is not reachable from Windows yet.";
+        const native = await checkNativeDocker();
+        if (native.installed && native.running) {
+          // Native Docker uses named pipes, clearing host ensures direct communication
+          delete process.env.OPENFORK_DOCKER_HOST;
+        } else {
+          const dockerHost = await resolveWindowsDockerApiEndpoint();
+          if (!dockerHost) {
+            const message =
+              "Docker is installed in WSL, but its API is not reachable from Windows yet.";
 
-          console.error(message);
+            console.error(message);
 
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("openfork_client:log", {
-              type: "stderr",
-              message,
-            });
-            mainWindow.webContents.send("openfork_client:status", "stopped");
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("openfork_client:log", {
+                type: "stderr",
+                message,
+              });
+              mainWindow.webContents.send("openfork_client:status", "stopped");
+            }
+            return;
           }
-          return;
-        }
 
-        process.env.OPENFORK_DOCKER_HOST = dockerHost;
+          process.env.OPENFORK_DOCKER_HOST = dockerHost;
+        }
       }
 
       await pythonManager.start(service, policy, allowedIds);
@@ -873,6 +879,7 @@ const fs = require("fs");
 // --- ENGINE INSTALL STATE ---
 let currentInstallProcess = null;
 let currentInstallCancelled = false;
+let currentInstallDistro = null; // distro name being installed — used by cancel handler
 const INSTALL_PROGRESS_LOG = "C:\\Windows\\Temp\\openfork_install_progress.log";
 
 // SECURITY: Validate Docker ID format to prevent command injection
@@ -903,6 +910,27 @@ async function execDockerCommand(command) {
   return new Promise((resolve, reject) => {
     // WSL ROBUSTNESS: On Windows, use execFile to avoid CMD shell escaping issues with pipes and quotes
     if (process.platform === "win32" && command.startsWith("docker ")) {
+      // When OPENFORK_DOCKER_HOST is not set, Docker Desktop is the active engine.
+      // Route directly to the native docker.exe instead of through WSL.
+      if (!process.env.OPENFORK_DOCKER_HOST) {
+        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
+          if (error) {
+            const msg = error.message.toLowerCase();
+            if (
+              msg.includes("is not running") ||
+              msg.includes("connection refused")
+            ) {
+              resolve("");
+              return;
+            }
+            console.error(`Docker command error: ${error.message}`);
+            reject(error);
+            return;
+          }
+          resolve(stdout.trim());
+        });
+        return;
+      }
       // Use -- separator which is more robust for passing complex strings to WSL
       const args = ["-d", wslDistro, "--", "sudo", "bash", "-c", command];
       execFile(
@@ -1067,10 +1095,16 @@ async function checkDockerUpdates() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   try {
-    // If on Windows, check if distro exists before monitoring
-    if (process.platform === "win32") {
-      const exists = await checkDistroExists(await getWslDistroName());
-      if (!exists) return;
+    // If on Windows and using WSL Docker (indicated by OPENFORK_DOCKER_HOST), check if distro exists before monitoring
+    if (process.platform === "win32" && process.env.OPENFORK_DOCKER_HOST) {
+      const distroName = await getWslDistroName();
+      const exists = await checkDistroExists(distroName);
+      if (!exists) {
+        mainWindow.webContents.send("docker:wsl-distro-missing", {
+          distroName,
+        });
+        return;
+      }
     }
 
     // Check containers
@@ -2148,6 +2182,8 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
       }
     }, 500);
 
+    const distroName = installPath ? "OpenFork" : "Ubuntu";
+    currentInstallDistro = distroName;
     const setupArgs = installPath
       ? ["-InstallPath", installPath, "-DistroName", "OpenFork"]
       : [];
@@ -2155,6 +2191,7 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
     try {
       result = await runElevatedPowerShell(scriptPath, setupArgs);
     } finally {
+      currentInstallDistro = null;
       clearInterval(watchInterval);
       try {
         fs.unlinkSync(INSTALL_PROGRESS_LOG);
@@ -2167,7 +2204,6 @@ ipcMain.handle("deps:install-engine", async (event, installPath) => {
     }
 
     // Persist the distro name so all subsequent checks (Docker, monitoring) use it
-    const distroName = installPath ? "OpenFork" : "Ubuntu";
     store.set("wslDistro", distroName);
     _resolvedWslDistro = distroName;
 
@@ -2201,30 +2237,169 @@ ipcMain.handle("deps:cancel-install", async () => {
   try {
     execSync(`taskkill /F /T /PID ${pid}`);
   } catch (_) {}
-  // Attempt to unregister a partially installed Ubuntu distro
+  // Attempt to unregister the partially installed distro
+  const distroToClean = currentInstallDistro || "Ubuntu";
   try {
-    execSync("wsl --unregister Ubuntu", { timeout: 15000 });
+    execSync(`wsl --unregister ${distroToClean}`, { timeout: 15000 });
   } catch (_) {}
+  return { success: true };
+});
+
+// Clears the cached WSL distro name so the next check re-detects it.
+// Useful when switching from the OpenFork distro to Docker Desktop (or vice-versa).
+ipcMain.handle("deps:reset-wsl-distro", () => {
+  store.delete("wslDistro");
+  _resolvedWslDistro = null;
   return { success: true };
 });
 
 ipcMain.handle("deps:check-nvidia", async () => {
   try {
     // Minimum CUDA version required for OpenFork AI models
-    const MIN_CUDA_VERSION = "11.8";
+    const MIN_CUDA_VERSION = "12.8";
 
-    // Query GPU name and CUDA version using nvidia-smi
-    const output = await new Promise((resolve, reject) => {
-      execFile(
-        "nvidia-smi",
-        ["--query-gpu=name,cuda_version", "--format=csv,noheader"],
-        { timeout: 10000 },
-        (error, stdout) => {
-          if (error) reject(error);
-          else resolve(stdout);
-        },
+    // Query GPU name and CUDA version using nvidia-smi.
+    // On Windows, Electron may not inherit the full user PATH so we try
+    // known installation paths before falling back to PowerShell.
+    const nvidiaSmiArgs = [
+      "--query-gpu=name,cuda_version",
+      "--format=csv,noheader",
+    ];
+
+    const runExecFile = (cmd, args, opts) =>
+      new Promise((resolve, reject) =>
+        execFile(cmd, args, opts, (err, out) =>
+          err ? reject(err) : resolve(out),
+        ),
       );
-    });
+
+    let output;
+    if (process.platform === "win32") {
+      // C:\Windows\System32\nvidia-smi.exe is a stub that exists but fails
+      // when run programmatically. Try real installation paths first, then
+      // fall back to PowerShell (which resolves PATH correctly).
+
+      // Try direct paths first without existence check (fs.existsSync may fail for various reasons)
+      const directPaths = [
+        process.env["ProgramFiles"] +
+          "\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe",
+        "C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe",
+      ];
+
+      let found = false;
+      for (const candidate of directPaths) {
+        try {
+          output = await runExecFile(candidate, nvidiaSmiArgs, {
+            timeout: 10000,
+          });
+          found = true;
+          break;
+        } catch {
+          // try next
+        }
+      }
+
+      if (!found) {
+        // PowerShell treats commas as array separators in argument mode, so
+        // --query-gpu=name,cuda_version gets split into two args. Single-quote
+        // each argument to make commas literal.
+        // Try multiple approaches to find nvidia-smi in PowerShell
+
+        // First, try direct path with PowerShell call operator
+        const possiblePaths = [
+          "C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe",
+          "C:\\Windows\\System32\\nvidia-smi.exe",
+        ];
+
+        for (const nvidiaSmiPath of possiblePaths) {
+          try {
+            output = await runExecFile(
+              "powershell.exe",
+              [
+                "-NoProfile",
+                "-Command",
+                `& "${nvidiaSmiPath}" '--query-gpu=name,cuda_version' '--format=csv,noheader'`,
+              ],
+              { timeout: 15000 },
+            );
+            found = true;
+            break;
+          } catch {
+            // try next path
+          }
+        }
+
+        // If direct paths didn't work, try using cmd.exe where command
+        if (!found) {
+          try {
+            output = await runExecFile("cmd.exe", ["/c", "where nvidia-smi"], {
+              timeout: 15000,
+            });
+            const nvidiaPath = output.toString().trim().split("\r?\n")[0];
+            if (nvidiaPath) {
+              output = await runExecFile(nvidiaPath, nvidiaSmiArgs, {
+                timeout: 15000,
+              });
+              found = true;
+            }
+          } catch {
+            // try next approach
+          }
+        }
+
+        // Next try PowerShell's Get-Command
+        if (!found) {
+          try {
+            output = await runExecFile(
+              "powershell.exe",
+              [
+                "-NoProfile",
+                "-Command",
+                `(Get-Command nvidia-smi -ErrorAction SilentlyContinue).Source`,
+              ],
+              { timeout: 15000 },
+            );
+            const nvidiaPath = output.toString().trim();
+            if (nvidiaPath) {
+              output = await runExecFile(
+                "powershell.exe",
+                [
+                  "-NoProfile",
+                  "-Command",
+                  `& "${nvidiaPath}" '--query-gpu=name,cuda_version' '--format=csv,noheader'`,
+                ],
+                { timeout: 15000 },
+              );
+              found = true;
+            }
+          } catch {
+            // try next approach
+          }
+        }
+
+        // Last resort: try with PATH modification via cmd.exe
+        if (!found) {
+          try {
+            output = await runExecFile(
+              "cmd.exe",
+              [
+                "/c",
+                `set "PATH=C:\\Program Files\\NVIDIA Corporation\\NVSMI;%PATH%" && nvidia-smi --query-gpu=name,cuda_version --format=csv,noheader`,
+              ],
+              { timeout: 15000 },
+            );
+            // If we got here, the command succeeded
+            found = true;
+          } catch {
+            // All methods exhausted - will fall through to outer catch block
+          }
+        }
+      }
+    } else {
+      output = await runExecFile("nvidia-smi", nvidiaSmiArgs, {
+        timeout: 10000,
+      });
+    }
 
     const lines = output.toString().trim().split("\n");
     if (lines.length === 0 || !lines[0].trim()) {
@@ -2259,7 +2434,8 @@ ipcMain.handle("deps:check-nvidia", async () => {
       cudaVersion: cudaVersion,
       isOutdated: isOutdated,
     };
-  } catch {
+  } catch (err) {
+    console.error("[deps:check-nvidia] detection failed:", err?.message ?? err);
     return {
       available: false,
       gpu: null,
