@@ -274,7 +274,7 @@ function App() {
                   Openfork Client
                 </h1>
                 <p className="text-[10px] md:text-xs text-white/70 mt-1 font-bold uppercase tracking-[0.15em]">
-                  Open-Source Engine for AI Video Collaboration
+                  Open-Source Peer-to-peer Engine for Video Collaboration
                 </p>
               </div>
             </div>
