@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import type { DependencyStatus } from "@/types";
 
+type Platform = "win32" | "linux" | "darwin";
+
 interface DependencySetupProps {
   onReady: () => void;
   initialStatus: DependencyStatus;
@@ -30,6 +32,7 @@ export function DependencySetup({
     { name: string; freeGB: number }[]
   >([]);
   const [selectedDrive, setSelectedDrive] = useState<string>("C");
+  const [platform, setPlatform] = useState<Platform>("win32");
 
   // Installation progress state
   const [installLogs, setInstallLogs] = useState<string[]>([]);
@@ -50,6 +53,9 @@ export function DependencySetup({
   }, [installLogs]);
 
   useEffect(() => {
+    window.electronAPI.getProcessInfo().then((info) => {
+      setPlatform(info.platform as Platform);
+    });
     window.electronAPI.getAvailableDrives().then((drives) => {
       setAvailableDrives(drives);
     });
@@ -180,7 +186,9 @@ export function DependencySetup({
                   ? "border-orange-500/50 bg-orange-500/5"
                   : status?.docker.installed
                     ? "border-yellow-500/50 bg-yellow-500/5"
-                    : "border-red-500/50 bg-red-500/5"
+                    : status?.docker.error === "WSL_DISTRO_MISSING"
+                      ? "border-yellow-500/50 bg-yellow-500/5"
+                      : "border-red-500/50 bg-red-500/5"
             }`}
           >
             <CardHeader className="pb-2">
@@ -196,6 +204,8 @@ export function DependencySetup({
                 ) : isInstalling ? (
                   <Download className="h-5 w-5 text-orange-500 ml-auto" />
                 ) : status?.docker.installed ? (
+                  <AlertCircle className="h-5 w-5 text-yellow-500 ml-auto" />
+                ) : status?.docker.error === "WSL_DISTRO_MISSING" ? (
                   <AlertCircle className="h-5 w-5 text-yellow-500 ml-auto" />
                 ) : (
                   <XCircle className="h-5 w-5 text-red-500 ml-auto" />
@@ -237,42 +247,63 @@ export function DependencySetup({
                       {!status?.docker.isNative &&
                         (status?.docker.error === "WSL_DISTRO_MISSING" ? (
                           <>
-                            <p className="text-sm text-red-400 font-medium">
-                              OpenFork engine was removed
+                            <p className="text-sm font-medium">
+                              Docker is not installed
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              The OpenFork WSL environment is no longer
-                              registered. Click below to reinstall it.
+                              OpenFork uses Docker to run the virtual machine.
+                              Docker is not installed on your system.
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Would you like to install it now? You can also{" "}
+                              <button
+                                onClick={() =>
+                                  window.electronAPI.openExternal(
+                                    platform === "win32"
+                                      ? "https://www.docker.com/products/docker-desktop"
+                                      : "https://docs.docker.com/engine/install/",
+                                  )
+                                }
+                                className="text-yellow-500 cursor-pointer hover:underline hover:text-yellow-400"
+                              >
+                                install Docker
+                              </button>{" "}
+                              yourself.
                             </p>
                           </>
                         ) : (
                           <>
-                            <p className="text-sm text-red-400 font-medium">
+                            <p className="text-sm font-medium">
                               Docker not found
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Docker is required to run OpenFork. It will be
-                              installed automatically using a dedicated
-                              WSL+Ubuntu environment.
+                              Docker is required to run OpenFork.
+                              {platform === "win32"
+                                ? " It will be installed automatically using a dedicated WSL+Ubuntu environment."
+                                : " It will be installed automatically."}
                             </p>
                           </>
                         ))}
                     </div>
                   )}
 
-                  {!status?.docker.isNative && installDrive && (
-                    <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-muted-foreground">
-                      Existing Ubuntu detected on{" "}
-                      <span className="font-semibold text-foreground">
-                        {installDrive}: drive
-                      </span>{" "}
-                      (e.g. Docker Desktop). OpenFork will be installed as a
-                      separate environment on the drive you choose below.
-                    </div>
-                  )}
+                  {/* Drive selector — Windows only, hidden on Linux */}
+                  {platform === "win32" &&
+                    !status?.docker.isNative &&
+                    installDrive && (
+                      <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-muted-foreground">
+                        Existing Ubuntu detected on{" "}
+                        <span className="font-semibold text-foreground">
+                          {installDrive}: drive
+                        </span>{" "}
+                        (e.g. Docker Desktop). OpenFork will be installed as a
+                        separate environment on the drive you choose below.
+                      </div>
+                    )}
 
-                  {/* Drive selector — hidden while installing or when Docker Desktop is installed */}
-                  {!isInstalling &&
+                  {/* Drive selector — Windows only, hidden while installing or when Docker Desktop is installed */}
+                  {platform === "win32" &&
+                    !isInstalling &&
                     !status?.docker.isNative &&
                     canChooseInstallDrive &&
                     availableDrives.length > 1 && (
@@ -318,7 +349,9 @@ export function DependencySetup({
                       {!status?.docker.installed ? (
                         <>
                           <Download className="h-4 w-4 mr-2" />
-                          Install Local AI Engine
+                          {status?.docker.error === "WSL_DISTRO_MISSING"
+                            ? "Install Docker"
+                            : "Install Local AI Engine"}
                         </>
                       ) : status?.docker.isNative ? (
                         <>
