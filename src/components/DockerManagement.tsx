@@ -463,38 +463,33 @@ export const DockerManagement = memo(() => {
 
       {/* Download Progress Card */}
       {isDownloading && (
-        <Card className="relative overflow-hidden group transition-all duration-500 border-primary/20 bg-primary/5 backdrop-blur-xl shadow-2xl shadow-primary/10">
+        <Card className="relative overflow-hidden group transition-all duration-500 border-white/20 bg-primary/5 backdrop-blur-xl shadow-2xl shadow-primary/10">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-primary)_15%,transparent),transparent)]" />
-          <CardHeader className="pb-4 relative z-10">
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-2.5 rounded-lg bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center shrink-0">
-                  <Download className="h-5 w-5 animate-bounce" />
-                </div>
-                <div>
-                  <span className="font-black text-xs uppercase tracking-widest text-primary">
-                    {dockerPullProgress?.status || "Downloading"}
-                  </span>
-                  <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">
-                    Docker Engine Component
-                  </p>
-                </div>
+          <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-2">
+            <CardTitle className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center shrink-0">
+                <Download className="h-4 w-4 animate-bounce" />
+              </div>
+              <div>
+                <span className="font-black text-xs uppercase tracking-widest text-white">
+                  DOWNLOADING {dockerPullProgress?.image}
+                </span>
               </div>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleCancelDownload}
-                className="rounded-lg h-9 px-4 text-[10px] font-black uppercase tracking-widest"
+                className="rounded-lg h-9 px-4 text-[10px] font-black uppercase tracking-widest ml-2"
               >
                 Abort
               </Button>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 relative z-10 pb-8">
+          <CardContent className="relative z-10 pb-4">
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-[10px] font-black tracking-[0.2em] text-muted/40 uppercase">
+              <div className="flex items-center justify-between text-[10px] font-black tracking-[0.2em] text-white uppercase">
                 <span>Progress</span>
-                <span className="text-primary tabular-nums">
+                <span className="text-white tabular-nums">
                   {Math.round(dockerPullProgress?.progress || 0)}%
                 </span>
               </div>
@@ -508,9 +503,6 @@ export const DockerManagement = memo(() => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
                 </motion.div>
               </div>
-            </div>
-            <div className="text-[10px] font-bold text-muted/30 uppercase tracking-widest truncate max-w-full text-center">
-              Target: {dockerPullProgress?.image}
             </div>
           </CardContent>
         </Card>
