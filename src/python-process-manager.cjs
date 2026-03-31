@@ -199,6 +199,28 @@ class PythonProcessManager {
     }
   }
 
+  _requestStopFromPython() {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.warn(
+        "Cannot send REQUEST_STOP command: Python process not running or stdin not writable.",
+      );
+      return false;
+    }
+
+    const command = {
+      type: "REQUEST_STOP",
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Sent REQUEST_STOP command to Python process.");
+      return true;
+    } catch (error) {
+      console.error("Error writing REQUEST_STOP to Python process stdin:", error);
+      return false;
+    }
+  }
+
   _listenForTokenRefresh() {
     if (this.authSubscription) {
       this.authSubscription.unsubscribe();
@@ -644,6 +666,8 @@ class PythonProcessManager {
 
       this.pythonProcess.once("close", cleanup);
 
+      this._requestStopFromPython();
+
       // Gracefully shutdown via HTTP endpoint
       const request = http.get(
         `http://localhost:${this.shutdownServerPort}/shutdown`,
@@ -673,7 +697,7 @@ class PythonProcessManager {
             }
           }, 1000);
         }
-      }, 8000);
+      }, 15000);
     });
   }
 
