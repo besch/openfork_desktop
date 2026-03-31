@@ -397,6 +397,10 @@ ipcMain.on(
 
     pendingClientStart = (async () => {
       if (process.platform === "win32") {
+        // Always resolve and expose the WSL distro name so the Python process can
+        // use it for WSL-specific operations (e.g. hostname lookup for TCP fallback).
+        process.env.OPENFORK_WSL_DISTRO = await getWslDistroName();
+
         const native = await checkNativeDocker();
         if (native.installed && native.running) {
           // Native Docker uses named pipes, clearing host ensures direct communication
