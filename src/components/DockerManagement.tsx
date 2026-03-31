@@ -467,7 +467,7 @@ export const DockerManagement = memo(() => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-primary)_15%,transparent),transparent)]" />
           <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-2">
             <CardTitle className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center shrink-0">
+              <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/40 text-white flex items-center justify-center shrink-0">
                 <Download className="h-4 w-4 animate-bounce" />
               </div>
               <div>
@@ -514,7 +514,7 @@ export const DockerManagement = memo(() => {
         <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
           <CardTitle className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
-              <Container className="h-5 w-5" />
+              <Container className="h-4 w-4 text-white" />
             </div>
             <div>
               <span className="font-black text-[10px] uppercase tracking-widest text-white/90">
