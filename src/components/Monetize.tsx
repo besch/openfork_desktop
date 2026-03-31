@@ -64,10 +64,10 @@ const ESTIMATOR_JOBS = [
   },
 ];
 
-// Rate preset multipliers for quick rate adjustment
+// Rate preset multipliers for quick rate adjustment (relative to platform rate)
 const RATE_PRESETS = [
   { label: "Min (50%)", multiplier: 0.5 },
-  { label: "Standard", multiplier: 1.0 },
+  { label: "Platform Rate", multiplier: 1.0 },
   { label: "+25%", multiplier: 1.25 },
   { label: "+50%", multiplier: 1.5 },
 ];
@@ -149,7 +149,13 @@ export function Monetize() {
       const result = await window.electronAPI.getProviderRate();
       if (!result.error) {
         setRateInfo(result);
-        setRateInput(rateToHourly(result.effective_rate).toFixed(3));
+        // If no custom rate is set, default the input to the market-suggested rate
+        // so the provider sees the optimal competitive rate immediately.
+        const initialRate =
+          result.custom_rate_cents_per_vram_gb_min !== null
+            ? result.effective_rate
+            : result.suggested_rate_cents_per_vram_gb_min;
+        setRateInput(rateToHourly(initialRate).toFixed(3));
       }
     } catch {}
     setRateLoading(false);
@@ -400,6 +406,37 @@ export function Monetize() {
 
               {/* Preset buttons */}
               <div className="flex flex-wrap gap-2">
+                {/* Recommended button — uses market-based suggested rate */}
+                {(() => {
+                  const suggestedRate = rateInfo.suggested_rate_cents_per_vram_gb_min;
+                  const isActive =
+                    currentInputRate !== null &&
+                    Math.abs(currentInputRate - suggestedRate) < 0.0001;
+                  const handleClick = () => {
+                    const valueStr = rateToHourly(suggestedRate).toFixed(3);
+                    setRateInput(valueStr);
+                    handleSaveRate(valueStr);
+                  };
+                  return (
+                    <Button
+                      type="button"
+                      variant={isActive ? "primary" : "outline"}
+                      size="xs"
+                      aria-pressed={isActive}
+                      onClick={handleClick}
+                      className={`h-auto rounded-lg px-2.5 py-1.5 font-semibold transition-colors justify-between gap-1.5 ${
+                        isActive
+                          ? ""
+                          : "text-muted-foreground hover:text-foreground hover:border-primary/50"
+                      }`}
+                    >
+                      <span>★ Recommended</span>
+                      <span className="opacity-60">
+                        ${rateToHourly(suggestedRate).toFixed(3)}
+                      </span>
+                    </Button>
+                  );
+                })()}
                 {RATE_PRESETS.map(({ label, multiplier }) => {
                   const presetRate =
                     rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
@@ -513,10 +550,18 @@ export function Monetize() {
                 </div>
               )}
 
+              {/* Above-platform warning */}
+              {currentInputRate !== null &&
+                currentInputRate > rateInfo.platform_rate_cents_per_vram_gb_min && (
+                  <p className="text-[10px] text-amber-400/80">
+                    ⚠ Rates above platform rate (${rateToHourly(rateInfo.platform_rate_cents_per_vram_gb_min).toFixed(3)}/hr) are excluded from standard monetize jobs. Automated cloud machines run at the platform rate and take priority.
+                  </p>
+                )}
+
               {rateInfo.custom_rate_cents_per_vram_gb_min === null && (
                 <p className="text-[10px] text-muted-foreground">
-                  Using platform default rate. Set a custom rate above to
-                  override.
+                  Recommended rate keeps you competitive with cloud providers.
+                  Adjust above to find your balance between volume and earnings.
                 </p>
               )}
             </>
