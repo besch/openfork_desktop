@@ -66,7 +66,6 @@ const ESTIMATOR_JOBS = [
 
 // Rate preset multipliers for quick rate adjustment (relative to platform rate)
 const RATE_PRESETS = [
-  { label: "Min (50%)", multiplier: 0.5 },
   { label: "Platform Rate", multiplier: 1.0 },
   { label: "+25%", multiplier: 1.25 },
   { label: "+50%", multiplier: 1.5 },
@@ -406,43 +405,14 @@ export function Monetize() {
 
               {/* Preset buttons */}
               <div className="flex flex-wrap gap-2">
-                {/* Recommended button — uses market-based suggested rate */}
-                {(() => {
-                  const suggestedRate = rateInfo.suggested_rate_cents_per_vram_gb_min;
-                  const isActive =
-                    currentInputRate !== null &&
-                    Math.abs(currentInputRate - suggestedRate) < 0.0001;
-                  const handleClick = () => {
-                    const valueStr = rateToHourly(suggestedRate).toFixed(3);
-                    setRateInput(valueStr);
-                    handleSaveRate(valueStr);
-                  };
-                  return (
-                    <Button
-                      type="button"
-                      variant={isActive ? "primary" : "outline"}
-                      size="xs"
-                      aria-pressed={isActive}
-                      onClick={handleClick}
-                      className={`h-auto rounded-lg px-2.5 py-1.5 font-semibold transition-colors justify-between gap-1.5 ${
-                        isActive
-                          ? ""
-                          : "text-muted-foreground hover:text-foreground hover:border-primary/50"
-                      }`}
-                    >
-                      <span>★ Recommended</span>
-                      <span className="opacity-60">
-                        ${rateToHourly(suggestedRate).toFixed(3)}
-                      </span>
-                    </Button>
-                  );
-                })()}
                 {RATE_PRESETS.map(({ label, multiplier }) => {
                   const presetRate =
                     rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
+                  const presetHourly = rateToHourly(presetRate);
+                  const inputHourly = parseFloat(rateInput);
                   const isActive =
-                    currentInputRate !== null &&
-                    Math.abs(currentInputRate - presetRate) < 0.0001;
+                    !isNaN(inputHourly) &&
+                    Math.abs(inputHourly - presetHourly) < 0.00001;
                   return (
                     <Button
                       key={label}
@@ -552,9 +522,15 @@ export function Monetize() {
 
               {/* Above-platform warning */}
               {currentInputRate !== null &&
-                currentInputRate > rateInfo.platform_rate_cents_per_vram_gb_min && (
+                currentInputRate >
+                  rateInfo.platform_rate_cents_per_vram_gb_min && (
                   <p className="text-[10px] text-amber-400/80">
-                    ⚠ Rates above platform rate (${rateToHourly(rateInfo.platform_rate_cents_per_vram_gb_min).toFixed(3)}/hr) are excluded from standard monetize jobs. Automated cloud machines run at the platform rate and take priority.
+                    ⚠ Rates above platform rate ($
+                    {rateToHourly(
+                      rateInfo.platform_rate_cents_per_vram_gb_min,
+                    ).toFixed(3)}
+                    /hr) are excluded from standard monetize jobs. Automated
+                    cloud machines run at the platform rate and take priority.
                   </p>
                 )}
 
