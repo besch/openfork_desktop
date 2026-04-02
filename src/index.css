@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "@fontsource/geist-sans/latin.css";
+@import "@fontsource/geist-mono/latin.css";
+
 
 @layer base {
   body {
@@ -376,8 +379,8 @@
 }
 
 @theme {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Geist Sans", sans-serif;
+  --font-mono: "Geist Mono", monospace;
   --selection-active-rgb: 22, 101, 52;
   --overlay: rgba(0, 0, 0, 0.5);
 
