@@ -9,8 +9,6 @@
 ; ─── Finish Page ──────────────────────────────────────────────────────────────
 !define MUI_FINISHPAGE_TITLE "OpenFork Is Ready"
 !define MUI_FINISHPAGE_TEXT "Installation complete.$\r$\n$\r$\nLaunch OpenFork and follow the on-screen guide to finish the one-time engine setup.$\r$\n$\r$\nVisit openfork.ai to explore community workflows and open source models."
-!define MUI_FINISHPAGE_LINK "Visit openfork.ai"
-!define MUI_FINISHPAGE_LINK_LOCATION "https://openfork.ai"
 
 ; ─── Abort Warning ────────────────────────────────────────────────────────────
 !define MUI_ABORTWARNING

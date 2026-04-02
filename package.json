@@ -89,6 +89,7 @@
       "preload.cjs",
       "src/python-process-manager.cjs",
       "src/schedule-manager.cjs",
+      "src/docker-cleanup-manager.cjs",
       "config.json",
       "package.json"
     ],

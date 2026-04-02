@@ -1,4 +1,3 @@
-const { exec } = require("child_process");
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
