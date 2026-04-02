@@ -211,7 +211,8 @@ interface ElectronAPI {
 
   // Disk Management
   getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
-  reclaimDiskSpace: () => Promise<{ success: boolean; error?: string }>;
+  reclaimDiskSpace: () => Promise<{ success: boolean; error?: string; message?: string }>;
+  onCompactionSuggested: (callback: () => void) => CleanupFn;
   relocateStorage: (
     newDrivePath: string,
   ) => Promise<{ success: boolean; error?: string }>;

@@ -428,6 +428,11 @@ ipcMain.on(
       }
 
       await pythonManager.start(service, policy, allowedIds);
+
+      // Wire up policy-aware disk cleanup now that the client is running
+      if (cleanupManager) {
+        cleanupManager.updatePolicy(policy);
+      }
     })().finally(() => {
       pendingClientStart = null;
     });
@@ -435,6 +440,7 @@ ipcMain.on(
 );
 ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
+  if (cleanupManager) cleanupManager.resetPolicy();
 });
 ipcMain.on("docker:cancel-download", (event, serviceType) => {
   if (pythonManager) {
@@ -880,6 +886,26 @@ ipcMain.handle("search:general", async (event, query) => {
 const { execSync, exec, execFile } = require("child_process");
 const fs = require("fs");
 
+/**
+ * Returns true when Docker commands are routed through WSL (not native Docker Desktop).
+ * OPENFORK_DOCKER_HOST is set only when the WSL Docker TCP endpoint was resolved.
+ */
+function isUsingWslDocker() {
+  return process.platform === "win32" && !!process.env.OPENFORK_DOCKER_HOST;
+}
+
+/**
+ * After deleting Docker images in WSL mode, physical disk space is not reclaimed
+ * automatically — the WSL VHDX must be compacted separately. Emit an event so the
+ * UI can surface a "Reclaim space" prompt to the user.
+ */
+function emitCompactionSuggested() {
+  if (!isUsingWslDocker()) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("docker:compaction-suggested");
+  }
+}
+
 // --- ENGINE INSTALL STATE ---
 let currentInstallProcess = null;
 let currentInstallCancelled = false;
@@ -1313,6 +1339,10 @@ ipcMain.handle("docker:remove-image", async (event, imageId) => {
       // Ignore prune errors
     }
 
+    // On WSL Docker, rmi + prune free space inside the VHDX but the file itself
+    // doesn't shrink until compacted. Suggest that to the user.
+    emitCompactionSuggested();
+
     return { success: true };
   } catch (error) {
     console.error(`Failed to remove Docker image ${imageId}:`, error);
@@ -1346,6 +1376,17 @@ ipcMain.handle("docker:remove-all-images", async () => {
         }
       }
     }
+
+    // Prune dangling layers left behind by rmi (was missing before — real bug)
+    try {
+      await execDockerCommand("docker image prune -f");
+    } catch (e) {
+      // Non-fatal
+    }
+
+    // On WSL Docker, rmi doesn't shrink the VHDX — suggest compaction to the user
+    if (removedCount > 0) emitCompactionSuggested();
+
     return { success: true, removedCount };
   } catch (error) {
     console.error("Failed to remove all Docker images:", error);
@@ -1467,6 +1508,9 @@ ipcMain.handle("docker:clean-openfork", async () => {
       await execDockerCommand("docker container prune -f");
     } catch (e) {}
 
+    // Suggest VHDX compaction now that a large purge has freed space inside WSL
+    if (removedCount > 0) emitCompactionSuggested();
+
     return { success: true, stoppedCount, removedCount };
   } catch (error) {
     console.error("Failed to clean OpenFork data:", error);
@@ -1581,6 +1625,29 @@ ipcMain.handle("docker:get-disk-space", async () => {
 // --- DOCKER DISK MANAGEMENT ---
 
 ipcMain.handle("docker:reclaim-space", async () => {
+  // Compaction only makes sense when Docker is running inside a WSL VHDX.
+  // Native Docker Desktop manages its own VHDX and does not expose a distro entry
+  // in the registry — compact-wsl.ps1 would fail to find it.
+  if (!isUsingWslDocker()) {
+    return {
+      success: false,
+      error: "NOT_WSL_MODE",
+      message:
+        "Disk compaction is only available when using WSL Docker. " +
+        "Native Docker Desktop manages its own storage automatically.",
+    };
+  }
+
+  // Refuse to compact while the DGN client is running — compact-wsl.ps1
+  // shuts down WSL entirely, which would abruptly kill the Python process.
+  if (pythonManager && pythonManager.isRunning()) {
+    return {
+      success: false,
+      error: "CLIENT_RUNNING",
+      message: "Stop the DGN engine before compacting disk space.",
+    };
+  }
+
   try {
     const scriptPath = app.isPackaged
       ? path.join(process.resourcesPath, "scripts", "compact-wsl.ps1")

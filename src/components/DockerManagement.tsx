@@ -49,6 +49,11 @@ export const DockerManagement = memo(() => {
     path: string;
   } | null>(null);
   const [showStorageSettings, setShowStorageSettings] = useState(false);
+  const [showCompactionBanner, setShowCompactionBanner] = useState(false);
+  const [compacting, setCompacting] = useState(false);
+  const [compactionResult, setCompactionResult] = useState<
+    { ok: boolean; message: string } | null
+  >(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
@@ -110,6 +115,15 @@ export const DockerManagement = memo(() => {
       }
     };
     fetchDiskSpace();
+  }, []);
+
+  // Listen for WSL VHDX compaction suggestions emitted after image deletion
+  useEffect(() => {
+    const cleanup = window.electronAPI.onCompactionSuggested(() => {
+      setShowCompactionBanner(true);
+      setCompactionResult(null);
+    });
+    return cleanup;
   }, []);
 
   // Subscribe to app-wide Docker monitoring updates.
@@ -303,6 +317,71 @@ export const DockerManagement = memo(() => {
             <X className="h-4 w-4" />
           </Button>
         </motion.div>
+      )}
+
+      {/* WSL VHDX compaction banner — shown after image deletion in WSL Docker mode */}
+      {showCompactionBanner && (
+        <Card className="bg-amber-500/10 border-amber-500/30">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-4">
+              <HardDrive className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-semibold text-amber-300">
+                  Reclaim physical disk space
+                </p>
+                <p className="text-xs text-amber-300/70">
+                  Docker images were removed but the WSL disk file (VHDX) doesn't
+                  shrink automatically. Compact it to recover space on Windows.
+                  This requires stopping the engine and UAC elevation.
+                </p>
+                {compactionResult && (
+                  <p
+                    className={`text-xs font-medium ${compactionResult.ok ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {compactionResult.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/40 text-amber-300 hover:bg-amber-500/20 text-xs h-8"
+                  disabled={compacting}
+                  onClick={async () => {
+                    setCompacting(true);
+                    setCompactionResult(null);
+                    const result = await window.electronAPI.reclaimDiskSpace();
+                    setCompacting(false);
+                    if (result.success) {
+                      setCompactionResult({ ok: true, message: "Compaction complete — space reclaimed." });
+                      // Refresh disk space display
+                      const diskResult = await window.electronAPI.getDiskSpace();
+                      if (diskResult.success) setDiskSpace(diskResult.data);
+                    } else if (result.error === "CLIENT_RUNNING") {
+                      setCompactionResult({ ok: false, message: result.message || "Stop the engine first." });
+                    } else if (result.error === "NOT_WSL_MODE") {
+                      setCompactionResult({ ok: false, message: "Not applicable — using Docker Desktop." });
+                    } else {
+                      setCompactionResult({ ok: false, message: result.message || result.error || "Compaction failed." });
+                    }
+                  }}
+                >
+                  {compacting ? <Loader size="xs" className="mr-1" /> : <HardDrive className="h-3 w-3 mr-1" />}
+                  Compact Now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 text-amber-300/60 hover:text-amber-300"
+                  onClick={() => { setShowCompactionBanner(false); setCompactionResult(null); }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Disk Space Error Alert */}

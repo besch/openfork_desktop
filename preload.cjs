@@ -113,6 +113,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   relocateStorage: (newDrivePath) => ipcRenderer.invoke("docker:relocate-storage", newDrivePath),
   reclaimDiskSpace: () => ipcRenderer.invoke("docker:reclaim-space"),
   getAvailableDrives: () => ipcRenderer.invoke("get-available-drives"),
+  // Fired after image deletion in WSL Docker mode to prompt the user to compact the VHDX
+  onCompactionSuggested: (callback) => createVoidListener("docker:compaction-suggested", callback),
   
   // Auto Updater - now return cleanup functions
   onUpdateAvailable: (callback) => createListener("update:available", callback),
