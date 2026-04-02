@@ -36,22 +36,22 @@ const DISPLAY_VRAM_GB = 8;
 // Realistic job specs for earnings estimator (VRAM × duration drives payout)
 const ESTIMATOR_JOBS = [
   {
-    label: "WAN 2.2  (8 GB · ~7 min)",
+    label: "WAN 2.2  (8 GB, 5 min)",
     vramGb: 8,
-    durationMin: 7,
-    jobsPerHour: 7,
+    durationMin: 5,
+    jobsPerHour: 10,
   },
   {
-    label: "LTX-2 24 GB GGUF  (24 GB · ~12 min)",
+    label: "LTX-2.3  (24 GB, 3 min)",
     vramGb: 24,
-    durationMin: 12,
-    jobsPerHour: 4,
+    durationMin: 3,
+    jobsPerHour: 18,
   },
   {
-    label: "Hunyuan 1.5 24 GB  (24 GB · ~18 min)",
+    label: "Hunyuan 1.5  (24 GB, 3 min)",
     vramGb: 24,
-    durationMin: 18,
-    jobsPerHour: 3,
+    durationMin: 3,
+    jobsPerHour: 18,
   },
 ];
 
@@ -396,10 +396,7 @@ export function Monetize() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground font-medium">
-                    Per-job earnings
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    Idle = $0 &mdash; paid per completed job only
+                    Estimated earnings
                   </p>
                 </div>
                 <div className="rounded-md border border-border/40 divide-y divide-border/30">
@@ -421,11 +418,11 @@ export function Monetize() {
                           {job.label}
                         </span>
                         <div className="flex items-center gap-2 tabular-nums">
-                          <span className="font-medium">
-                            ~{formatCents(perJob)}
+                          <span className="font-medium text-white">
+                            {formatCents(perJob)}/job
                           </span>
                           <span className="text-muted-foreground/60">
-                            ≈ {formatCents(perHour)}/hr
+                            ({formatCents(perHour)}/hr)
                           </span>
                         </div>
                       </div>
@@ -481,21 +478,9 @@ export function Monetize() {
                 currentInputRate >
                   rateInfo.platform_rate_cents_per_vram_gb_min && (
                   <p className="text-[10px] text-amber-400/80">
-                    ⚠ Rates above platform rate ($
-                    {rateToHourly(
-                      rateInfo.platform_rate_cents_per_vram_gb_min,
-                    ).toFixed(3)}
-                    /hr) are excluded from standard monetize jobs. Automated
-                    cloud machines run at the platform rate and take priority.
+                    ⚠ Above platform rate — fewer jobs, cloud machines take priority.
                   </p>
                 )}
-
-              {rateInfo.custom_rate_cents_per_vram_gb_min === null && (
-                <p className="text-[10px] text-muted-foreground">
-                  Recommended rate keeps you competitive with cloud providers.
-                  Adjust above to find your balance between volume and earnings.
-                </p>
-              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
