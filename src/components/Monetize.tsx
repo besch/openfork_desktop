@@ -196,11 +196,21 @@ export function Monetize() {
     }
   }, [monetizeWallet, fetchMonetizeWallet]);
 
+  // Stripe error state
+  const [stripeError, setStripeError] = useState<string | null>(null);
+
   const handleStripeOnboard = useCallback(async () => {
     setStripeLoading(true);
+    setStripeError(null);
     try {
       const result = await window.electronAPI.openStripeOnboard();
-      if (result.error) console.error("Stripe onboard error:", result.error);
+      if (result.error) {
+        console.error("Stripe onboard error:", result.error);
+        setStripeError(result.error);
+      }
+    } catch (err: any) {
+      console.error("Stripe onboard error:", err);
+      setStripeError(err.message || "Failed to open Stripe onboarding");
     } finally {
       setStripeLoading(false);
     }
@@ -208,9 +218,16 @@ export function Monetize() {
 
   const handleStripeDashboard = useCallback(async () => {
     setStripeLoading(true);
+    setStripeError(null);
     try {
       const result = await window.electronAPI.openStripeDashboard();
-      if (result.error) console.error("Stripe dashboard error:", result.error);
+      if (result.error) {
+        console.error("Stripe dashboard error:", result.error);
+        setStripeError(result.error);
+      }
+    } catch (err: any) {
+      console.error("Stripe dashboard error:", err);
+      setStripeError(err.message || "Failed to open Stripe dashboard");
     } finally {
       setStripeLoading(false);
     }
@@ -552,7 +569,7 @@ export function Monetize() {
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 relative z-10">
             {wallet?.stripe_account_verified ? (
               <>
                 <div className="w-full">
@@ -570,13 +587,18 @@ export function Monetize() {
                   {stripeLoading ? (
                     <Loader
                       size="xs"
-                      className="mr-2 animate-spin text-white"
+                      className="mr-2 animate-spin"
                     />
                   ) : (
-                    <ExternalLink size={14} className="mr-2 text-white" />
+                    <ExternalLink size={14} className="mr-2" />
                   )}
                   Manage Payout Account
                 </Button>
+                {stripeError && (
+                  <p className="text-xs text-destructive-foreground mt-2">
+                    {stripeError}
+                  </p>
+                )}
               </>
             ) : wallet?.stripe_details_submitted ? (
               <>
@@ -601,6 +623,11 @@ export function Monetize() {
                   )}
                   Open Stripe Dashboard
                 </Button>
+                {stripeError && (
+                  <p className="text-xs text-destructive-foreground mt-2">
+                    {stripeError}
+                  </p>
+                )}
               </>
             ) : (
               <>
@@ -623,6 +650,11 @@ export function Monetize() {
                   )}
                   Connect Bank Account
                 </Button>
+                {stripeError && (
+                  <p className="text-xs text-destructive-foreground mt-2">
+                    {stripeError}
+                  </p>
+                )}
               </>
             )}
           </CardContent>

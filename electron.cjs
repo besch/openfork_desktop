@@ -616,17 +616,19 @@ ipcMain.handle("monetize:open-stripe-onboard", async () => {
 });
 
 ipcMain.handle("monetize:open-stripe-dashboard", async () => {
+  console.log("[Stripe] Opening dashboard, session exists:", !!session);
   try {
     const data = await makeAuthenticatedPostRequest(
       `${ORCHESTRATOR_API_URL}/api/stripe/connect/dashboard`,
     );
+    console.log("[Stripe] Dashboard response:", data);
     if (data.url) {
       shell.openExternal(data.url);
       return { success: true };
     }
     return { error: data.error || "No URL returned" };
   } catch (err) {
-    console.error("Error opening Stripe dashboard:", err);
+    console.error("[Stripe] Error opening Stripe dashboard:", err);
     return { error: err.message };
   }
 });
