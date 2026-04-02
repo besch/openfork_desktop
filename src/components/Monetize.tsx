@@ -42,16 +42,16 @@ const ESTIMATOR_JOBS = [
     jobsPerHour: 10,
   },
   {
-    label: "LTX-2.3  (24 GB, 3 min)",
+    label: "LTX-2.3  (24 GB, 2 min)",
     vramGb: 24,
-    durationMin: 3,
-    jobsPerHour: 18,
+    durationMin: 2,
+    jobsPerHour: 27,
   },
   {
-    label: "Hunyuan 1.5  (24 GB, 3 min)",
+    label: "Hunyuan 1.5  (24 GB, 20 min)",
     vramGb: 24,
-    durationMin: 3,
-    jobsPerHour: 18,
+    durationMin: 20,
+    jobsPerHour: 3,
   },
 ];
 
