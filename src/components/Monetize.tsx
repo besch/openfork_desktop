@@ -3,7 +3,6 @@ import { useClientStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import type { ProviderRateInfo } from "@/types";
 import { Loader } from "@/components/ui/loader";
@@ -12,7 +11,6 @@ import {
   Building2,
   ArrowDownToLine,
   Clock,
-  Trash2,
   ExternalLink,
   CheckCircle2,
   AlertCircle,
@@ -30,13 +28,6 @@ interface Transaction {
   created_at: string;
   description: string | null;
   status: string;
-}
-
-interface CleanupEvent {
-  service_type: string;
-  image: string;
-  reason: string;
-  timestamp: string;
 }
 
 // Reference VRAM for $/hr display (must match backend DISPLAY_VRAM_GB)
@@ -110,9 +101,6 @@ export function Monetize() {
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
-  const [idleTimeout, setIdleTimeout] = useState(30);
-  const [cleanupEnabled, setCleanupEnabled] = useState(false);
-  const [cleanupLog, setCleanupLog] = useState<CleanupEvent[]>([]);
 
   // Provider pricing state
   const [rateInfo, setRateInfo] = useState<ProviderRateInfo | null>(null);
@@ -124,7 +112,6 @@ export function Monetize() {
   useEffect(() => {
     fetchMonetizeWallet();
     loadTransactions();
-    loadMonetizeConfig();
     loadProviderRate();
   }, []);
 
@@ -132,14 +119,6 @@ export function Monetize() {
   useEffect(() => {
     const interval = setInterval(loadProviderRate, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
-
-  // Listen for cleanup events from main process
-  useEffect(() => {
-    const cleanup = window.electronAPI.onMonetizeCleanupEvent((evt) => {
-      setCleanupLog((prev) => [evt, ...prev].slice(0, 50));
-    });
-    return cleanup;
   }, []);
 
   async function loadProviderRate() {
@@ -158,14 +137,6 @@ export function Monetize() {
       }
     } catch {}
     setRateLoading(false);
-  }
-
-  async function loadMonetizeConfig() {
-    try {
-      const cfg = await window.electronAPI.getMonetizeConfig();
-      setIdleTimeout(cfg.idleTimeoutMinutes ?? 30);
-      setCleanupEnabled(cfg.enabled ?? false);
-    } catch {}
   }
 
   async function loadTransactions() {
@@ -242,21 +213,6 @@ export function Monetize() {
       if (result.error) console.error("Stripe dashboard error:", result.error);
     } finally {
       setStripeLoading(false);
-    }
-  }, []);
-
-  const handleIdleTimeoutChange = useCallback(async (val: number[]) => {
-    const minutes = val[0];
-    setIdleTimeout(minutes);
-    await window.electronAPI.setMonetizeIdleTimeout(minutes);
-  }, []);
-
-  const toggleCleanup = useCallback((enabled: boolean) => {
-    setCleanupEnabled(enabled);
-    if (enabled) {
-      window.electronAPI.startMonetizeCleanup();
-    } else {
-      window.electronAPI.stopMonetizeCleanup();
     }
   }, []);
 
@@ -821,78 +777,6 @@ export function Monetize() {
           </CardContent>
         </Card>
 
-        {/* Docker Auto-Cleanup */}
-        <Card className="bg-surface/40 border-white/20 shadow-xl overflow-hidden group">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Trash2 size={16} />
-              Docker Auto-Cleanup
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Auto-remove idle images</p>
-                <p className="text-xs text-muted-foreground">
-                  Images unused for the idle timeout are removed automatically
-                </p>
-              </div>
-              <Button
-                variant={cleanupEnabled ? "primary" : "outline"}
-                size="sm"
-                onClick={() => toggleCleanup(!cleanupEnabled)}
-              >
-                {cleanupEnabled ? "Enabled" : "Disabled"}
-              </Button>
-            </div>
-
-            {cleanupEnabled && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Idle timeout</span>
-                  <span className="font-medium">{idleTimeout} min</span>
-                </div>
-                <Slider
-                  min={15}
-                  max={120}
-                  step={5}
-                  value={[idleTimeout]}
-                  onValueChange={handleIdleTimeoutChange}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>15 min</span>
-                  <span>120 min</span>
-                </div>
-              </div>
-            )}
-
-            {cleanupLog.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium">
-                  Recent cleanup events
-                </p>
-                <div className="max-h-32 overflow-y-auto space-y-1">
-                  {cleanupLog.map((evt, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 text-xs text-muted-foreground"
-                    >
-                      <Trash2
-                        size={10}
-                        className="text-amber-400 flex-shrink-0"
-                      />
-                      <span className="truncate">{evt.service_type}</span>
-                      <span className="ml-auto flex-shrink-0">
-                        {formatDate(evt.timestamp)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
