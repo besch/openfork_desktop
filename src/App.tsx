@@ -255,7 +255,7 @@ function App() {
   return (
     <>
       {status === "stopping" && <ShutdownOverlay />}
-      <div className="min-h-screen relative overflow-hidden">
+      <div className="min-h-screen relative overflow-hidden antialiased">
         {/* Website Signature Background Effects */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_600px_at_80%_-10%,color-mix(in_oklab,var(--color-primary)_25%,transparent),transparent_60%),radial-gradient(900px_500px_at_10%_20%,color-mix(in_oklab,var(--color-primary)_18%,transparent),transparent_60%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-background)_96%,var(--color-foreground)_4%),var(--color-background))]" />

@@ -554,15 +554,15 @@ export const DockerManagement = memo(() => {
                   DOWNLOADING {dockerPullProgress?.image}
                 </span>
               </div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleCancelDownload}
-                className="rounded-lg h-9 px-4 text-[10px] font-black uppercase tracking-widest ml-2"
-              >
-                Abort
-              </Button>
             </CardTitle>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleCancelDownload}
+              className="rounded-lg h-9 px-4 text-[10px] font-black uppercase tracking-widest"
+            >
+              Abort
+            </Button>
           </CardHeader>
           <CardContent className="relative z-10 pb-4">
             <div className="space-y-2">
