@@ -151,14 +151,22 @@ export interface ProviderRateInfo {
   platform_rate_cents_per_vram_gb_min: number;
   platform_fee_percent: number;
   floor_rate: number;
+  /** Dynamic ceiling: lower when fewer providers online (1.5x–3.0x platform rate). */
   ceiling_rate: number;
   effective_rate: number;
   effective_rate_hourly_dollars: number;
+  /** Anti-sybil: only providers priced at/below platform rate contribute to this average. */
   market_avg_rate: number | null;
   market_avg_rate_hourly_dollars: number | null;
   online_monetize_providers_count: number;
-  suggested_rate_cents_per_vram_gb_min: number;
-  suggested_rate_hourly_dollars: number;
+  /** Number of pending monetize jobs (used for demand surge signal). */
+  pending_jobs_count: number | null;
+  /** Surge multiplier applied to suggested rate based on demand/supply ratio. */
+  surge_factor: number | null;
+  suggested_rate_cents_per_vram_gb_min: number | null;
+  suggested_rate_hourly_dollars: number | null;
   display_vram_gb: number;
+  /** Seconds remaining in the rate-increase cooldown (0 = can change now). */
+  cooldown_remaining_seconds: number;
   error?: string;
 }

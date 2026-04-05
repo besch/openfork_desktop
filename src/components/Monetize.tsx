@@ -18,6 +18,8 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
+  Flame,
+  Lock,
 } from "lucide-react";
 import { supabase } from "@/supabase";
 
@@ -107,6 +109,8 @@ export function Monetize() {
   const [rateLoading, setRateLoading] = useState(false);
   const [rateInput, setRateInput] = useState<string>("");
   const [rateSaving, setRateSaving] = useState(false);
+  const [rateSaveError, setRateSaveError] = useState<string | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   // Fetch wallet + transactions + rate on mount
   useEffect(() => {
@@ -121,18 +125,30 @@ export function Monetize() {
     return () => clearInterval(interval);
   }, []);
 
+  // Countdown timer for rate increase cooldown
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
+
   async function loadProviderRate() {
     setRateLoading(true);
     try {
       const result = await window.electronAPI.getProviderRate();
       if (!result.error) {
         setRateInfo(result);
+        setCooldownSeconds(result.cooldown_remaining_seconds ?? 0);
         // If no custom rate is set, default the input to the market-suggested rate
         // so the provider sees the optimal competitive rate immediately.
+        const suggestedRate =
+          result.suggested_rate_cents_per_vram_gb_min ?? result.platform_rate_cents_per_vram_gb_min;
         const initialRate =
           result.custom_rate_cents_per_vram_gb_min !== null
             ? result.effective_rate
-            : result.suggested_rate_cents_per_vram_gb_min;
+            : suggestedRate;
         setRateInput(rateToHourly(initialRate).toFixed(3));
       }
     } catch {}
@@ -237,24 +253,33 @@ export function Monetize() {
     async (valueStr?: string) => {
       if (!rateInfo) return;
       const dollars = parseFloat(valueStr ?? rateInput);
-      if (isNaN(dollars) || dollars < 0) {
-        return;
-      }
+      if (isNaN(dollars) || dollars < 0) return;
       const centsPerVramGbMin = hourlyToRate(dollars);
       if (centsPerVramGbMin < rateInfo.floor_rate) {
+        setRateSaveError(`Minimum rate is $${rateToHourly(rateInfo.floor_rate).toFixed(3)}/hr`);
         return;
       }
       if (centsPerVramGbMin > rateInfo.ceiling_rate) {
+        setRateSaveError(`Maximum rate is $${rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr (${rateInfo.online_monetize_providers_count} provider(s) online)`);
         return;
       }
       setRateSaving(true);
+      setRateSaveError(null);
       try {
-        const result =
-          await window.electronAPI.setProviderRate(centsPerVramGbMin);
-        if (!result.error) {
-          setRateInfo(result);
+        const result = await window.electronAPI.setProviderRate(centsPerVramGbMin);
+        if (result.error) {
+          setRateSaveError(result.error);
+          if (result.cooldown_remaining_seconds) {
+            setCooldownSeconds(result.cooldown_remaining_seconds);
+          }
+        } else {
+          setRateInfo((prev) => ({ ...prev!, ...result }));
+          if (result.cooldown_remaining_seconds) {
+            setCooldownSeconds(result.cooldown_remaining_seconds);
+          }
         }
-      } catch {
+      } catch (err: any) {
+        setRateSaveError(err?.message ?? "Failed to save rate");
       } finally {
         setRateSaving(false);
       }
@@ -268,6 +293,7 @@ export function Monetize() {
       const newRate = rateInfo.platform_rate_cents_per_vram_gb_min * multiplier;
       const valueStr = rateToHourly(newRate).toFixed(3);
       setRateInput(valueStr);
+      setRateSaveError(null);
       handleSaveRate(valueStr);
     },
     [rateInfo, handleSaveRate],
@@ -276,13 +302,18 @@ export function Monetize() {
   const handleResetRate = useCallback(async () => {
     if (!rateInfo) return;
     setRateSaving(true);
+    setRateSaveError(null);
     try {
       const result = await window.electronAPI.setProviderRate(null);
-      if (!result.error) {
-        setRateInfo(result);
+      if (result.error) {
+        setRateSaveError(result.error);
+      } else {
+        setRateInfo((prev) => ({ ...prev!, ...result }));
         setRateInput(rateToHourly(result.effective_rate).toFixed(3));
+        setCooldownSeconds(0);
       }
-    } catch {
+    } catch (err: any) {
+      setRateSaveError(err?.message ?? "Failed to reset rate");
     } finally {
       setRateSaving(false);
     }
@@ -343,13 +374,17 @@ export function Monetize() {
                       value={rateInput}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         setRateInput(e.target.value);
+                        setRateSaveError(null);
                       }}
                       onBlur={() => handleSaveRate()}
-                      className="pl-7 pr-12 font-mono"
+                      disabled={cooldownSeconds > 0}
+                      className="pl-7 pr-12 font-mono disabled:opacity-50"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
                       {rateSaving ? (
                         <Loader size="xs" className="text-white" />
+                      ) : cooldownSeconds > 0 ? (
+                        <Lock size={12} className="text-amber-400" />
                       ) : (
                         "/hr"
                       )}
@@ -367,14 +402,52 @@ export function Monetize() {
                     </Button>
                   )}
                 </div>
+
+                {/* Cooldown notice */}
+                {cooldownSeconds > 0 && (
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-400/90">
+                    <Lock size={10} />
+                    Rate increases locked for{" "}
+                    {cooldownSeconds >= 60
+                      ? `${Math.ceil(cooldownSeconds / 60)}m`
+                      : `${cooldownSeconds}s`}
+                    {" "}— decreases and resets are always allowed
+                  </div>
+                )}
+
+                {/* Save error */}
+                {rateSaveError && (
+                  <div className="flex items-center gap-1.5 text-[10px] text-destructive-foreground">
+                    <AlertCircle size={10} />
+                    {rateSaveError}
+                  </div>
+                )}
+
                 <p className="text-[10px] text-white/70">
-                  Based on {DISPLAY_VRAM_GB} GB GPU reference. Platform range:{" "}
+                  Based on {DISPLAY_VRAM_GB} GB GPU reference. Current allowed range:{" "}
                   <span className="text-white/90">
                     ${rateToHourly(rateInfo.floor_rate).toFixed(3)} – $
                     {rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr
                   </span>
+                  {rateInfo.online_monetize_providers_count > 0 && (
+                    <span className="text-white/50">
+                      {" "}({rateInfo.online_monetize_providers_count} provider{rateInfo.online_monetize_providers_count !== 1 ? "s" : ""} online)
+                    </span>
+                  )}
                 </p>
               </div>
+
+              {/* Surge demand indicator */}
+              {rateInfo.surge_factor !== null && rateInfo.surge_factor > 1.0 && (
+                <div className="flex items-center gap-1.5 rounded-md border border-amber-400/20 bg-amber-400/5 px-2.5 py-1.5">
+                  <Flame size={12} className="text-amber-400 shrink-0" />
+                  <p className="text-[10px] text-amber-400/90">
+                    High demand — {rateInfo.pending_jobs_count} job{rateInfo.pending_jobs_count !== 1 ? "s" : ""} queued for{" "}
+                    {rateInfo.online_monetize_providers_count} provider{rateInfo.online_monetize_providers_count !== 1 ? "s" : ""}.
+                    Suggested rate raised {Math.round((rateInfo.surge_factor - 1) * 100)}% to attract providers.
+                  </p>
+                </div>
+              )}
 
               {/* Preset buttons */}
               <div className="flex flex-wrap gap-2">
@@ -386,6 +459,7 @@ export function Monetize() {
                   const isActive =
                     !isNaN(inputHourly) &&
                     Math.abs(inputHourly - presetHourly) < 0.00001;
+                  const exceedsCeiling = presetRate > rateInfo.ceiling_rate;
                   return (
                     <Button
                       key={label}
@@ -394,6 +468,7 @@ export function Monetize() {
                       size="xs"
                       aria-pressed={isActive}
                       onClick={() => handleSetPreset(multiplier)}
+                      disabled={exceedsCeiling || cooldownSeconds > 0}
                       className={`h-auto rounded-lg px-2.5 py-1.5 font-semibold transition-colors justify-between gap-1.5 ${
                         isActive
                           ? ""
@@ -449,55 +524,61 @@ export function Monetize() {
               </div>
 
               {/* Market position */}
-              {rateInfo.market_avg_rate !== null && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Market position</span>
-                  <div className="flex items-center gap-1.5">
-                    {marketPosition === "competitive" && (
-                      <>
-                        <TrendingDown size={12} className="text-white" />
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] border-primary/30 text-primary"
-                        >
-                          Competitive — more jobs likely
-                        </Badge>
-                      </>
-                    )}
-                    {marketPosition === "above" && (
-                      <>
-                        <Minus size={12} className="text-white" />
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] border-merged-status/30 text-merged-status"
-                        >
-                          Above average — slightly fewer jobs
-                        </Badge>
-                      </>
-                    )}
-                    {marketPosition === "premium" && (
-                      <>
-                        <TrendingUp size={12} className="text-white" />
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] border-merged-status/30 text-merged-status"
-                        >
-                          Premium — significantly fewer jobs
-                        </Badge>
-                      </>
-                    )}
-                  </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Market position</span>
+                <div className="flex items-center gap-1.5">
+                  {currentInputRate !== null &&
+                  currentInputRate > rateInfo.platform_rate_cents_per_vram_gb_min ? (
+                    <>
+                      <TrendingUp size={12} className="text-destructive-foreground" />
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] border-destructive/30 text-destructive-foreground"
+                      >
+                        Above platform rate — no standard jobs
+                      </Badge>
+                    </>
+                  ) : rateInfo.market_avg_rate !== null ? (
+                    <>
+                      {marketPosition === "competitive" && (
+                        <>
+                          <TrendingDown size={12} className="text-white" />
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] border-primary/30 text-primary"
+                          >
+                            Competitive — more jobs likely
+                          </Badge>
+                        </>
+                      )}
+                      {marketPosition === "above" && (
+                        <>
+                          <Minus size={12} className="text-white" />
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] border-merged-status/30 text-merged-status"
+                          >
+                            Above average — slightly fewer jobs
+                          </Badge>
+                        </>
+                      )}
+                      {marketPosition === "premium" && (
+                        <>
+                          <TrendingUp size={12} className="text-white" />
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] border-merged-status/30 text-merged-status"
+                          >
+                            Premium — significantly fewer jobs
+                          </Badge>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground text-[10px]">No market data yet</span>
+                  )}
                 </div>
-              )}
-
-              {/* Above-platform warning */}
-              {currentInputRate !== null &&
-                currentInputRate >
-                  rateInfo.platform_rate_cents_per_vram_gb_min && (
-                  <p className="text-[10px] text-amber-400/80">
-                    ⚠ Above platform rate — fewer jobs, cloud machines take priority.
-                  </p>
-                )}
+              </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">

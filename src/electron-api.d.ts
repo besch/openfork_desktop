@@ -12,9 +12,12 @@ interface ProviderRateInfo {
   market_avg_rate: number | null;
   market_avg_rate_hourly_dollars: number | null;
   online_monetize_providers_count: number;
-  suggested_rate_cents_per_vram_gb_min: number;
-  suggested_rate_hourly_dollars: number;
+  pending_jobs_count: number | null;
+  surge_factor: number | null;
+  suggested_rate_cents_per_vram_gb_min: number | null;
+  suggested_rate_hourly_dollars: number | null;
   display_vram_gb: number;
+  cooldown_remaining_seconds: number;
   error?: string;
 }
 
