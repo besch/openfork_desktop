@@ -108,10 +108,10 @@ export function StorageSettings() {
               <HardDrive className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-xs font-black uppercase tracking-widest text-white">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">
                 Storage Management
               </h3>
-              <p className="text-[10px] text-muted/40 font-bold uppercase tracking-widest mt-0.5">
+              <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5">
                 WSL Partition Configuration
               </p>
             </div>
@@ -121,7 +121,7 @@ export function StorageSettings() {
               <div className="text-[9px] text-white/80 bg-white/5 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/5">
                 Active: {diskInfo.path}
               </div>
-              <div className="text-[10px] font-black tracking-tighter text-white">
+              <div className="text-[10px] font-black tracking-widest text-white/90 uppercase">
                 {diskInfo.free_gb} GB FREE / {diskInfo.total_gb} GB TOTAL
               </div>
             </div>
@@ -132,18 +132,18 @@ export function StorageSettings() {
           {/* Reclaim Section */}
           <div className="space-y-2">
             <div className="space-y-0.5">
-              <Label className="text-xs font-bold flex items-center gap-1.5">
-                <RefreshCw className="h-3 w-3 text-white" />
+              <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
+                <RefreshCw className="h-3 w-3" />
                 Space Reclamation
               </Label>
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
+              <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
                 Reclaim unused space from the WSL disk file.
               </p>
             </div>
             <Button
               variant="primary"
               size="sm"
-              className="px-4 h-8 text-[11px]"
+              className="px-4 h-8 text-[10px] font-black uppercase tracking-widest"
               onClick={handleReclaim}
               disabled={isReclaiming || isRelocating}
             >
@@ -159,13 +159,13 @@ export function StorageSettings() {
           {/* Relocation Section */}
           <div className="space-y-2 md:border-l md:pl-4 border-white/5">
             <div className="space-y-0.5">
-              <Label className="text-xs font-bold flex items-center gap-1.5">
-                <ArrowRightLeft className="h-3 w-3 text-white" />
+              <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
+                <ArrowRightLeft className="h-3 w-3" />
                 Relocate Engine
               </Label>
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
+              <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
                 Reinstall the engine on another drive.{" "}
-                <span className="text-orange-400 font-medium italic">
+                <span className="text-orange-400/80 italic">
                   Requires re-downloading images.
                 </span>
               </p>
@@ -198,7 +198,7 @@ export function StorageSettings() {
                               ({d.freeGB} GB free)
                             </span>
                             {isInstalledHere && (
-                              <span className="text-[9px] text-primary font-bold ml-auto">
+                            <span className="text-[8px] text-primary font-black uppercase tracking-widest ml-auto px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20">
                                 ACTIVE
                               </span>
                             )}
@@ -235,7 +235,7 @@ export function StorageSettings() {
             className="p-2 rounded-md bg-destructive-foreground border border-destructive/20 flex items-center gap-2 text-destructive"
           >
             <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-            <span className="text-[10px] text-white font-medium">{error}</span>
+            <span className="text-[9px] text-white font-black uppercase tracking-widest">{error}</span>
           </motion.div>
         )}
       </CardContent>

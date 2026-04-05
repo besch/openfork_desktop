@@ -278,7 +278,7 @@ export const DockerManagement = memo(() => {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
         <Loader size="lg" variant="white" />
-        <span className="text-xs font-black uppercase tracking-[0.2em] text-white/50">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
           Initializing Docker Engine...
         </span>
       </div>
@@ -306,7 +306,7 @@ export const DockerManagement = memo(() => {
         >
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5" />
-            <span className="font-medium">{error}</span>
+            <span className="text-sm font-bold tracking-tight uppercase">{error}</span>
           </div>
           <Button
             variant="ghost"
@@ -336,7 +336,7 @@ export const DockerManagement = memo(() => {
                 </p>
                 {compactionResult && (
                   <p
-                    className={`text-xs font-medium ${compactionResult.ok ? "text-emerald-400" : "text-red-400"}`}
+                    className={`text-[10px] font-black uppercase tracking-widest ${compactionResult.ok ? "text-emerald-400" : "text-red-400"}`}
                   >
                     {compactionResult.message}
                   </p>
@@ -391,19 +391,19 @@ export const DockerManagement = memo(() => {
             <div className="flex items-start gap-4">
               <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1 space-y-2">
-                <h3 className="font-semibold text-destructive flex items-center gap-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-destructive flex items-center gap-2">
                   Insufficient Disk Space
                 </h3>
                 <div className="text-sm space-y-1">
                   <p>
                     Cannot download{" "}
-                    <span className="font-mono font-medium">
+                    <span className="font-mono font-bold">
                       {diskSpaceError.image_name}
                     </span>
                   </p>
                   <p>
                     <span className="text-destructive/80">Need:</span>{" "}
-                    <span className="font-semibold">
+                    <span className="font-black">
                       {diskSpaceError.required_gb} GB
                     </span>{" "}
                     <span className="text-muted-foreground">
@@ -412,12 +412,12 @@ export const DockerManagement = memo(() => {
                   </p>
                   <p>
                     <span className="text-destructive/80">Available:</span>{" "}
-                    <span className="font-semibold">
+                    <span className="font-black">
                       {diskSpaceError.available_gb} GB
                     </span>
                   </p>
                 </div>
-                <p className="text-sm text-muted-foreground pt-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground pt-2">
                   Please free up disk space and try again.
                 </p>
               </div>
@@ -440,10 +440,10 @@ export const DockerManagement = memo(() => {
             <Container className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-black tracking-tight text-white uppercase">
+            <h2 className="text-lg font-black tracking-tighter text-white uppercase">
               Docker Management
             </h2>
-            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mt-0.5">
+            <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mt-0.5">
               Engine & Container Runtime
             </p>
           </div>
@@ -459,7 +459,7 @@ export const DockerManagement = memo(() => {
             >
               <HardDrive className="h-3.5 w-3.5" />
               <span className="text-[10px] font-black tracking-widest uppercase">
-                {diskSpace.free_gb}GB / {diskSpace.total_gb}GB
+                {diskSpace.free_gb}GB / {diskSpace.total_gb}GB FREE
               </span>
             </div>
           )}
@@ -500,10 +500,10 @@ export const DockerManagement = memo(() => {
               <HardDrive className="h-4 w-4" />
             </div>
             <div className="text-left">
-              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white">
+              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
                 Storage & Engine Settings
               </span>
-              <p className="text-[9px] text-white/50 font-black uppercase tracking-[0.1em] mt-0.5">
+              <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5">
                 Configure Location & Performance
               </p>
             </div>
@@ -596,10 +596,10 @@ export const DockerManagement = memo(() => {
               <Container className="h-4 w-4 text-white" />
             </div>
             <div>
-              <span className="font-black text-[10px] uppercase tracking-widest text-white/90">
+              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
                 Running Containers
               </span>
-              <p className="text-[9px] text-muted/30 font-bold uppercase tracking-[0.2em] mt-0.5">
+              <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.2em] mt-0.5">
                 {containers.length} Instances
               </p>
             </div>
@@ -621,10 +621,10 @@ export const DockerManagement = memo(() => {
                   className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-xs text-white/90 truncate tracking-tight">
+                    <p className="font-black text-[11px] text-white/90 truncate tracking-tight uppercase">
                       {container.name}
                     </p>
-                    <p className="text-[10px] text-muted-foreground/60 truncate font-medium mt-0.5">
+                    <p className="text-[10px] text-white/40 truncate font-bold uppercase tracking-tight mt-0.5">
                       {container.image}
                     </p>
                   </div>
@@ -672,7 +672,9 @@ export const DockerManagement = memo(() => {
             <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
               <HardDrive className="h-5 w-5" />
             </div>
-            <span>Downloaded Docker Images ({images.length})</span>
+            <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
+              Downloaded Docker Images ({images.length})
+            </span>
           </CardTitle>
           {images.length > 0 && (
             <Button
@@ -680,21 +682,22 @@ export const DockerManagement = memo(() => {
               size="sm"
               onClick={handleRemoveAllImages}
               disabled={actionLoading !== null}
+              className="h-8 text-[10px] font-black uppercase tracking-widest px-4"
             >
               {actionLoading === "remove-all" ? (
                 <Loader size="xs" className="mr-2" />
               ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
               )}
-              Remove All
+              Purge Sync
             </Button>
           )}
         </CardHeader>
         <CardContent className="px-4 pb-4">
           {images.length === 0 ? (
-            <p className="text-muted-foreground text-center py-4">
-              No OpenFork Docker images found
-            </p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/20 text-center py-8">
+                No OpenFork Docker images found
+              </p>
           ) : (
             <div className="space-y-2">
               {images.map((image) => (
@@ -703,15 +706,15 @@ export const DockerManagement = memo(() => {
                   className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">
+                    <p className="font-black text-[11px] text-white/90 truncate tracking-tight uppercase">
                       {image.repository}:{image.tag}
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-[10px] text-white/40 font-bold uppercase tracking-tight flex items-center gap-2 mt-0.5">
                       <span className="inline-flex items-center gap-1">
-                        <HardDrive className="h-3 w-3" />
+                        <HardDrive className="h-2.5 w-2.5" />
                         {image.size}
                       </span>
-                      <span className="mx-2">•</span>
+                      <span className="opacity-30">•</span>
                       {image.created}
                     </p>
                   </div>

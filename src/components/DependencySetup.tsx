@@ -167,7 +167,7 @@ export function DependencySetup({
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">
       <div className="max-w-2xl w-full space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-black bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent uppercase tracking-tighter">
             System Setup
           </h1>
           <p className="text-muted-foreground">
@@ -192,34 +192,34 @@ export function DependencySetup({
             }`}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-3 text-lg">
+              <CardTitle className="flex items-center gap-3 text-sm font-black uppercase tracking-widest text-white/90">
                 <img
                   src="./logo.svg"
                   alt=""
-                  className="h-5 w-5 brightness-0 invert"
+                  className="h-4 w-4 brightness-0 invert opacity-80"
                 />
                 OpenFork Engine
                 {status?.docker.running ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto" />
+                  <CheckCircle2 className="h-4 w-4 text-green-500 ml-auto" />
                 ) : isInstalling ? (
-                  <Download className="h-5 w-5 text-orange-500 ml-auto" />
+                  <Download className="h-4 w-4 text-orange-500 ml-auto" />
                 ) : status?.docker.installed ? (
-                  <AlertCircle className="h-5 w-5 text-yellow-500 ml-auto" />
+                  <AlertCircle className="h-4 w-4 text-yellow-500 ml-auto" />
                 ) : status?.docker.error === "WSL_DISTRO_MISSING" ? (
-                  <AlertCircle className="h-5 w-5 text-yellow-500 ml-auto" />
+                  <AlertCircle className="h-4 w-4 text-yellow-500 ml-auto" />
                 ) : (
-                  <XCircle className="h-5 w-5 text-red-500 ml-auto" />
+                  <XCircle className="h-4 w-4 text-red-500 ml-auto" />
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {status?.docker.running ? (
-                <p className="text-sm text-green-400">
+                <p className="text-[10px] font-black uppercase tracking-widest text-green-400">
                   ✓ AI Engine is installed and running
                 </p>
               ) : status?.docker.installed ? (
                 <>
-                  <p className="text-sm text-yellow-400">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400">
                     {status.docker.isNative
                       ? status.docker.isStarting
                         ? "Docker Desktop is starting…"
@@ -247,7 +247,7 @@ export function DependencySetup({
                       {!status?.docker.isNative &&
                         (status?.docker.error === "WSL_DISTRO_MISSING" ? (
                           <>
-                            <p className="text-sm font-medium">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
                               Docker is not installed
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -273,7 +273,7 @@ export function DependencySetup({
                           </>
                         ) : (
                           <>
-                            <p className="text-sm font-medium">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
                               Docker not found
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -308,7 +308,7 @@ export function DependencySetup({
                     canChooseInstallDrive &&
                     availableDrives.length > 1 && (
                       <div className="space-y-2 pt-2">
-                        <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 flex items-center gap-1.5">
                           <HardDrive className="h-3 w-3" />
                           Choose installation drive
                         </label>
@@ -348,7 +348,7 @@ export function DependencySetup({
                       {/* Show "Retry Check" if Docker Desktop is installed but not running */}
                       {!status?.docker.installed ? (
                         <>
-                          <Download className="h-4 w-4 mr-2" />
+                          <Download className="h-3.5 w-3.5 mr-2" />
                           {status?.docker.error === "WSL_DISTRO_MISSING"
                             ? "Install Docker"
                             : "Install Local AI Engine"}
@@ -364,7 +364,7 @@ export function DependencySetup({
                         </>
                       ) : (
                         <>
-                          <Download className="h-4 w-4 mr-2" />
+                          <Download className="h-3.5 w-3.5 mr-2" />
                           Install Local AI Engine
                         </>
                       )}
@@ -376,7 +376,7 @@ export function DependencySetup({
                   {isInstalling && (
                     <div className="space-y-3 mt-2">
                       {/* Phase label */}
-                      <p className="text-sm font-medium text-primary animate-pulse">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">
                         {installPhase || "Starting setup…"}
                       </p>
 
@@ -408,7 +408,7 @@ export function DependencySetup({
                       <Button
                         variant="destructive"
                         size="sm"
-                        className="w-full"
+                        className="w-full text-[10px] font-black uppercase tracking-widest"
                         onClick={handleCancelInstall}
                         disabled={isCancelling}
                       >
@@ -437,24 +437,24 @@ export function DependencySetup({
             }`}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-3 text-lg">
-                <Cpu className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-3 text-sm font-black uppercase tracking-widest text-white/90">
+                <Cpu className="h-4 w-4" />
                 NVIDIA GPU
                 {status?.nvidia.available ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500 ml-auto" />
+                  <CheckCircle2 className="h-4 w-4 text-green-500 ml-auto" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-yellow-500 ml-auto" />
+                  <AlertCircle className="h-4 w-4 text-yellow-500 ml-auto" />
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {status?.nvidia.available ? (
-                <p className="text-sm text-green-400">
+                <p className="text-[10px] font-black uppercase tracking-widest text-green-400">
                   ✓ {status.nvidia.gpu} detected
                 </p>
               ) : (
                 <>
-                  <p className="text-sm text-yellow-400">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400">
                     No NVIDIA GPU detected
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -468,10 +468,10 @@ export function DependencySetup({
                         "https://www.nvidia.com/drivers",
                       )
                     }
-                    className="w-full mt-2"
+                    className="w-full mt-2 text-[10px] font-black uppercase tracking-widest"
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    Install NVIDIA Drivers (CUDA 12.8+)
+                    <Download className="h-3.5 w-3.5 mr-2" />
+                    Install NVIDIA Drivers
                   </Button>
                 </>
               )}
@@ -486,7 +486,7 @@ export function DependencySetup({
               onClick={checkDependencies}
               disabled={isChecking}
               size="lg"
-              className="w-full"
+              className="w-full text-[11px] font-black uppercase tracking-[0.2em]"
             >
               {isChecking ? (
                 <Loader size="xs" className="mr-2" />
