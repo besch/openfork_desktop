@@ -551,7 +551,7 @@ export const DockerManagement = memo(() => {
               </div>
               <div>
                 <span className="font-black text-xs uppercase tracking-widest text-white">
-                  DOWNLOADING {dockerPullProgress?.image}
+                  {dockerPullProgress?.status || "Downloading"} {dockerPullProgress?.image}
                 </span>
               </div>
             </CardTitle>
