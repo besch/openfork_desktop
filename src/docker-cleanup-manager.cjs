@@ -6,9 +6,9 @@ const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
 // null = disabled — no auto-cleanup for this policy.
 const POLICY_IDLE_TIMEOUTS = {
   all: 120, // 2 hours  — user processes random network jobs; stale images pile up fast
-  project: 120, // 2 hours — curated project images; keep them around between work sessions
-  users: 120, // 2 hours — trusted-user images; same rationale as project
-  monetize: 30, // 30 minutes
+  project: 240, // 4 hours — curated project images; longer gaps expected between work sessions
+  users: 240, // 4 hours — trusted-user images; same rationale as project
+  monetize: 90, // 90 minutes — reclaims space without churning on large (100-220 GB) image re-downloads
   mine: null, // disabled — user's own workflow images; never auto-evict
 };
 
