@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { Loader } from "@/components/ui/loader";
+import type { DockerStatus } from "@/types";
 import {
   HardDrive,
   RefreshCw,
@@ -19,6 +20,9 @@ import {
 } from "lucide-react";
 
 export function StorageSettings() {
+  const [platform, setPlatform] = useState<"win32" | "linux" | "darwin">(
+    "win32",
+  );
   const [diskInfo, setDiskInfo] = useState<{
     free_gb: string;
     used_gb: string;
@@ -31,25 +35,20 @@ export function StorageSettings() {
   const [selectedDrive, setSelectedDrive] = useState<string>("");
   const [isReclaiming, setIsReclaiming] = useState(false);
   const [isRelocating, setIsRelocating] = useState(false);
-  const [dockerStatus, setDockerStatus] = useState<{
-    installed: boolean;
-    running: boolean;
-    installDrive?: string;
-  } | null>(null);
+  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshData = async () => {
     try {
+      const status = await window.electronAPI.checkDocker();
+      setDockerStatus(status);
+
       const info = await window.electronAPI.getDiskSpace();
       if (info.success) setDiskInfo(info.data);
 
       const drives = await window.electronAPI.getAvailableDrives();
       setAvailableDrives(drives);
 
-      const status = await window.electronAPI.checkDocker();
-      setDockerStatus(status);
-
-      // Default to current install drive if known
       if (status?.installDrive) {
         setSelectedDrive(status.installDrive);
       }
@@ -59,8 +58,25 @@ export function StorageSettings() {
   };
 
   useEffect(() => {
+    window.electronAPI.getProcessInfo().then((info) => {
+      setPlatform(info.platform as "win32" | "linux" | "darwin");
+    });
     refreshData();
   }, []);
+
+  const isWindows = platform === "win32";
+  const isWslMode = isWindows && dockerStatus?.isNative === false;
+  const isDockerDesktop = isWindows && dockerStatus?.isNative === true;
+  const storageTitle = isWslMode
+    ? "WSL Engine Storage"
+    : isDockerDesktop
+      ? "Docker Desktop Storage"
+      : "Native Docker Storage";
+  const storageSubtitle = isWslMode
+    ? "Manage OpenFork's dedicated WSL disk"
+    : isDockerDesktop
+      ? "Managed by Docker Desktop"
+      : "Native Linux Docker runtime";
 
   const handleReclaim = async () => {
     if (isReclaiming) return;
@@ -109,10 +125,10 @@ export function StorageSettings() {
             </div>
             <div>
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">
-                Storage Management
+                {storageTitle}
               </h3>
               <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5">
-                WSL Partition Configuration
+                {storageSubtitle}
               </p>
             </div>
           </div>
@@ -128,105 +144,113 @@ export function StorageSettings() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          {/* Reclaim Section */}
-          <div className="space-y-2">
-            <div className="space-y-0.5">
-              <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
-                <RefreshCw className="h-3 w-3" />
-                Space Reclamation
-              </Label>
-              <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
-                Reclaim unused space from the WSL disk file.
-              </p>
-            </div>
-            <Button
-              variant="primary"
-              size="sm"
-              className="px-4 h-8 text-[10px] font-black uppercase tracking-widest"
-              onClick={handleReclaim}
-              disabled={isReclaiming || isRelocating}
-            >
-              {isReclaiming ? (
-                <Loader size="xs" className="mr-2" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5 mr-2" />
-              )}
-              {isReclaiming ? "Compacting..." : "Optimize Now"}
-            </Button>
-          </div>
-
-          {/* Relocation Section */}
-          <div className="space-y-2 md:border-l md:pl-4 border-white/5">
-            <div className="space-y-0.5">
-              <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
-                <ArrowRightLeft className="h-3 w-3" />
-                Relocate Engine
-              </Label>
-              <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
-                Reinstall the engine on another drive.{" "}
-                <span className="text-orange-400/80 italic">
-                  Requires re-downloading images.
-                </span>
-              </p>
-            </div>
-
-            <div className="flex gap-2 items-center">
-              <div className="flex-1 min-w-0">
-                <Select
-                  value={selectedDrive}
-                  onValueChange={setSelectedDrive}
-                  disabled={isRelocating}
-                >
-                  <SelectTrigger className="w-full h-8 text-[11px] bg-background/50 border-white/10 hover:bg-background/80 transition-colors">
-                    <SelectValue placeholder="Select Drive" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableDrives.map((d) => {
-                      const isInstalledHere =
-                        dockerStatus?.installDrive === d.name;
-                      return (
-                        <SelectItem
-                          key={d.name}
-                          value={d.name}
-                          disabled={isInstalledHere}
-                          className="text-[11px]"
-                        >
-                          <div className="flex items-center justify-between w-full gap-4">
-                            <span>{d.name}: Drive</span>
-                            <span className="text-[10px] opacity-50">
-                              ({d.freeGB} GB free)
-                            </span>
-                            {isInstalledHere && (
-                            <span className="text-[8px] text-primary font-black uppercase tracking-widest ml-auto px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20">
-                                ACTIVE
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+        {isWslMode ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div className="space-y-2">
+              <div className="space-y-0.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
+                  <RefreshCw className="h-3 w-3" />
+                  Space Reclamation
+                </Label>
+                <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
+                  Reclaim unused space from the WSL disk file.
+                </p>
               </div>
-
               <Button
                 variant="primary"
                 size="sm"
-                className="px-4 h-8 text-[11px] flex-shrink-0"
-                onClick={handleRelocate}
-                disabled={
-                  !selectedDrive ||
-                  selectedDrive === dockerStatus?.installDrive ||
-                  isRelocating ||
-                  isReclaiming
-                }
+                className="px-4 h-8 text-[10px] font-black uppercase tracking-widest"
+                onClick={handleReclaim}
+                disabled={isReclaiming || isRelocating}
               >
-                {isRelocating ? <Loader size="xs" /> : "Move"}
+                {isReclaiming ? (
+                  <Loader size="xs" className="mr-2" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                )}
+                {isReclaiming ? "Compacting..." : "Optimize Now"}
               </Button>
             </div>
+
+            <div className="space-y-2 md:border-l md:pl-4 border-white/5">
+              <div className="space-y-0.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
+                  <ArrowRightLeft className="h-3 w-3" />
+                  Relocate Engine
+                </Label>
+                <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
+                  Reinstall the engine on another drive.{" "}
+                  <span className="text-orange-400/80 italic">
+                    Requires re-downloading images.
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 min-w-0">
+                  <Select
+                    value={selectedDrive}
+                    onValueChange={setSelectedDrive}
+                    disabled={isRelocating}
+                  >
+                    <SelectTrigger className="w-full h-8 text-[11px] bg-background/50 border-white/10 hover:bg-background/80 transition-colors">
+                      <SelectValue placeholder="Select Drive" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableDrives.map((drive) => {
+                        const isInstalledHere =
+                          dockerStatus?.installDrive === drive.name;
+                        return (
+                          <SelectItem
+                            key={drive.name}
+                            value={drive.name}
+                            disabled={isInstalledHere}
+                            className="text-[11px]"
+                          >
+                            <div className="flex items-center justify-between w-full gap-4">
+                              <span>{drive.name}: Drive</span>
+                              <span className="text-[10px] opacity-50">
+                                ({drive.freeGB} GB free)
+                              </span>
+                              {isInstalledHere && (
+                                <span className="text-[8px] text-primary font-black uppercase tracking-widest ml-auto px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20">
+                                  ACTIVE
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="px-4 h-8 text-[11px] flex-shrink-0"
+                  onClick={handleRelocate}
+                  disabled={
+                    !selectedDrive ||
+                    selectedDrive === dockerStatus?.installDrive ||
+                    isRelocating ||
+                    isReclaiming
+                  }
+                >
+                  {isRelocating ? <Loader size="xs" /> : "Move"}
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/80">
+              {isDockerDesktop
+                ? "Docker Desktop manages its own virtual disk. OpenFork only exposes relocation and compaction controls for the dedicated WSL engine."
+                : "This setup uses native Docker. OpenFork doesn't relocate or compact Docker storage from the app in this mode."}
+            </p>
+          </div>
+        )}
 
         {error && (
           <motion.div
@@ -235,7 +259,9 @@ export function StorageSettings() {
             className="p-2 rounded-md bg-destructive-foreground border border-destructive/20 flex items-center gap-2 text-destructive"
           >
             <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-            <span className="text-[9px] text-white font-black uppercase tracking-widest">{error}</span>
+            <span className="text-[9px] text-white font-black uppercase tracking-widest">
+              {error}
+            </span>
           </motion.div>
         )}
       </CardContent>

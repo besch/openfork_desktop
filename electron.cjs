@@ -57,52 +57,78 @@ const WINDOWS_DOCKER_API_PORT = 2375;
 // Resolved lazily on first use — user-configured or auto-detected
 let _resolvedWslDistro = null;
 
-/**
- * Returns the WSL distro name to use for Docker operations.
- * Priority: (1) user setting in electron-store, (2) first distro from wsl --list, (3) "Ubuntu"
- */
-async function getWslDistroName() {
-  if (_resolvedWslDistro) return _resolvedWslDistro;
-
-  // Check user-configured override
-  const stored = store.get("wslDistro");
-  if (stored) {
-    _resolvedWslDistro = stored;
-    return _resolvedWslDistro;
-  }
-
-  // Auto-detect: find the default (starred) or first available distro
-  _resolvedWslDistro = await new Promise((resolve) => {
+async function listWslDistros() {
+  return new Promise((resolve) => {
     execFile(
       "wsl.exe",
       ["--list", "--quiet"],
       { timeout: 5000 },
       (error, stdout) => {
         if (error || !stdout) {
-          console.warn(
-            "WSL distro auto-detect failed, defaulting to Ubuntu:",
-            error?.message,
-          );
-          resolve("Ubuntu");
+          console.warn("Failed to list WSL distros:", error?.message);
+          resolve([]);
           return;
         }
-        // wsl --list --quiet output may contain null bytes (UTF-16 encoded)
-        const lines = stdout
+
+        // `wsl --list --quiet` can return UTF-16 output with embedded null bytes.
+        const distros = stdout
           .replace(/\0/g, "")
           .split(/\r?\n/)
-          .map((l) => l.trim())
+          .map((line) => line.trim())
           .filter(Boolean);
-        const distro = lines[0];
-        if (distro) {
-          console.log(`Auto-detected WSL distro: ${distro}`);
-          resolve(distro);
-        } else {
-          console.warn("No WSL distros found, defaulting to Ubuntu");
-          resolve("Ubuntu");
-        }
+
+        resolve(distros);
       },
     );
   });
+}
+
+function choosePreferredWslDistro(distros) {
+  const userDistros = distros.filter(
+    (name) => !/^docker-desktop(?:-data)?$/i.test(name),
+  );
+
+  const preferred =
+    userDistros.find((name) => /^openfork$/i.test(name)) ||
+    userDistros.find((name) => /^ubuntu(?:-.+)?$/i.test(name)) ||
+    userDistros[0];
+
+  return preferred || "Ubuntu";
+}
+
+/**
+ * Returns the WSL distro name to use for Docker operations.
+ * Priority: (1) user setting in electron-store when it still exists,
+ * (2) preferred user distro from `wsl --list`, (3) "Ubuntu".
+ */
+async function getWslDistroName() {
+  if (_resolvedWslDistro) return _resolvedWslDistro;
+
+  const stored = store.get("wslDistro");
+  const distros = await listWslDistros();
+
+  if (stored) {
+    const stillExists = distros.some(
+      (name) => name.toLowerCase() === stored.toLowerCase(),
+    );
+    if (stillExists) {
+      _resolvedWslDistro = stored;
+      return _resolvedWslDistro;
+    }
+
+    console.warn(
+      `Stored WSL distro '${stored}' no longer exists. Falling back to auto-detect.`,
+    );
+    store.delete("wslDistro");
+  }
+
+  _resolvedWslDistro = choosePreferredWslDistro(distros);
+
+  if (distros.length > 0) {
+    console.log(`Auto-detected WSL distro: ${_resolvedWslDistro}`);
+  } else {
+    console.warn("No usable WSL distros found, defaulting to Ubuntu");
+  }
 
   return _resolvedWslDistro;
 }
@@ -401,29 +427,27 @@ ipcMain.on(
         // use it for WSL-specific operations (e.g. hostname lookup for TCP fallback).
         process.env.OPENFORK_WSL_DISTRO = await getWslDistroName();
 
-        const native = await checkNativeDocker();
-        if (native.installed && native.running) {
-          // Native Docker uses named pipes, clearing host ensures direct communication
-          delete process.env.OPENFORK_DOCKER_HOST;
-        } else {
-          const dockerHost = await resolveWindowsDockerApiEndpoint();
-          if (!dockerHost) {
-            const message =
-              "Docker is installed in WSL, but its API is not reachable from Windows yet.";
+        const dockerStatus = await resolveDockerStatus({
+          allowNativeStart: false,
+        });
+        if (!dockerStatus.running) {
+          const message =
+            dockerStatus.error === "DOCKER_WINDOWS_CONTAINERS"
+              ? "Docker Desktop is running Windows containers. Switch it to Linux containers before starting OpenFork."
+              : dockerStatus.error === "DOCKER_API_UNREACHABLE"
+                ? "Docker is installed in WSL, but its API is not reachable from Windows yet."
+                : "Docker is not ready yet. Please retry once the engine is running.";
 
-            console.error(message);
+          console.error(message);
 
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send("openfork_client:log", {
-                type: "stderr",
-                message,
-              });
-              mainWindow.webContents.send("openfork_client:status", "stopped");
-            }
-            return;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("openfork_client:log", {
+              type: "stderr",
+              message,
+            });
+            mainWindow.webContents.send("openfork_client:status", "stopped");
           }
-
-          process.env.OPENFORK_DOCKER_HOST = dockerHost;
+          return;
         }
       }
 
@@ -1101,7 +1125,11 @@ async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
     }
 
     try {
-      await execDockerCommand("docker info > /dev/null 2>&1 || true");
+      await runDockerCheckCommand("docker info > /dev/null 2>&1 || true", {
+        useWsl: true,
+        wslDistro: await getWslDistroName(),
+        timeoutMs: 5000,
+      });
     } catch {
       // Best-effort warmup only.
     }
@@ -1127,16 +1155,32 @@ async function checkDockerUpdates() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   try {
-    // If on Windows and using WSL Docker (indicated by OPENFORK_DOCKER_HOST), check if distro exists before monitoring
-    if (process.platform === "win32" && process.env.OPENFORK_DOCKER_HOST) {
-      const distroName = await getWslDistroName();
-      const exists = await checkDistroExists(distroName);
-      if (!exists) {
+    const dockerStatus = await resolveDockerStatus({
+      allowNativeStart: false,
+      wslHostTimeoutMs: 2000,
+    });
+
+    if (!dockerStatus.running) {
+      if (
+        process.platform === "win32" &&
+        dockerStatus.error === "WSL_DISTRO_MISSING"
+      ) {
         mainWindow.webContents.send("docker:wsl-distro-missing", {
-          distroName,
+          distroName: await getWslDistroName(),
         });
-        return;
       }
+
+      if (lastContainersJson !== "") {
+        lastContainersJson = "";
+        mainWindow.webContents.send("docker:containers-update", []);
+      }
+
+      if (lastImagesJson !== "") {
+        lastImagesJson = "";
+        mainWindow.webContents.send("docker:images-update", []);
+      }
+
+      return;
     }
 
     // Check containers
@@ -1526,16 +1570,17 @@ ipcMain.handle("docker:get-disk-space", async () => {
     let totalBytes, freeBytes, usedBytes, diskPath;
 
     if (process.platform === "win32") {
-      // Detect where the OpenFork distro is actually installed
-      const basePath = await getDistroBasePath(await getWslDistroName());
-      // Extract drive letter robustly (handles D:, \??\D:, or defaults to C)
-      let driveLetter = "C";
-      if (basePath) {
-        const match = basePath.match(/([a-zA-Z]):/);
-        if (match) driveLetter = match[1].toUpperCase();
+      let driveLetter = getWindowsSystemDriveLetter();
+
+      if (isUsingWslDocker()) {
+        // In OpenFork WSL mode, Docker's physical storage lives in the distro VHDX.
+        const basePath = await getDistroBasePath(await getWslDistroName());
+        if (basePath) {
+          const match = basePath.match(/([a-zA-Z]):/);
+          if (match) driveLetter = match[1].toUpperCase();
+        }
       }
 
-      // Windows: Use PowerShell to get disk info for the detected drive
       const psCommand = `Get-PSDrive ${driveLetter} | Select-Object Free, Used | ConvertTo-Json`;
 
       const output = await new Promise((resolve, reject) => {
@@ -1578,15 +1623,32 @@ ipcMain.handle("docker:get-disk-space", async () => {
         };
       }
     } else {
-      // Linux/macOS: Use df command
-      const dfOutput = await new Promise((resolve, reject) => {
-        exec("df -k /", { timeout: 10000 }, (error, stdout, stderr) => {
-          if (error) {
-            reject(error);
-            return;
+      let targetPath = "/";
+      if (process.platform === "linux") {
+        try {
+          const dockerRootOutput = await execDockerCommand(
+            'docker info --format "{{.DockerRootDir}}"',
+          );
+          if (dockerRootOutput) {
+            targetPath = dockerRootOutput.split(/\r?\n/)[0].trim() || "/";
           }
-          resolve(stdout.trim());
-        });
+        } catch {
+          targetPath = "/";
+        }
+      }
+
+      const dfOutput = await new Promise((resolve, reject) => {
+        exec(
+          `df -k ${escapeShellArg(targetPath)}`,
+          { timeout: 10000 },
+          (error, stdout) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolve(stdout.trim());
+          },
+        );
       });
 
       // Parse df output (skip header, get second line)
@@ -1602,7 +1664,7 @@ ipcMain.handle("docker:get-disk-space", async () => {
       totalBytes = totalKB * 1024;
       usedBytes = usedKB * 1024;
       freeBytes = availableKB * 1024;
-      diskPath = "/";
+      diskPath = targetPath;
     }
 
     return {
@@ -1882,6 +1944,83 @@ async function checkDistroExists(distroName) {
   });
 }
 
+function getWindowsSystemDriveLetter() {
+  const match = (process.env.SYSTEMDRIVE || "C:").match(/([a-zA-Z]):?/);
+  return match ? match[1].toUpperCase() : "C";
+}
+
+function classifyDockerCheckError(errorMessage = "", stderr = "") {
+  const combined = `${errorMessage}\n${stderr}`.toLowerCase();
+
+  if (combined.includes("permission denied")) {
+    return "DOCKER_PERMISSION_DENIED";
+  }
+
+  return null;
+}
+
+async function runDockerCheckCommand(
+  cmd,
+  { useWsl = false, wslDistro = null, wslUser = "root", timeoutMs } = {},
+) {
+  return new Promise((resolve) => {
+    if (useWsl && process.platform === "win32") {
+      const args = [
+        "-d",
+        wslDistro,
+        "--user",
+        wslUser,
+        "--",
+        "bash",
+        "-lc",
+        cmd,
+      ];
+
+      execFile(
+        "wsl.exe",
+        args,
+        { timeout: timeoutMs ?? 15000 },
+        (error, stdout, stderr) => {
+          if (error) {
+            console.log(`Check command '${cmd}' failed: ${error.message}`);
+            console.log(`WSL Stdout: ${stdout}`);
+            console.log(`WSL Stderr: ${stderr}`);
+            resolve({
+              success: false,
+              error: error.message,
+              stderr: stderr?.trim() || "",
+            });
+            return;
+          }
+
+          resolve({ success: true, output: stdout.trim() });
+        },
+      );
+      return;
+    }
+
+    exec(
+      cmd,
+      { timeout: timeoutMs ?? 10000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          console.log(`Check command '${cmd}' failed: ${error.message}`);
+          console.log(`Stdout: ${stdout}`);
+          console.log(`Stderr: ${stderr}`);
+          resolve({
+            success: false,
+            error: error.message,
+            stderr: stderr?.trim() || "",
+          });
+          return;
+        }
+
+        resolve({ success: true, output: stdout.trim() });
+      },
+    );
+  });
+}
+
 async function checkNativeDocker() {
   if (process.platform !== "win32") return { installed: false, running: false };
 
@@ -1909,20 +2048,213 @@ async function checkNativeDocker() {
           const pipePath = "\\\\.\\pipe\\docker_engine";
           const pipeExists = fs.existsSync(pipePath);
 
-          // If installed, check if it's responding to commands
-          // Use 'version' instead of 'info' (faster, less state-dependent)
-          exec(`${dockerCmd} version --format "{{.Server.Version}}"`, (err) => {
-            resolve({
-              installed: true,
-              running: !err || pipeExists, // Consider it running if pipe exists or version command works
-              isNative: true,
-              isProcessRunning: processRunning || pipeExists,
-            });
-          });
+          // Check which container mode Docker Desktop is exposing.
+          // OpenFork requires Linux containers.
+          exec(
+            `${dockerCmd} version --format "{{.Server.Os}}"`,
+            (versionError, versionStdout) => {
+              const serverOs = versionStdout.trim().toLowerCase() || null;
+
+              resolve({
+                installed: true,
+                running: serverOs === "linux",
+                isNative: true,
+                isProcessRunning: processRunning || pipeExists,
+                installDrive: getWindowsSystemDriveLetter(),
+                serverOs,
+                isWindowsContainers: serverOs === "windows",
+                lastError: versionError?.message,
+              });
+            },
+          );
         },
       );
     });
   });
+}
+
+async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
+  if (process.platform !== "win32") {
+    return { installed: false, running: false };
+  }
+
+  const wslDistro = await getWslDistroName();
+  process.env.OPENFORK_WSL_DISTRO = wslDistro;
+
+  const distroExists = await checkDistroExists(wslDistro);
+  if (!distroExists) {
+    console.log(`WSL distro '${wslDistro}' is missing`);
+    return {
+      installed: false,
+      running: false,
+      isNative: false,
+      error: "WSL_DISTRO_MISSING",
+      wslDistro,
+    };
+  }
+
+  const basePath = await getDistroBasePath(wslDistro);
+  let installDrive = null;
+  if (basePath) {
+    const match = basePath.match(/([a-zA-Z]):/);
+    if (match) installDrive = match[1].toUpperCase();
+  }
+
+  const versionResult = await runDockerCheckCommand("docker --version", {
+    useWsl: true,
+    wslDistro,
+  });
+  if (!versionResult.success) {
+    console.log(`Docker CLI not found inside WSL distro '${wslDistro}'`);
+    return {
+      installed: false,
+      running: false,
+      isNative: false,
+      installDrive,
+      error:
+        classifyDockerCheckError(versionResult.error, versionResult.stderr) ||
+        undefined,
+      wslDistro,
+    };
+  }
+
+  const infoResult = await runDockerCheckCommand("docker info", {
+    useWsl: true,
+    wslDistro,
+  });
+  if (!infoResult.success) {
+    console.log(
+      `Docker is installed in WSL distro '${wslDistro}' but not ready:`,
+      infoResult.error,
+    );
+    return {
+      installed: true,
+      running: false,
+      isNative: false,
+      installDrive,
+      error:
+        classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
+        undefined,
+      wslDistro,
+    };
+  }
+
+  const dockerHost = await resolveWindowsDockerApiEndpoint(hostTimeoutMs);
+  if (!dockerHost) {
+    return {
+      installed: true,
+      running: false,
+      isNative: false,
+      installDrive,
+      error: "DOCKER_API_UNREACHABLE",
+      wslDistro,
+    };
+  }
+
+  return {
+    installed: true,
+    running: true,
+    isNative: false,
+    installDrive,
+    dockerHost,
+    wslDistro,
+  };
+}
+
+async function resolveDockerStatus(
+  { allowNativeStart = true, wslHostTimeoutMs = 15000 } = {},
+) {
+  if (process.platform !== "win32") {
+    const versionResult = await runDockerCheckCommand("docker --version");
+    if (!versionResult.success) {
+      return { installed: false, running: false };
+    }
+
+    const infoResult = await runDockerCheckCommand("docker info");
+    if (infoResult.success) {
+      return { installed: true, running: true };
+    }
+
+    return {
+      installed: true,
+      running: false,
+      error:
+        classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
+        undefined,
+    };
+  }
+
+  const native = await checkNativeDocker();
+  if (native.installed && native.running) {
+    delete process.env.OPENFORK_DOCKER_HOST;
+    return {
+      installed: true,
+      running: true,
+      isNative: true,
+      installDrive: native.installDrive,
+    };
+  }
+
+  const wsl = await checkWslDockerStatus({ hostTimeoutMs: wslHostTimeoutMs });
+  if (wsl.running) {
+    process.env.OPENFORK_DOCKER_HOST = wsl.dockerHost;
+    return {
+      installed: true,
+      running: true,
+      isNative: false,
+      installDrive: wsl.installDrive,
+    };
+  }
+
+  delete process.env.OPENFORK_DOCKER_HOST;
+
+  if (wsl.installed) {
+    return {
+      installed: true,
+      running: false,
+      isNative: false,
+      installDrive: wsl.installDrive,
+      error: wsl.error,
+    };
+  }
+
+  if (native.installed) {
+    if (native.isWindowsContainers) {
+      return {
+        installed: true,
+        running: false,
+        isNative: true,
+        installDrive: native.installDrive,
+        error: "DOCKER_WINDOWS_CONTAINERS",
+      };
+    }
+
+    if (!native.isProcessRunning && allowNativeStart) {
+      console.log("Docker Desktop is not running. Attempting auto-start...");
+      const startResult = await startNativeDocker();
+      return {
+        installed: true,
+        running: false,
+        isNative: true,
+        installDrive: native.installDrive,
+        isStarting: startResult.success,
+      };
+    }
+
+    return {
+      installed: true,
+      running: false,
+      isNative: true,
+      installDrive: native.installDrive,
+      isStarting: !!native.isProcessRunning,
+    };
+  }
+
+  return {
+    installed: false,
+    running: false,
+    error: wsl.error,
+  };
 }
 
 async function startNativeDocker() {
@@ -1953,149 +2285,8 @@ async function startNativeDocker() {
 }
 
 ipcMain.handle("deps:check-docker", async () => {
-  // 1. Check for Native Windows Docker first
-  if (process.platform === "win32") {
-    const native = await checkNativeDocker();
-    if (native.installed) {
-      console.log("Native Docker Desktop detected");
-
-      if (native.running) {
-        // If native docker is running and responding, we use it!
-        delete process.env.OPENFORK_DOCKER_HOST;
-        return {
-          installed: true,
-          running: true,
-          isNative: true,
-          installDrive: "C",
-        };
-      } else if (native.isProcessRunning) {
-        // Process is running but not responding yet -> it's starting
-        console.log(
-          "Docker Desktop process detected but not responding to API. Status: starting...",
-        );
-        return {
-          installed: true,
-          running: false,
-          isNative: true,
-          isStarting: true,
-          installDrive: "C",
-        };
-      } else {
-        // Installed but NOT running at all -> try to start it!
-        console.log("Docker Desktop is not running. Attempting auto-start...");
-        const startResult = await startNativeDocker();
-        return {
-          installed: true,
-          running: false,
-          isNative: true,
-          isStarting: startResult.success,
-          installDrive: "C",
-        };
-      }
-    }
-  }
-
-  // 2. Fall back to custom WSL distro logic
-  // Use a separate exec that doesn't log errors (cleaner output)
-  const checkCommand = async (cmd) => {
-    const wslDistro =
-      process.platform === "win32" ? await getWslDistroName() : null;
-    return new Promise((resolve) => {
-      if (process.platform === "win32") {
-        // Use -- separator for robustness
-        const args = [
-          "-d",
-          wslDistro,
-          "--user",
-          "root",
-          "--",
-          "bash",
-          "-c",
-          cmd,
-        ];
-        execFile(
-          "wsl.exe",
-          args,
-          { timeout: 15000 },
-          (error, stdout, stderr) => {
-            if (error) {
-              console.log(`Check command '${cmd}' failed: ${error.message}`);
-              console.log(`WSL Stdout: ${stdout}`);
-              console.log(`WSL Stderr: ${stderr}`);
-              resolve({ success: false, error: error.message });
-            } else {
-              resolve({ success: true, output: stdout.trim() });
-            }
-          },
-        );
-      } else {
-        exec(cmd, { timeout: 10000 }, (error, stdout, stderr) => {
-          if (error) {
-            console.log(`Check command '${cmd}' failed: ${error.message}`);
-            console.log(`Stdout: ${stdout}`);
-            console.log(`Stderr: ${stderr}`);
-            resolve({ success: false, error: error.message });
-          } else {
-            resolve({ success: true, output: stdout.trim() });
-          }
-        });
-      }
-    });
-  };
-
   try {
-    // WSL CHECK (Windows only)
-    if (process.platform === "win32") {
-      const distroExists = await checkDistroExists(await getWslDistroName());
-      if (!distroExists) {
-        console.log("Ubuntu WSL distro missing");
-        return {
-          installed: false,
-          running: false,
-          error: "WSL_DISTRO_MISSING",
-        };
-      }
-    }
-
-    // Get installation path for UI
-    const basePath = await getDistroBasePath(await getWslDistroName());
-    let installDrive = null;
-    if (basePath) {
-      const match = basePath.match(/([a-zA-Z]):/);
-      if (match) installDrive = match[1].toUpperCase();
-    }
-
-    // Check if Docker CLI is available
-    const versionResult = await checkCommand("docker --version");
-    if (!versionResult.success) {
-      console.log("Docker CLI not found inside WSL Ubuntu");
-      return { installed: false, running: false, installDrive };
-    }
-
-    // Check if Docker daemon is running and responsive
-    const infoResult = await checkCommand("docker info");
-    if (infoResult.success) {
-      if (process.platform === "win32") {
-        const dockerHost = await resolveWindowsDockerApiEndpoint(15000);
-        if (!dockerHost) {
-          delete process.env.OPENFORK_DOCKER_HOST;
-          return {
-            installed: true,
-            running: false,
-            installDrive,
-            error: "DOCKER_API_UNREACHABLE",
-          };
-        }
-        process.env.OPENFORK_DOCKER_HOST = dockerHost;
-      }
-      return { installed: true, running: true, installDrive };
-    } else {
-      console.log(
-        "Docker is installed but daemon not running:",
-        infoResult.error,
-      );
-      return { installed: true, running: false, installDrive };
-    }
+    return await resolveDockerStatus({ allowNativeStart: true });
   } catch (err) {
     console.error("Unexpected error checking Docker:", err);
     return { installed: false, running: false };

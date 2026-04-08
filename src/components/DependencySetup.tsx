@@ -46,6 +46,32 @@ export function DependencySetup({
     status?.docker.error === "DOCKER_API_UNREACHABLE" ||
     !!status?.docker.isStarting;
   const canChooseInstallDrive = !status?.docker.installed;
+  const dockerStatusHeadline = status?.docker.installed
+    ? status.docker.error === "DOCKER_WINDOWS_CONTAINERS"
+      ? "Docker Desktop is running Windows containers"
+      : status.docker.error === "DOCKER_PERMISSION_DENIED"
+        ? "Docker access needs a permission refresh"
+        : status.docker.isNative
+          ? status.docker.isStarting
+            ? "Docker Desktop is starting…"
+            : "Docker Desktop is not running"
+          : isBridgeStarting
+            ? "AI Engine is starting and exposing its Docker API"
+            : "AI Engine is installed but not running"
+    : "";
+  const dockerStatusDescription = status?.docker.installed
+    ? status.docker.error === "DOCKER_WINDOWS_CONTAINERS"
+      ? "OpenFork requires Linux containers. Switch Docker Desktop from Windows containers to Linux containers, then retry the check."
+      : status.docker.error === "DOCKER_PERMISSION_DENIED"
+        ? "Docker is installed, but your user cannot access it yet. If you just finished setup on Linux, log out and back in before retrying."
+        : status.docker.isNative
+          ? status.docker.isStarting
+            ? "OpenFork detected Docker Desktop and is attempting to start it automatically. This may take a minute."
+            : "Docker Desktop was detected but is not running. Please start it to use the local AI Engine."
+          : isBridgeStarting
+            ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
+            : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."
+    : "";
 
   // Auto-scroll log terminal to bottom when new lines arrive
   useEffect(() => {
@@ -220,22 +246,10 @@ export function DependencySetup({
               ) : status?.docker.installed ? (
                 <>
                   <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400">
-                    {status.docker.isNative
-                      ? status.docker.isStarting
-                        ? "Docker Desktop is starting…"
-                        : "Docker Desktop is not running"
-                      : isBridgeStarting
-                        ? "AI Engine is starting and exposing its Docker API"
-                        : "AI Engine is installed but not running"}
+                    {dockerStatusHeadline}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {status.docker.isNative
-                      ? status.docker.isStarting
-                        ? "OpenFork detected Docker Desktop and is attempting to start it automatically. This may take a minute."
-                        : "Docker Desktop was detected but is not running. Please start it to use the local AI Engine."
-                      : isBridgeStarting
-                        ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
-                        : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."}
+                    {dockerStatusDescription}
                   </p>
                 </>
               ) : (

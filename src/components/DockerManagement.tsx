@@ -15,7 +15,7 @@ import {
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
 import { StorageSettings } from "./StorageSettings";
-import type { DockerImage, DockerContainer } from "@/types";
+import type { DockerImage, DockerContainer, DockerStatus } from "@/types";
 
 interface ConfirmDialogState {
   isOpen: boolean;
@@ -25,6 +25,10 @@ interface ConfirmDialogState {
 }
 
 export const DockerManagement = memo(() => {
+  const [platform, setPlatform] = useState<"win32" | "linux" | "darwin">(
+    "win32",
+  );
+  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
   const [images, setImages] = useState<DockerImage[]>([]);
   const [containers, setContainers] = useState<DockerContainer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,13 +64,49 @@ export const DockerManagement = memo(() => {
   );
   const status = useClientStore((state) => state.status);
 
+  const describeDockerState = useCallback(
+    (nextStatus: DockerStatus) => {
+      if (nextStatus.error === "DOCKER_WINDOWS_CONTAINERS") {
+        return "Docker Desktop is running Windows containers. Switch it to Linux containers to use OpenFork.";
+      }
+
+      if (nextStatus.error === "DOCKER_PERMISSION_DENIED") {
+        return "Docker is installed, but your user cannot access the Docker socket yet. Log out and back in, then retry.";
+      }
+
+      if (nextStatus.error === "DOCKER_API_UNREACHABLE") {
+        return "OpenFork detected the WSL Docker daemon, but its API is not reachable from Windows yet.";
+      }
+
+      if (nextStatus.error === "WSL_DISTRO_MISSING") {
+        return "The OpenFork WSL distro is missing. Reinstall the local engine to restore Docker access.";
+      }
+
+      return "Docker is not ready right now.";
+    },
+    [],
+  );
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [imagesResult, containersResult] = await Promise.all([
+      const nextDockerStatus = await window.electronAPI.checkDocker();
+      setDockerStatus(nextDockerStatus);
+
+      if (!nextDockerStatus.running) {
+        setImages([]);
+        setContainers([]);
+        setError(describeDockerState(nextDockerStatus));
+        const diskResult = await window.electronAPI.getDiskSpace();
+        if (diskResult.success) setDiskSpace(diskResult.data);
+        return;
+      }
+
+      const [imagesResult, containersResult, diskResult] = await Promise.all([
         window.electronAPI.listDockerImages(),
         window.electronAPI.listDockerContainers(),
+        window.electronAPI.getDiskSpace(),
       ]);
 
       if (imagesResult.success && imagesResult.data) {
@@ -78,6 +118,10 @@ export const DockerManagement = memo(() => {
       if (containersResult.success && containersResult.data) {
         setContainers(containersResult.data);
       }
+
+      if (diskResult.success) {
+        setDiskSpace(diskResult.data);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to fetch Docker data",
@@ -85,9 +129,12 @@ export const DockerManagement = memo(() => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [describeDockerState]);
 
   useEffect(() => {
+    window.electronAPI.getProcessInfo().then((info) => {
+      setPlatform(info.platform as "win32" | "linux" | "darwin");
+    });
     fetchData();
   }, [fetchData]);
 
@@ -104,17 +151,6 @@ export const DockerManagement = memo(() => {
       setDiskSpaceError(data);
     });
     return cleanup;
-  }, []);
-
-  // Fetch disk space info on mount and after cleanup operations
-  useEffect(() => {
-    const fetchDiskSpace = async () => {
-      const result = await window.electronAPI.getDiskSpace();
-      if (result.success) {
-        setDiskSpace(result.data);
-      }
-    };
-    fetchDiskSpace();
   }, []);
 
   // Listen for WSL VHDX compaction suggestions emitted after image deletion
@@ -273,6 +309,12 @@ export const DockerManagement = memo(() => {
   const isDownloading =
     dockerPullProgress !== null &&
     (status === "starting" || status === "running");
+  const engineLabel =
+    platform === "linux"
+      ? "Linux Docker"
+      : dockerStatus?.isNative
+        ? "Docker Desktop"
+        : "OpenFork WSL";
 
   if (loading) {
     return (
@@ -444,7 +486,7 @@ export const DockerManagement = memo(() => {
               Docker Management
             </h2>
             <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mt-0.5">
-              Engine & Container Runtime
+              {engineLabel}
             </p>
           </div>
         </div>
