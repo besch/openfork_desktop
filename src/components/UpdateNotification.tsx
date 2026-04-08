@@ -4,29 +4,46 @@ import { Download, RefreshCcw, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
+interface UpdateInfo {
+  version: string;
+  releaseNotes?: string;
+}
+
+interface UpdateProgress {
+  percent: number;
+}
+
 export function UpdateNotification() {
-  const [updateInfo, setUpdateInfo] = useState<any>(null);
-  const [progress, setProgress] = useState<any>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [progress, setProgress] = useState<UpdateProgress | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // Listen for update events
-    window.electronAPI.onUpdateAvailable((info) => {
+    const cleanupAvailable = window.electronAPI.onUpdateAvailable((info) => {
       console.log("Update available:", info);
       setUpdateInfo(info);
+      setDownloaded(false);
+      setProgress(null);
       setDismissed(false);
     });
 
-    window.electronAPI.onUpdateProgress((prog) => {
+    const cleanupProgress = window.electronAPI.onUpdateProgress((prog) => {
       setProgress(prog);
     });
 
-    window.electronAPI.onUpdateDownloaded((info) => {
+    const cleanupDownloaded = window.electronAPI.onUpdateDownloaded((info) => {
       console.log("Update downloaded:", info);
+      setUpdateInfo(info);
       setDownloaded(true);
       setProgress(null);
     });
+
+    return () => {
+      cleanupAvailable();
+      cleanupProgress();
+      cleanupDownloaded();
+    };
   }, []);
 
   const handleDownload = () => {

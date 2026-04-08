@@ -3,6 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/loader";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -11,7 +18,7 @@ import {
   Cpu,
   HardDrive,
 } from "lucide-react";
-import type { DependencyStatus } from "@/types";
+import type { DependencyStatus, DockerEnginePreference } from "@/types";
 
 type Platform = "win32" | "linux" | "darwin";
 
@@ -32,6 +39,8 @@ export function DependencySetup({
     { name: string; freeGB: number }[]
   >([]);
   const [selectedDrive, setSelectedDrive] = useState<string>("C");
+  const [enginePreference, setEnginePreference] =
+    useState<DockerEnginePreference>("auto");
   const [platform, setPlatform] = useState<Platform>("win32");
 
   // Installation progress state
@@ -92,6 +101,10 @@ export function DependencySetup({
       setSelectedDrive(installDrive);
     }
   }, [installDrive]);
+
+  useEffect(() => {
+    setEnginePreference(status?.docker.enginePreference ?? "auto");
+  }, [status?.docker.enginePreference]);
 
   const checkDependencies = useCallback(async () => {
     setIsChecking(true);
@@ -162,6 +175,31 @@ export function DependencySetup({
       setInstallPercent(0);
     }
   }, [isCancelling]);
+
+  const handleEnginePreferenceChange = useCallback(
+    async (nextPreference: DockerEnginePreference) => {
+      setEnginePreference(nextPreference);
+
+      try {
+        const result = await window.electronAPI.saveSettings({
+          dockerEnginePreference: nextPreference,
+        });
+
+        if (!result.success) {
+          console.error(
+            "Failed to save Docker backend preference:",
+            result.error,
+          );
+          return;
+        }
+
+        await checkDependencies();
+      } catch (error) {
+        console.error("Failed to switch Docker backend:", error);
+      }
+    },
+    [checkDependencies],
+  );
 
   // Auto-recheck when bridge is starting (Docker installed but API not yet reachable)
   useEffect(() => {
@@ -300,6 +338,48 @@ export function DependencySetup({
                         ))}
                     </div>
                   )}
+
+                  {platform === "win32" &&
+                    (status?.docker.availableEngines?.desktop ||
+                      status?.docker.availableEngines?.wsl) && (
+                      <div className="space-y-2 pt-2">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
+                          Docker backend
+                        </label>
+                        <Select
+                          value={enginePreference}
+                          onValueChange={(value: DockerEnginePreference) =>
+                            void handleEnginePreferenceChange(value)
+                          }
+                          disabled={isChecking || isInstalling}
+                        >
+                          <SelectTrigger className="w-full h-10 bg-black/20 border-white/10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">
+                              Auto-select best available engine
+                            </SelectItem>
+                            <SelectItem
+                              value="desktop"
+                              disabled={!status?.docker.availableEngines?.desktop}
+                            >
+                              Docker Desktop
+                            </SelectItem>
+                            <SelectItem
+                              value="wsl"
+                              disabled={!status?.docker.availableEngines?.wsl}
+                            >
+                              OpenFork WSL
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          OpenFork will use this backend for dependency checks,
+                          Docker Management, and client startup on Windows.
+                        </p>
+                      </div>
+                    )}
 
                   {/* Drive selector — Windows only, hidden on Linux */}
                   {platform === "win32" &&

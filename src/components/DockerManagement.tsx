@@ -67,6 +67,10 @@ export const DockerManagement = memo(() => {
   const describeDockerState = useCallback(
     (nextStatus: DockerStatus) => {
       if (nextStatus.error === "DOCKER_WINDOWS_CONTAINERS") {
+        if (nextStatus.availableEngines?.wsl) {
+          return "Docker Desktop is running Windows containers. Switch it to Linux containers, or change OpenFork to the OpenFork WSL backend below.";
+        }
+
         return "Docker Desktop is running Windows containers. Switch it to Linux containers to use OpenFork.";
       }
 
@@ -79,6 +83,10 @@ export const DockerManagement = memo(() => {
       }
 
       if (nextStatus.error === "WSL_DISTRO_MISSING") {
+        if (nextStatus.availableEngines?.desktop) {
+          return "The OpenFork WSL distro is missing. Switch OpenFork to Docker Desktop below, or reinstall the local engine.";
+        }
+
         return "The OpenFork WSL distro is missing. Reinstall the local engine to restore Docker access.";
       }
 
@@ -577,7 +585,7 @@ export const DockerManagement = memo(() => {
           className="overflow-hidden"
         >
           <div className="p-4 pt-0 relative z-10 border-t border-white/5">
-            <StorageSettings />
+            <StorageSettings onSettingsChanged={fetchData} />
           </div>
         </motion.div>
       </Card>

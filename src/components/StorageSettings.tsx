@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { Loader } from "@/components/ui/loader";
-import type { DockerStatus } from "@/types";
+import type { DockerEnginePreference, DockerStatus } from "@/types";
 import {
   HardDrive,
   RefreshCw,
@@ -19,7 +19,11 @@ import {
   ArrowRightLeft,
 } from "lucide-react";
 
-export function StorageSettings() {
+interface StorageSettingsProps {
+  onSettingsChanged?: () => void | Promise<void>;
+}
+
+export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
   const [platform, setPlatform] = useState<"win32" | "linux" | "darwin">(
     "win32",
   );
@@ -36,12 +40,15 @@ export function StorageSettings() {
   const [isReclaiming, setIsReclaiming] = useState(false);
   const [isRelocating, setIsRelocating] = useState(false);
   const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
+  const [enginePreference, setEnginePreference] =
+    useState<DockerEnginePreference>("auto");
   const [error, setError] = useState<string | null>(null);
 
   const refreshData = async () => {
     try {
       const status = await window.electronAPI.checkDocker();
       setDockerStatus(status);
+      setEnginePreference(status.enginePreference ?? "auto");
 
       const info = await window.electronAPI.getDiskSpace();
       if (info.success) setDiskInfo(info.data);
@@ -67,6 +74,8 @@ export function StorageSettings() {
   const isWindows = platform === "win32";
   const isWslMode = isWindows && dockerStatus?.isNative === false;
   const isDockerDesktop = isWindows && dockerStatus?.isNative === true;
+  const hasDesktopEngine = isWindows && !!dockerStatus?.availableEngines?.desktop;
+  const hasWslEngine = isWindows && !!dockerStatus?.availableEngines?.wsl;
   const storageTitle = isWslMode
     ? "WSL Engine Storage"
     : isDockerDesktop
@@ -78,6 +87,30 @@ export function StorageSettings() {
       ? "Managed by Docker Desktop"
       : "Native Linux Docker runtime";
 
+  const handleEnginePreferenceChange = async (
+    nextPreference: DockerEnginePreference,
+  ) => {
+    setEnginePreference(nextPreference);
+    setError(null);
+
+    try {
+      const result = await window.electronAPI.saveSettings({
+        dockerEnginePreference: nextPreference,
+      });
+
+      if (!result.success) {
+        setError(result.error || "Failed to save Docker backend preference");
+        return;
+      }
+
+      await refreshData();
+      await Promise.resolve(onSettingsChanged?.());
+    } catch (e) {
+      console.error("Failed to update Docker backend preference:", e);
+      setError("Failed to save Docker backend preference");
+    }
+  };
+
   const handleReclaim = async () => {
     if (isReclaiming) return;
     setIsReclaiming(true);
@@ -86,6 +119,7 @@ export function StorageSettings() {
       const result = await window.electronAPI.reclaimDiskSpace();
       if (!result.success) setError(result.error || "Reclaim failed");
       await refreshData();
+      await Promise.resolve(onSettingsChanged?.());
     } finally {
       setIsReclaiming(false);
     }
@@ -109,6 +143,7 @@ export function StorageSettings() {
       } else {
         alert("Relocation complete! The engine has been moved and restarted.");
         await refreshData();
+        await Promise.resolve(onSettingsChanged?.());
       }
     } finally {
       setIsRelocating(false);
@@ -143,6 +178,59 @@ export function StorageSettings() {
             </div>
           )}
         </div>
+
+        {isWindows && (hasDesktopEngine || hasWslEngine) && (
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3">
+            <div className="space-y-0.5">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-white/90">
+                Docker Backend
+              </Label>
+              <p className="text-[9px] text-white/40 font-black uppercase tracking-tight leading-relaxed">
+                Choose which Windows Docker engine OpenFork should track in
+                Docker Management and use for client startup.
+              </p>
+            </div>
+
+            <Select
+              value={enginePreference}
+              onValueChange={(value: DockerEnginePreference) =>
+                void handleEnginePreferenceChange(value)
+              }
+              disabled={isReclaiming || isRelocating}
+            >
+              <SelectTrigger className="w-full h-9 bg-background/50 border-white/10 hover:bg-background/80 transition-colors">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto" className="text-[11px]">
+                  Auto-select best available engine
+                </SelectItem>
+                <SelectItem
+                  value="desktop"
+                  disabled={!hasDesktopEngine}
+                  className="text-[11px]"
+                >
+                  Docker Desktop
+                </SelectItem>
+                <SelectItem
+                  value="wsl"
+                  disabled={!hasWslEngine}
+                  className="text-[11px]"
+                >
+                  OpenFork WSL
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
+              {hasDesktopEngine && hasWslEngine
+                ? "Both Docker Desktop and the dedicated OpenFork WSL engine are available on this PC."
+                : hasDesktopEngine
+                  ? "Docker Desktop is the only Windows Docker engine detected right now."
+                  : "The dedicated OpenFork WSL engine is the only Windows Docker engine detected right now."}
+            </p>
+          </div>
+        )}
 
         {isWslMode ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">

@@ -32,6 +32,10 @@ interface Transaction {
   status: string;
 }
 
+interface ApiErrorResponse {
+  error?: string;
+}
+
 // Reference VRAM for $/hr display (must match backend DISPLAY_VRAM_GB)
 const DISPLAY_VRAM_GB = 8;
 
@@ -76,6 +80,18 @@ function formatDate(iso: string): string {
   });
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  return fallback;
+}
+
 /** Convert internal rate to $/hr display using reference VRAM */
 function rateToHourly(centsPerVramGbMin: number): number {
   return (centsPerVramGbMin * DISPLAY_VRAM_GB * 60) / 100;
@@ -97,6 +113,7 @@ function estimateJobEarnings(
 
 export function Monetize() {
   const { session, monetizeWallet, fetchMonetizeWallet } = useClientStore();
+  const userId = session?.user?.id;
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingTxns, setLoadingTxns] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
@@ -112,29 +129,7 @@ export function Monetize() {
   const [rateSaveError, setRateSaveError] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
-  // Fetch wallet + transactions + rate on mount
-  useEffect(() => {
-    fetchMonetizeWallet();
-    loadTransactions();
-    loadProviderRate();
-  }, []);
-
-  // Auto-refresh rate info every 5 minutes to keep market data fresh
-  useEffect(() => {
-    const interval = setInterval(loadProviderRate, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Countdown timer for rate increase cooldown
-  useEffect(() => {
-    if (cooldownSeconds <= 0) return;
-    const timer = setInterval(() => {
-      setCooldownSeconds((s) => Math.max(0, s - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [cooldownSeconds]);
-
-  async function loadProviderRate() {
+  const loadProviderRate = useCallback(async () => {
     setRateLoading(true);
     try {
       const result = await window.electronAPI.getProviderRate();
@@ -151,12 +146,19 @@ export function Monetize() {
             : suggestedRate;
         setRateInput(rateToHourly(initialRate).toFixed(3));
       }
-    } catch {}
-    setRateLoading(false);
-  }
+    } catch (error) {
+      console.error("Failed to load provider rate:", error);
+    } finally {
+      setRateLoading(false);
+    }
+  }, []);
 
-  async function loadTransactions() {
-    if (!session?.user) return;
+  const loadTransactions = useCallback(async () => {
+    if (!userId) {
+      setTransactions([]);
+      return;
+    }
+
     setLoadingTxns(true);
     try {
       const { data } = await supabase
@@ -164,16 +166,38 @@ export function Monetize() {
         .select(
           "id, transaction_type, amount_cents, created_at, description, status",
         )
-        .eq("user_id", session.user.id)
+        .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(20);
       setTransactions((data as Transaction[]) || []);
-    } catch (err) {
-      console.error("Failed to load transactions:", err);
+    } catch (error) {
+      console.error("Failed to load transactions:", error);
     } finally {
       setLoadingTxns(false);
     }
-  }
+  }, [userId]);
+
+  // Fetch wallet + transactions + rate on mount
+  useEffect(() => {
+    fetchMonetizeWallet();
+    loadTransactions();
+    loadProviderRate();
+  }, [fetchMonetizeWallet, loadProviderRate, loadTransactions]);
+
+  // Auto-refresh rate info every 5 minutes to keep market data fresh
+  useEffect(() => {
+    const interval = setInterval(loadProviderRate, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [loadProviderRate]);
+
+  // Countdown timer for rate increase cooldown
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
 
   const handleWithdraw = useCallback(async () => {
     if (!monetizeWallet) return;
@@ -196,21 +220,27 @@ export function Monetize() {
         },
         body: JSON.stringify({ amount_cents: amount }),
       });
-      const result = await resp.json();
+      let result: ApiErrorResponse | null = null;
+      try {
+        result = (await resp.json()) as ApiErrorResponse;
+      } catch (error) {
+        console.warn("Withdrawal response did not include JSON:", error);
+      }
+
       if (!resp.ok) {
-        setWithdrawError(result.error || "Withdrawal failed");
+        setWithdrawError(result?.error || "Withdrawal failed");
       } else {
         setWithdrawSuccess(true);
         fetchMonetizeWallet();
         loadTransactions();
         setTimeout(() => setWithdrawSuccess(false), 4000);
       }
-    } catch (err: any) {
-      setWithdrawError(err.message || "Network error");
+    } catch (error) {
+      setWithdrawError(getErrorMessage(error, "Network error"));
     } finally {
       setWithdrawing(false);
     }
-  }, [monetizeWallet, fetchMonetizeWallet]);
+  }, [fetchMonetizeWallet, loadTransactions, monetizeWallet]);
 
   // Stripe error state
   const [stripeError, setStripeError] = useState<string | null>(null);
@@ -224,9 +254,9 @@ export function Monetize() {
         console.error("Stripe onboard error:", result.error);
         setStripeError(result.error);
       }
-    } catch (err: any) {
-      console.error("Stripe onboard error:", err);
-      setStripeError(err.message || "Failed to open Stripe onboarding");
+    } catch (error) {
+      console.error("Stripe onboard error:", error);
+      setStripeError(getErrorMessage(error, "Failed to open Stripe onboarding"));
     } finally {
       setStripeLoading(false);
     }
@@ -241,9 +271,9 @@ export function Monetize() {
         console.error("Stripe dashboard error:", result.error);
         setStripeError(result.error);
       }
-    } catch (err: any) {
-      console.error("Stripe dashboard error:", err);
-      setStripeError(err.message || "Failed to open Stripe dashboard");
+    } catch (error) {
+      console.error("Stripe dashboard error:", error);
+      setStripeError(getErrorMessage(error, "Failed to open Stripe dashboard"));
     } finally {
       setStripeLoading(false);
     }
@@ -273,13 +303,13 @@ export function Monetize() {
             setCooldownSeconds(result.cooldown_remaining_seconds);
           }
         } else {
-          setRateInfo((prev) => ({ ...prev!, ...result }));
+          setRateInfo((prev) => (prev ? { ...prev, ...result } : result));
           if (result.cooldown_remaining_seconds) {
             setCooldownSeconds(result.cooldown_remaining_seconds);
           }
         }
-      } catch (err: any) {
-        setRateSaveError(err?.message ?? "Failed to save rate");
+      } catch (error) {
+        setRateSaveError(getErrorMessage(error, "Failed to save rate"));
       } finally {
         setRateSaving(false);
       }
@@ -308,12 +338,12 @@ export function Monetize() {
       if (result.error) {
         setRateSaveError(result.error);
       } else {
-        setRateInfo((prev) => ({ ...prev!, ...result }));
+        setRateInfo((prev) => (prev ? { ...prev, ...result } : result));
         setRateInput(rateToHourly(result.effective_rate).toFixed(3));
         setCooldownSeconds(0);
       }
-    } catch (err: any) {
-      setRateSaveError(err?.message ?? "Failed to reset rate");
+    } catch (error) {
+      setRateSaveError(getErrorMessage(error, "Failed to reset rate"));
     } finally {
       setRateSaving(false);
     }

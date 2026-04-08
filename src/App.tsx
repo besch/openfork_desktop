@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef, memo } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  memo,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { useClientStore } from "./store";
 import type { Session } from "@supabase/supabase-js";
 import type { DependencyStatus } from "./types";
@@ -41,9 +48,9 @@ const TabTrigger = memo(
     children,
   }: {
     value: string;
-    icon?: any;
+    icon?: ComponentType<{ className?: string; size?: number | string }>;
     label?: string;
-    children?: React.ReactNode;
+    children?: ReactNode;
   }) => {
     const dockerPullProgress = useClientStore(
       (state) => state.dockerPullProgress,

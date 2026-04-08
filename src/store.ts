@@ -1,4 +1,3 @@
-/// <reference path="./electron.d.ts" />
 import { create } from "zustand";
 import type { Session, RealtimeChannel } from "@supabase/supabase-js";
 import type {
@@ -67,6 +66,33 @@ interface DGNClientState {
   }) => void;
   monetizeWallet: MonetizeWallet | null;
   fetchMonetizeWallet: () => Promise<void>;
+}
+
+interface JobRealtimeOptions {
+  event: "*";
+  schema: "public";
+  table: "dgn_jobs";
+  filter?: string;
+}
+
+interface JobStatusPayload {
+  type: "JOB_START" | "JOB_COMPLETE" | "JOB_FAILED" | "MONETIZE_JOB_COMPLETE";
+  id?: string;
+  workflow_type?: string | null;
+}
+
+function isJobStatusPayload(payload: unknown): payload is JobStatusPayload {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const { type } = payload as { type?: unknown };
+  return (
+    type === "JOB_START" ||
+    type === "JOB_COMPLETE" ||
+    type === "JOB_FAILED" ||
+    type === "MONETIZE_JOB_COMPLETE"
+  );
 }
 
 export const useClientStore = create<DGNClientState>((set, get) => ({
@@ -245,7 +271,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
     const instanceId = Math.random().toString(36).substring(2, 9);
     let channelName: string;
-    let postgresChangesOptions: any;
+    let postgresChangesOptions: JobRealtimeOptions;
 
     switch (jobPolicy) {
       case "mine":
@@ -485,18 +511,25 @@ function initializeIpcListeners() {
 
   // Listen for job status updates from backend
   cleanupFns.push(
-    window.electronAPI.onJobStatus((payload: any) => {
+    window.electronAPI.onJobStatus((payload: unknown) => {
+      if (!isJobStatusPayload(payload)) {
+        return;
+      }
+
       if (payload.type === "JOB_START") {
         setJobState({
           status: "processing",
-          jobId: payload.id,
-          type: payload.workflow_type
+          jobId: payload.id ?? null,
+          type: payload.workflow_type ?? null,
         });
-      } else if (payload.type === "JOB_COMPLETE" || payload.type === "JOB_FAILED") {
+      } else if (
+        payload.type === "JOB_COMPLETE" ||
+        payload.type === "JOB_FAILED"
+      ) {
         setJobState({
           status: "idle",
           jobId: null,
-          type: null
+          type: null,
         });
         // Refresh stats to ensure counts are accurate
         useClientStore.getState().fetchStats();

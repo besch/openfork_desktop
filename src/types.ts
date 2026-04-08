@@ -108,7 +108,16 @@ export interface DockerStatus {
   installDrive?: string;
   isNative?: boolean;
   isStarting?: boolean;
+  storagePath?: string;
+  activeEngine?: "desktop" | "wsl" | "linux";
+  enginePreference?: DockerEnginePreference;
+  availableEngines?: {
+    desktop: boolean;
+    wsl: boolean;
+  };
 }
+
+export type DockerEnginePreference = "auto" | "desktop" | "wsl";
 
 export interface NvidiaStatus {
   available: boolean;

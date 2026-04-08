@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ComponentType } from "react";
 import {
   Select,
   SelectContent,
@@ -128,7 +128,11 @@ export function JobPolicySettings({
 
   const policyInfo: Record<
     JobPolicy,
-    { title: string; description: string; icon: any }
+    {
+      title: string;
+      description: string;
+      icon: ComponentType<{ className?: string; size?: number | string }>;
+    }
   > = {
     all: {
       title: "Global",

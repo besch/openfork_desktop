@@ -372,7 +372,7 @@ export const JobHistory = memo(() => {
   // Initial load or when filters change
   useEffect(() => {
     fetchJobHistory(true);
-  }, [session?.user?.id, statusFilter, typeFilter, debouncedSearchQuery]);
+  }, [fetchJobHistory]);
 
   // Intersection observer for infinite scroll
   const observer = useRef<IntersectionObserver | null>(null);

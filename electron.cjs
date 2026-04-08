@@ -664,8 +664,7 @@ ipcMain.on("open-external", (event, url) => {
 // Add persistence handlers for job policy settings
 ipcMain.handle("load-settings", async () => {
   try {
-    const settings = store.get("appSettings") || {};
-    return settings;
+    return getAppSettings();
   } catch (error) {
     console.error("Error loading settings:", error);
     return null;
@@ -674,7 +673,7 @@ ipcMain.handle("load-settings", async () => {
 
 ipcMain.handle("save-settings", async (event, settings) => {
   try {
-    store.set("appSettings", settings);
+    saveAppSettings(settings);
     return { success: true };
   } catch (error) {
     console.error("Error saving settings:", error);
@@ -911,6 +910,165 @@ ipcMain.handle("search:general", async (event, query) => {
 // --- DOCKER MANAGEMENT ---
 const { execSync, exec, execFile } = require("child_process");
 const fs = require("fs");
+
+function getAppSettings() {
+  const settings = store.get("appSettings");
+  return settings && typeof settings === "object" ? settings : {};
+}
+
+function saveAppSettings(partialSettings = {}) {
+  const nextSettings = {
+    ...getAppSettings(),
+    ...partialSettings,
+  };
+
+  store.set("appSettings", nextSettings);
+  return nextSettings;
+}
+
+function normalizeDockerEnginePreference(value) {
+  return value === "desktop" || value === "wsl" ? value : "auto";
+}
+
+function getDockerEnginePreference() {
+  return normalizeDockerEnginePreference(
+    getAppSettings().dockerEnginePreference,
+  );
+}
+
+function getDriveLetterFromPath(targetPath) {
+  if (typeof targetPath !== "string") return null;
+  const match = targetPath.match(/^([a-zA-Z]):/);
+  return match ? match[1].toUpperCase() : null;
+}
+
+function getFirstExistingPath(candidates = []) {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function readJsonFileSafe(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    console.warn(`Failed to read JSON from ${filePath}:`, error.message);
+    return null;
+  }
+}
+
+function collectDockerStorageCandidates(value, keyPath = "", candidates = []) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectDockerStorageCandidates(item, keyPath, candidates);
+    }
+    return candidates;
+  }
+
+  if (!value || typeof value !== "object") {
+    return candidates;
+  }
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    const nextKeyPath = `${keyPath}.${key}`.toLowerCase();
+    if (
+      typeof nestedValue === "string" &&
+      /^[a-zA-Z]:[\\/]/.test(nestedValue) &&
+      /(disk|image|datafolder|storage|vhd)/.test(nextKeyPath)
+    ) {
+      candidates.push(nestedValue);
+      continue;
+    }
+
+    if (nestedValue && typeof nestedValue === "object") {
+      collectDockerStorageCandidates(nestedValue, nextKeyPath, candidates);
+    }
+  }
+
+  return candidates;
+}
+
+function expandDockerStoragePath(rawPath) {
+  if (typeof rawPath !== "string" || !rawPath.trim()) {
+    return null;
+  }
+
+  const normalizedPath = path.normalize(rawPath.trim());
+  const candidates = [normalizedPath];
+
+  if (!normalizedPath.toLowerCase().endsWith(".vhdx")) {
+    candidates.push(
+      path.join(normalizedPath, "DockerDesktopWSL", "disk", "docker_data.vhdx"),
+      path.join(normalizedPath, "DockerDesktopWSL", "main", "ext4.vhdx"),
+      path.join(normalizedPath, "DockerDesktopWSL", "ext4.vhdx"),
+      path.join(normalizedPath, "disk", "docker_data.vhdx"),
+      path.join(normalizedPath, "main", "ext4.vhdx"),
+      path.join(normalizedPath, "ext4.vhdx"),
+      path.join(normalizedPath, "docker_data.vhdx"),
+    );
+  }
+
+  return getFirstExistingPath([...new Set(candidates)]);
+}
+
+async function resolveWslStoragePath(distroName) {
+  const basePath = await getDistroBasePath(distroName);
+  if (!basePath) return null;
+
+  const normalizedBasePath = path.normalize(basePath);
+  return (
+    getFirstExistingPath([path.join(normalizedBasePath, "ext4.vhdx")]) ||
+    normalizedBasePath
+  );
+}
+
+function resolveDockerDesktopStoragePath() {
+  if (process.platform !== "win32") {
+    return null;
+  }
+
+  const appData = process.env.APPDATA || "";
+  const localAppData = process.env.LOCALAPPDATA || "";
+  const settingsFiles = [
+    path.join(appData, "Docker", "settings-store.json"),
+    path.join(appData, "Docker", "settings.json"),
+    path.join(localAppData, "Docker", "settings-store.json"),
+    path.join(localAppData, "Docker", "settings.json"),
+  ];
+
+  const rawCandidates = [];
+  for (const settingsFile of settingsFiles) {
+    if (!fs.existsSync(settingsFile)) continue;
+
+    const settings = readJsonFileSafe(settingsFile);
+    if (!settings) continue;
+
+    rawCandidates.push(
+      settings.diskImageLocation,
+      settings.diskImageDirectory,
+      settings.storageLocation,
+      settings.dataFolder,
+      ...collectDockerStorageCandidates(settings),
+    );
+  }
+
+  for (const candidate of rawCandidates) {
+    const resolvedPath = expandDockerStoragePath(candidate);
+    if (resolvedPath) {
+      return resolvedPath;
+    }
+  }
+
+  return getFirstExistingPath([
+    path.join(localAppData, "Docker", "wsl", "disk", "docker_data.vhdx"),
+    path.join(localAppData, "Docker", "wsl", "main", "ext4.vhdx"),
+    path.join(localAppData, "Docker", "DockerDesktopWSL", "disk", "docker_data.vhdx"),
+  ]);
+}
 
 /**
  * Returns true when Docker commands are routed through WSL (not native Docker Desktop).
@@ -1571,13 +1729,23 @@ ipcMain.handle("docker:get-disk-space", async () => {
 
     if (process.platform === "win32") {
       let driveLetter = getWindowsSystemDriveLetter();
+      let storagePath = `${driveLetter}:\\`;
 
       if (isUsingWslDocker()) {
         // In OpenFork WSL mode, Docker's physical storage lives in the distro VHDX.
-        const basePath = await getDistroBasePath(await getWslDistroName());
-        if (basePath) {
-          const match = basePath.match(/([a-zA-Z]):/);
-          if (match) driveLetter = match[1].toUpperCase();
+        const wslStoragePath = await resolveWslStoragePath(
+          await getWslDistroName(),
+        );
+        if (wslStoragePath) {
+          storagePath = wslStoragePath;
+          driveLetter = getDriveLetterFromPath(wslStoragePath) || driveLetter;
+        }
+      } else {
+        const nativeStoragePath = resolveDockerDesktopStoragePath();
+        if (nativeStoragePath) {
+          storagePath = nativeStoragePath;
+          driveLetter =
+            getDriveLetterFromPath(nativeStoragePath) || driveLetter;
         }
       }
 
@@ -1608,7 +1776,7 @@ ipcMain.handle("docker:get-disk-space", async () => {
           freeBytes = diskInfo.Free;
           usedBytes = diskInfo.Used;
           totalBytes = freeBytes + usedBytes;
-          diskPath = `${driveLetter}:\\`;
+          diskPath = storagePath;
         } catch (e) {
           console.error("Error parsing disk space info:", e);
         }
@@ -1847,9 +2015,7 @@ ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
       return { success: false, error: `Installation failed: ${result.error}` };
     } else {
       // Save the new base path in settings
-      const settings = store.get("appSettings") || {};
-      settings.wslStoragePath = newDrivePath;
-      store.set("appSettings", settings);
+      saveAppSettings({ wslStoragePath: newDrivePath });
       console.log(`Engine reinstalled successfully at ${newDrivePath}.`);
       return { success: true };
     }
@@ -2054,13 +2220,17 @@ async function checkNativeDocker() {
             `${dockerCmd} version --format "{{.Server.Os}}"`,
             (versionError, versionStdout) => {
               const serverOs = versionStdout.trim().toLowerCase() || null;
+              const storagePath = resolveDockerDesktopStoragePath();
 
               resolve({
                 installed: true,
                 running: serverOs === "linux",
                 isNative: true,
                 isProcessRunning: processRunning || pipeExists,
-                installDrive: getWindowsSystemDriveLetter(),
+                installDrive:
+                  getDriveLetterFromPath(storagePath) ||
+                  getWindowsSystemDriveLetter(),
+                storagePath,
                 serverOs,
                 isWindowsContainers: serverOs === "windows",
                 lastError: versionError?.message,
@@ -2093,12 +2263,8 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
     };
   }
 
-  const basePath = await getDistroBasePath(wslDistro);
-  let installDrive = null;
-  if (basePath) {
-    const match = basePath.match(/([a-zA-Z]):/);
-    if (match) installDrive = match[1].toUpperCase();
-  }
+  const storagePath = await resolveWslStoragePath(wslDistro);
+  const installDrive = getDriveLetterFromPath(storagePath);
 
   const versionResult = await runDockerCheckCommand("docker --version", {
     useWsl: true,
@@ -2111,6 +2277,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
       running: false,
       isNative: false,
       installDrive,
+      storagePath,
       error:
         classifyDockerCheckError(versionResult.error, versionResult.stderr) ||
         undefined,
@@ -2132,6 +2299,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
       running: false,
       isNative: false,
       installDrive,
+      storagePath,
       error:
         classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
         undefined,
@@ -2146,6 +2314,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
       running: false,
       isNative: false,
       installDrive,
+      storagePath,
       error: "DOCKER_API_UNREACHABLE",
       wslDistro,
     };
@@ -2156,8 +2325,93 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
     running: true,
     isNative: false,
     installDrive,
+    storagePath,
     dockerHost,
     wslDistro,
+  };
+}
+
+function withWindowsDockerMetadata(status, { preference, native, wsl }) {
+  return {
+    ...status,
+    enginePreference: preference,
+    availableEngines: {
+      desktop: !!native.installed,
+      wsl: !!wsl.installed,
+    },
+  };
+}
+
+function buildRunningNativeStatus(native) {
+  delete process.env.OPENFORK_DOCKER_HOST;
+  return {
+    installed: true,
+    running: true,
+    isNative: true,
+    installDrive: native.installDrive,
+    storagePath: native.storagePath,
+    activeEngine: "desktop",
+  };
+}
+
+function buildRunningWslStatus(wsl) {
+  process.env.OPENFORK_DOCKER_HOST = wsl.dockerHost;
+  return {
+    installed: true,
+    running: true,
+    isNative: false,
+    installDrive: wsl.installDrive,
+    storagePath: wsl.storagePath,
+    activeEngine: "wsl",
+  };
+}
+
+async function buildNativeStatus(native, { allowNativeStart } = {}) {
+  delete process.env.OPENFORK_DOCKER_HOST;
+
+  if (native.isWindowsContainers) {
+    return {
+      installed: true,
+      running: false,
+      isNative: true,
+      installDrive: native.installDrive,
+      storagePath: native.storagePath,
+      error: "DOCKER_WINDOWS_CONTAINERS",
+    };
+  }
+
+  if (!native.isProcessRunning && allowNativeStart) {
+    console.log("Docker Desktop is not running. Attempting auto-start...");
+    const startResult = await startNativeDocker();
+    return {
+      installed: true,
+      running: false,
+      isNative: true,
+      installDrive: native.installDrive,
+      storagePath: native.storagePath,
+      isStarting: startResult.success,
+    };
+  }
+
+  return {
+    installed: true,
+    running: false,
+    isNative: true,
+    installDrive: native.installDrive,
+    storagePath: native.storagePath,
+    isStarting: !!native.isProcessRunning,
+  };
+}
+
+function buildWslStatus(wsl) {
+  delete process.env.OPENFORK_DOCKER_HOST;
+  return {
+    installed: true,
+    running: false,
+    isNative: false,
+    installDrive: wsl.installDrive,
+    storagePath: wsl.storagePath,
+    error: wsl.error,
   };
 }
 
@@ -2172,89 +2426,79 @@ async function resolveDockerStatus(
 
     const infoResult = await runDockerCheckCommand("docker info");
     if (infoResult.success) {
-      return { installed: true, running: true };
+      return { installed: true, running: true, activeEngine: "linux" };
     }
 
     return {
       installed: true,
       running: false,
+      activeEngine: "linux",
       error:
         classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
         undefined,
     };
   }
 
-  const native = await checkNativeDocker();
-  if (native.installed && native.running) {
-    delete process.env.OPENFORK_DOCKER_HOST;
-    return {
-      installed: true,
-      running: true,
-      isNative: true,
-      installDrive: native.installDrive,
-    };
+  const preference = getDockerEnginePreference();
+  const [native, wsl] = await Promise.all([
+    checkNativeDocker(),
+    checkWslDockerStatus({ hostTimeoutMs: wslHostTimeoutMs }),
+  ]);
+
+  const decorate = (status) =>
+    withWindowsDockerMetadata(status, { preference, native, wsl });
+
+  if (preference === "desktop" && native.installed) {
+    return decorate(
+      native.running
+        ? buildRunningNativeStatus(native)
+        : await buildNativeStatus(native, { allowNativeStart }),
+    );
   }
 
-  const wsl = await checkWslDockerStatus({ hostTimeoutMs: wslHostTimeoutMs });
+  if (preference === "wsl" && wsl.installed) {
+    return decorate(wsl.running ? buildRunningWslStatus(wsl) : buildWslStatus(wsl));
+  }
+
+  if (preference === "desktop" && !native.installed && wsl.installed) {
+    return decorate(wsl.running ? buildRunningWslStatus(wsl) : buildWslStatus(wsl));
+  }
+
+  if (preference === "wsl" && !wsl.installed && native.installed) {
+    return decorate(
+      native.running
+        ? buildRunningNativeStatus(native)
+        : await buildNativeStatus(native, { allowNativeStart }),
+    );
+  }
+
+  if (native.running) {
+    return decorate(buildRunningNativeStatus(native));
+  }
+
   if (wsl.running) {
-    process.env.OPENFORK_DOCKER_HOST = wsl.dockerHost;
-    return {
-      installed: true,
-      running: true,
-      isNative: false,
-      installDrive: wsl.installDrive,
-    };
+    return decorate(buildRunningWslStatus(wsl));
+  }
+
+  if (wsl.installed && native.isWindowsContainers) {
+    return decorate(buildWslStatus(wsl));
+  }
+
+  if (native.installed) {
+    return decorate(await buildNativeStatus(native, { allowNativeStart }));
+  }
+
+  if (wsl.installed) {
+    return decorate(buildWslStatus(wsl));
   }
 
   delete process.env.OPENFORK_DOCKER_HOST;
 
-  if (wsl.installed) {
-    return {
-      installed: true,
-      running: false,
-      isNative: false,
-      installDrive: wsl.installDrive,
-      error: wsl.error,
-    };
-  }
-
-  if (native.installed) {
-    if (native.isWindowsContainers) {
-      return {
-        installed: true,
-        running: false,
-        isNative: true,
-        installDrive: native.installDrive,
-        error: "DOCKER_WINDOWS_CONTAINERS",
-      };
-    }
-
-    if (!native.isProcessRunning && allowNativeStart) {
-      console.log("Docker Desktop is not running. Attempting auto-start...");
-      const startResult = await startNativeDocker();
-      return {
-        installed: true,
-        running: false,
-        isNative: true,
-        installDrive: native.installDrive,
-        isStarting: startResult.success,
-      };
-    }
-
-    return {
-      installed: true,
-      running: false,
-      isNative: true,
-      installDrive: native.installDrive,
-      isStarting: !!native.isProcessRunning,
-    };
-  }
-
-  return {
+  return decorate({
     installed: false,
     running: false,
     error: wsl.error,
-  };
+  });
 }
 
 async function startNativeDocker() {
