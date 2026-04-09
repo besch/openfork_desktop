@@ -13,6 +13,11 @@ interface UpdateProgress {
   percent: number;
 }
 
+function normalizeReleaseNotes(releaseNotes: string) {
+  const parsed = new DOMParser().parseFromString(releaseNotes, "text/html");
+  return (parsed.body.textContent || releaseNotes).trim();
+}
+
 export function UpdateNotification() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
@@ -62,6 +67,10 @@ export function UpdateNotification() {
 
   if (!updateInfo || dismissed) return null;
 
+  const releaseNotes = updateInfo.releaseNotes
+    ? normalizeReleaseNotes(updateInfo.releaseNotes)
+    : null;
+
   return (
     <AnimatePresence>
       <motion.div
@@ -92,9 +101,11 @@ export function UpdateNotification() {
                   }
                 </div>
                 
-                {updateInfo.releaseNotes && !downloaded && !progress && (
+                {releaseNotes && !downloaded && !progress && (
                   <div className="mt-2 text-xs text-muted-foreground/80 bg-muted/50 p-2 rounded-md max-h-24 overflow-y-auto custom-scrollbar border border-border/50">
-                    <div dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }} />
+                    <pre className="whitespace-pre-wrap break-words font-sans">
+                      {releaseNotes}
+                    </pre>
                   </div>
                 )}
               </div>
