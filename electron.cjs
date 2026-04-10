@@ -1308,6 +1308,34 @@ async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
 let dockerMonitorInterval = null;
 let lastContainersJson = "";
 let lastImagesJson = "";
+let dockerMonitorConsecutiveFailures = 0;
+const DOCKER_MONITOR_MAX_FAILURES = 3;
+
+// Cached Docker routing — avoids expensive resolveDockerStatus on every list call
+let _cachedRoutingResult = null;
+let _cachedRoutingTimestamp = 0;
+const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
+
+/**
+ * Ensures that OPENFORK_DOCKER_HOST is correctly set for the active Docker engine.
+ * Uses a short-lived cache to avoid calling resolveDockerStatus() on every IPC call.
+ * Returns the resolved Docker status.
+ */
+async function ensureDockerRouting() {
+  const now = Date.now();
+  if (_cachedRoutingResult && (now - _cachedRoutingTimestamp) < ROUTING_CACHE_TTL_MS) {
+    return _cachedRoutingResult;
+  }
+
+  const status = await resolveDockerStatus({
+    allowNativeStart: false,
+    wslHostTimeoutMs: 5000,
+  });
+
+  _cachedRoutingResult = status;
+  _cachedRoutingTimestamp = now;
+  return status;
+}
 
 async function checkDockerUpdates() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -1315,10 +1343,16 @@ async function checkDockerUpdates() {
   try {
     const dockerStatus = await resolveDockerStatus({
       allowNativeStart: false,
-      wslHostTimeoutMs: 2000,
+      wslHostTimeoutMs: 5000,
     });
 
+    // Also update the routing cache so list handlers stay in sync
+    _cachedRoutingResult = dockerStatus;
+    _cachedRoutingTimestamp = Date.now();
+
     if (!dockerStatus.running) {
+      dockerMonitorConsecutiveFailures++;
+
       if (
         process.platform === "win32" &&
         dockerStatus.error === "WSL_DISTRO_MISSING"
@@ -1328,18 +1362,29 @@ async function checkDockerUpdates() {
         });
       }
 
-      if (lastContainersJson !== "") {
-        lastContainersJson = "";
-        mainWindow.webContents.send("docker:containers-update", []);
-      }
+      // Only clear the display after consecutive failures to avoid
+      // transient WSL Docker API timeouts from flickering the UI.
+      if (dockerMonitorConsecutiveFailures >= DOCKER_MONITOR_MAX_FAILURES) {
+        if (lastContainersJson !== "") {
+          lastContainersJson = "";
+          mainWindow.webContents.send("docker:containers-update", []);
+        }
 
-      if (lastImagesJson !== "") {
-        lastImagesJson = "";
-        mainWindow.webContents.send("docker:images-update", []);
+        if (lastImagesJson !== "") {
+          lastImagesJson = "";
+          mainWindow.webContents.send("docker:images-update", []);
+        }
+      } else {
+        console.log(
+          `Docker monitor: not running (${dockerMonitorConsecutiveFailures}/${DOCKER_MONITOR_MAX_FAILURES} failures, error: ${dockerStatus.error || "none"}). Keeping current display.`,
+        );
       }
 
       return;
     }
+
+    // Docker is running — reset the failure counter
+    dockerMonitorConsecutiveFailures = 0;
 
     // Check containers
     const containersOutput = await execDockerCommand(
@@ -1402,7 +1447,8 @@ async function checkDockerUpdates() {
       mainWindow.webContents.send("docker:images-update", images);
     }
   } catch (error) {
-    // Silent fail for background monitor
+    // Silent fail for background monitor — count as a failure
+    dockerMonitorConsecutiveFailures++;
   }
 }
 
@@ -1428,6 +1474,9 @@ ipcMain.on("docker:stop-monitoring", stopDockerMonitoring);
 
 ipcMain.handle("docker:list-images", async () => {
   try {
+    // Ensure Docker routing (OPENFORK_DOCKER_HOST) is current before querying
+    await ensureDockerRouting();
+
     const output = await execDockerCommand(
       'docker images --format "{{json .}}"',
     );
@@ -1460,6 +1509,9 @@ ipcMain.handle("docker:list-images", async () => {
 
 ipcMain.handle("docker:list-containers", async () => {
   try {
+    // Ensure Docker routing (OPENFORK_DOCKER_HOST) is current before querying
+    await ensureDockerRouting();
+
     const output = await execDockerCommand(
       'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
     );
