@@ -803,7 +803,7 @@ export function Monetize() {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Platform fee (15%) is already deducted from your earnings at
+                    Platform fee (25%) is already deducted from your earnings at
                     job completion.
                   </p>
                 </div>
