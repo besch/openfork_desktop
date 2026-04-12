@@ -66,7 +66,7 @@ class DockerCleanupManager {
     this.activeServices.add(serviceType);
   }
 
-  /** Called when a JOB_COMPLETE or JOB_FAILED message arrives */
+  /** Called when a JOB_COMPLETE, JOB_FAILED, or JOB_CLEARED message arrives */
   notifyJobEnd(serviceType) {
     if (!serviceType) return;
     this.imageLastJobTime.set(serviceType, new Date());

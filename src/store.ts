@@ -76,9 +76,16 @@ interface JobRealtimeOptions {
 }
 
 interface JobStatusPayload {
-  type: "JOB_START" | "JOB_COMPLETE" | "JOB_FAILED" | "MONETIZE_JOB_COMPLETE";
+  type:
+    | "JOB_START"
+    | "JOB_COMPLETE"
+    | "JOB_FAILED"
+    | "JOB_CLEARED"
+    | "MONETIZE_JOB_COMPLETE";
   id?: string;
   workflow_type?: string | null;
+  service_type?: string | null;
+  status?: string | null;
 }
 
 const createIdleJobState = (): DGNClientState["jobState"] => ({
@@ -97,6 +104,7 @@ function isJobStatusPayload(payload: unknown): payload is JobStatusPayload {
     type === "JOB_START" ||
     type === "JOB_COMPLETE" ||
     type === "JOB_FAILED" ||
+    type === "JOB_CLEARED" ||
     type === "MONETIZE_JOB_COMPLETE"
   );
 }
@@ -533,7 +541,8 @@ function initializeIpcListeners() {
         });
       } else if (
         payload.type === "JOB_COMPLETE" ||
-        payload.type === "JOB_FAILED"
+        payload.type === "JOB_FAILED" ||
+        payload.type === "JOB_CLEARED"
       ) {
         setJobState(createIdleJobState());
         // Refresh stats to ensure counts are accurate

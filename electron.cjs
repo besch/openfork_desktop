@@ -289,7 +289,11 @@ function createWindow() {
       if (!cleanupManager) return;
       if (type === "JOB_START") {
         cleanupManager.notifyJobStart(payload.service_type);
-      } else if (type === "JOB_COMPLETE" || type === "JOB_FAILED") {
+      } else if (
+        type === "JOB_COMPLETE" ||
+        type === "JOB_FAILED" ||
+        type === "JOB_CLEARED"
+      ) {
         cleanupManager.notifyJobEnd(payload.service_type);
       }
     },

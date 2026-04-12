@@ -535,7 +535,7 @@ class PythonProcessManager {
           }
 
           // Handle Job Status messages (Start/Complete/Failed/MonetizeComplete)
-          if (["JOB_START", "JOB_COMPLETE", "JOB_FAILED", "MONETIZE_JOB_COMPLETE"].includes(message.type)) {
+          if (["JOB_START", "JOB_COMPLETE", "JOB_FAILED", "JOB_CLEARED", "MONETIZE_JOB_COMPLETE"].includes(message.type)) {
             this.mainWindow.webContents.send(
               "openfork_client:job-status",
               { type: message.type, ...message.payload }
@@ -559,6 +559,14 @@ class PythonProcessManager {
                this.mainWindow.webContents.send("openfork_client:log", {
                  type: "stderr",
                  message: `Job ${message.payload.id} failed: ${message.payload.error}`
+               });
+            } else if (message.type === "JOB_CLEARED") {
+               const suffix = message.payload.status
+                 ? ` (${message.payload.status})`
+                 : "";
+               this.mainWindow.webContents.send("openfork_client:log", {
+                 type: "stdout",
+                 message: `Job ${message.payload.id} is no longer active${suffix}.`
                });
              }
              return;
