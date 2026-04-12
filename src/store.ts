@@ -81,6 +81,12 @@ interface JobStatusPayload {
   workflow_type?: string | null;
 }
 
+const createIdleJobState = (): DGNClientState["jobState"] => ({
+  status: "idle",
+  jobId: null,
+  type: null,
+});
+
 function isJobStatusPayload(payload: unknown): payload is JobStatusPayload {
   if (!payload || typeof payload !== "object") {
     return false;
@@ -111,7 +117,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   allowedIds: "",
   dockerPullProgress: null,
   dependencyStatus: null,
-  jobState: { status: "idle", jobId: null, type: null },
+  jobState: createIdleJobState(),
   monetizeWallet: null,
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
   setDependencyStatus: (status) => set({ dependencyStatus: status }),
@@ -439,6 +445,9 @@ function initializeIpcListeners() {
   cleanupFns.push(
     window.electronAPI.onStatusChange((status) => {
       setStatus(status);
+      if (status !== "running") {
+        setJobState(createIdleJobState());
+      }
       if (status === "stopping") {
         window.electronAPI.setWindowClosable(false);
       } else {
@@ -526,11 +535,7 @@ function initializeIpcListeners() {
         payload.type === "JOB_COMPLETE" ||
         payload.type === "JOB_FAILED"
       ) {
-        setJobState({
-          status: "idle",
-          jobId: null,
-          type: null,
-        });
+        setJobState(createIdleJobState());
         // Refresh stats to ensure counts are accurate
         useClientStore.getState().fetchStats();
       } else if (payload.type === "MONETIZE_JOB_COMPLETE") {
