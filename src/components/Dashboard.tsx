@@ -296,11 +296,10 @@ export const Dashboard = memo(() => {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden sm:block h-6 w-px bg-white/10" />
             <div className="flex items-center gap-3">
               <div className="hidden sm:block">
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                  Policy
+                  Job Execution Policy
                 </span>
               </div>
               <Select
