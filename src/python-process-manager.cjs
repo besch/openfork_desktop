@@ -666,21 +666,29 @@ class PythonProcessManager {
 
       this.pythonProcess.once("close", cleanup);
 
-      this._requestStopFromPython();
+      const stopRequested = this._requestStopFromPython();
+      const shutdownRequestDelayMs = stopRequested ? 250 : 0;
 
-      // Gracefully shutdown via HTTP endpoint
-      const request = http.get(
-        `http://localhost:${this.shutdownServerPort}/shutdown`,
-        () => {
-          console.log("Sent HTTP shutdown request to Python backend.");
+      setTimeout(() => {
+        if (resolved || !this.pythonProcess) {
+          return;
         }
-      );
-      request.on("error", (err) => {
-        console.error(
-          `Error sending HTTP shutdown request: ${err.message}. Falling back to kill.`
+
+        // Give the stdin stop command a brief head start so Python can capture
+        // the in-flight job before the HTTP shutdown event begins unwinding.
+        const request = http.get(
+          `http://localhost:${this.shutdownServerPort}/shutdown`,
+          () => {
+            console.log("Sent HTTP shutdown request to Python backend.");
+          }
         );
-        if (this.pythonProcess) this.pythonProcess.kill("SIGTERM");
-      });
+        request.on("error", (err) => {
+          console.error(
+            `Error sending HTTP shutdown request: ${err.message}. Falling back to kill.`
+          );
+          if (this.pythonProcess) this.pythonProcess.kill("SIGTERM");
+        });
+      }, shutdownRequestDelayMs);
 
       // Failsafe timeout - force kill and cleanup
       setTimeout(() => {
