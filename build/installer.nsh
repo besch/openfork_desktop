@@ -4,7 +4,9 @@
 !define MUI_WELCOMEPAGE_TITLE_3LINES
 !define MUI_FINISHPAGE_TITLE_3LINES
 !define MUI_ABORTWARNING
+!ifndef MUI_HEADERIMAGE_RIGHT
 !define MUI_HEADERIMAGE_RIGHT
+!endif
 
 ; ─── Welcome Page ─────────────────────────────────────────────────────────────
 !define MUI_WELCOMEPAGE_TITLE "Welcome to OpenFork"
