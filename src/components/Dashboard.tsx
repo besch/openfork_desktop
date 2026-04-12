@@ -1,6 +1,5 @@
 import React, { useState, useCallback, memo, useMemo, useEffect } from "react";
 import { useClientStore } from "@/store";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CheckCircle,
@@ -10,9 +9,57 @@ import {
   AlertCircle,
   Play,
   Pause,
-  Settings,
   RefreshCw,
+  Globe,
+  Lock,
+  Layout,
+  Users,
+  DollarSign,
 } from "lucide-react";
+
+import { type ComponentType } from "react";
+
+const policyInfo: Record<
+  JobPolicy,
+  {
+    title: string;
+    description: string;
+    icon: ComponentType<{ className?: string; size?: number | string }>;
+  }
+> = {
+  all: {
+    title: "Global",
+    description: "Share your GPU and use any GPU on the network",
+    icon: Globe,
+  },
+  mine: {
+    title: "Private",
+    description: "Reserved for your tasks only",
+    icon: Lock,
+  },
+  project: {
+    title: "Project",
+    description: "Authorized projects only",
+    icon: Layout,
+  },
+  users: {
+    title: "Users",
+    description: "Trusted collaborators only",
+    icon: Users,
+  },
+  monetize: {
+    title: "Monetize",
+    description: "Earn real money — paid by processed jobs",
+    icon: DollarSign,
+  },
+};
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobPolicySettings } from "./JobPolicySettings";
 import type { Project, Profile, JobPolicy } from "@/types";
@@ -165,6 +212,7 @@ const PowerButton = memo(
   },
 );
 
+
 export const Dashboard = memo(() => {
   const {
     status,
@@ -180,7 +228,6 @@ export const Dashboard = memo(() => {
 
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Load persistent settings on component mount
   useEffect(() => {
@@ -228,10 +275,15 @@ export const Dashboard = memo(() => {
   const isProcessingAndRunning =
     status === "running" && jobState.status === "processing";
 
+  const showSubSettings = jobPolicy === "project" || jobPolicy === "users";
+
+  const currentInfo = policyInfo[jobPolicy];
+  const PolicyIcon = currentInfo.icon;
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header className="bg-surface/50 backdrop-blur-md border border-white/20 rounded-lg p-3 shadow-xl">
-        <div className="flex flex-wrap items-center content-center justify-between gap-3">
+        <div className="flex flex-wrap items-center content-center justify-between gap-3 px-1">
           <div className="flex items-center gap-3">
             <PowerButton
               isRunning={isRunning}
@@ -243,19 +295,71 @@ export const Dashboard = memo(() => {
               <StatusIndicator />
             </div>
           </div>
-
-          <Button
-            variant="primary"
-            onClick={() => setIsSettingsOpen((prev) => !prev)}
-          >
-            <Settings className="mr-1.5 h-3.5 w-3.5" />
-            <span>Settings</span>
-          </Button>
+            
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:block h-6 w-px bg-white/10" />
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Policy
+                </span>
+              </div>
+              <Select
+                value={jobPolicy}
+                onValueChange={(value) => handleJobPolicyChange(value as JobPolicy)}
+                disabled={isRunning || isDisabled}
+              >
+                <SelectTrigger className="w-32 h-10 text-xs bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
+                  <SelectValue placeholder="Policy" />
+                </SelectTrigger>
+                <SelectContent className="bg-surface/95 backdrop-blur-xl border-white/10">
+                  <SelectItem value="all" className="text-xs">
+                    All Public
+                  </SelectItem>
+                  <SelectItem value="mine" className="text-xs">
+                    Only Mine
+                  </SelectItem>
+                  <SelectItem value="project" className="text-xs">
+                    By Project
+                  </SelectItem>
+                  <SelectItem value="users" className="text-xs">
+                    By User
+                  </SelectItem>
+                  <SelectItem value="monetize" className="text-xs">
+                    Monetize
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       </header>
 
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={jobPolicy}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          transition={{ duration: 0.2 }}
+          className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-500 backdrop-blur-md shadow-lg shadow-amber-500/5"
+        >
+          <div className="p-2 rounded-lg bg-amber-500/20 border border-amber-500/30">
+            <PolicyIcon size={18} />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-black uppercase tracking-widest opacity-60">
+              Active Strategy
+            </span>
+            <span className="text-sm font-bold tracking-tight leading-none text-white/90">
+              {currentInfo.description}
+            </span>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
       <AnimatePresence>
-        {isSettingsOpen && (
+        {showSubSettings && (
           <motion.section
             key="settings-panel"
             initial={{ opacity: 0, height: 0 }}
@@ -268,7 +372,6 @@ export const Dashboard = memo(() => {
               <CardContent className="p-6 space-y-6">
                 <JobPolicySettings
                   jobPolicy={jobPolicyState}
-                  onJobPolicyChange={handleJobPolicyChange}
                   selectedProjects={selectedProjects}
                   onSelectedProjectsChange={setSelectedProjects}
                   selectedUsers={selectedUsers}
