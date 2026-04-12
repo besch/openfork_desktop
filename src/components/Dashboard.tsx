@@ -39,12 +39,12 @@ const policyInfo: Record<
   },
   project: {
     title: "Project",
-    description: "Authorized projects only",
+    description: "Share with authorized projects only",
     icon: Layout,
   },
   users: {
     title: "Users",
-    description: "Trusted collaborators only",
+    description: "Share with trusted collaborators only",
     icon: Users,
   },
   monetize: {
@@ -89,7 +89,7 @@ const StatCard = memo(
         </div>
       </CardHeader>
       <CardContent className="relative z-10 pb-3">
-        <div className="text-xl font-black tracking-tighter text-white drop-shadow-2xl">
+        <div className="text-xl font-black text-white drop-shadow-2xl">
           {value.toLocaleString()}
         </div>
       </CardContent>
@@ -212,7 +212,6 @@ const PowerButton = memo(
   },
 );
 
-
 export const Dashboard = memo(() => {
   const {
     status,
@@ -295,7 +294,7 @@ export const Dashboard = memo(() => {
               <StatusIndicator />
             </div>
           </div>
-            
+
           <div className="flex items-center gap-4">
             <div className="hidden sm:block h-6 w-px bg-white/10" />
             <div className="flex items-center gap-3">
@@ -306,7 +305,9 @@ export const Dashboard = memo(() => {
               </div>
               <Select
                 value={jobPolicy}
-                onValueChange={(value) => handleJobPolicyChange(value as JobPolicy)}
+                onValueChange={(value) =>
+                  handleJobPolicyChange(value as JobPolicy)
+                }
                 disabled={isRunning || isDisabled}
               >
                 <SelectTrigger className="w-32 h-10 text-xs bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
@@ -351,7 +352,7 @@ export const Dashboard = memo(() => {
             <span className="text-[10px] font-black uppercase tracking-widest opacity-60">
               Active Strategy
             </span>
-            <span className="text-sm font-bold tracking-tight leading-none text-white/90">
+            <span className="text-sm font-bold leading-none text-white/90">
               {currentInfo.description}
             </span>
           </div>

@@ -24,7 +24,7 @@ export function Auth() {
                 className="h-20 mx-auto relative z-10 drop-shadow-3xl"
               />
             </div>
-            <CardTitle className="text-3xl font-black tracking-tighter text-white mb-2">
+            <CardTitle className="text-3xl font-black text-white mb-2">
               Openfork Client
             </CardTitle>
           </CardHeader>

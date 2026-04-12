@@ -185,7 +185,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
               <Label className="text-[10px] font-black uppercase tracking-widest text-white/90">
                 Docker Backend
               </Label>
-              <p className="text-[9px] text-white/40 font-black uppercase tracking-tight leading-relaxed">
+              <p className="text-[9px] text-white/40 font-black uppercase leading-relaxed">
                 Choose which Windows Docker engine OpenFork should track in
                 Docker Management and use for client startup.
               </p>
@@ -222,7 +222,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
               </SelectContent>
             </Select>
 
-            <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
+            <p className="text-[9px] text-white/30 font-black uppercase leading-relaxed">
               {hasDesktopEngine && hasWslEngine
                 ? "Both Docker Desktop and the dedicated OpenFork WSL engine are available on this PC."
                 : hasDesktopEngine
@@ -240,7 +240,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
                   <RefreshCw className="h-3 w-3" />
                   Space Reclamation
                 </Label>
-                <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
+                <p className="text-[9px] text-white/30 font-black uppercase leading-relaxed">
                   Reclaim unused space from the WSL disk file.
                 </p>
               </div>
@@ -266,7 +266,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
                   <ArrowRightLeft className="h-3 w-3" />
                   Relocate Engine
                 </Label>
-                <p className="text-[9px] text-white/30 font-black uppercase tracking-tight leading-relaxed">
+                <p className="text-[9px] text-white/30 font-black uppercase leading-relaxed">
                   Reinstall the engine on another drive.{" "}
                   <span className="text-orange-400/80 italic">
                     Requires re-downloading images.

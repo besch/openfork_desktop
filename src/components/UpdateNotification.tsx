@@ -89,7 +89,7 @@ export function UpdateNotification() {
                   <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
                     <Sparkles size={16} />
                   </div>
-                  <h3 className="font-semibold text-lg leading-none tracking-tight">
+                  <h3 className="font-semibold text-lg leading-none">
                     {downloaded ? "Update Ready" : "New Version Available"}
                   </h3>
                 </div>

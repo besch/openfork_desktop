@@ -277,10 +277,10 @@ function App() {
                 className="h-10 drop-shadow-2xl"
               />
               <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tighter text-white leading-none">
+                <h1 className="text-2xl md:text-3xl font-black text-white leading-none">
                   Openfork Client
                 </h1>
-                <p className="text-[10px] md:text-xs text-white/70 mt-1 font-bold uppercase tracking-[0.15em]">
+                <p className="text-[10px] md:text-xs text-white/70 mt-1 font-bold uppercase tracking-widest">
                   Open-Source Peer-to-peer Engine for Video Collaboration
                 </p>
               </div>

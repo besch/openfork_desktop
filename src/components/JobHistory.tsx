@@ -151,7 +151,7 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
           <StatusBadge status={job.status} />
         </div>
         <p
-          className="text-[10px] text-white/70 line-clamp-1 mt-0.5 font-medium tracking-tight group-hover:text-white/90 transition-colors"
+          className="text-[10px] text-white/70 line-clamp-1 mt-0.5 font-medium group-hover:text-white/90 transition-colors"
           title={job.prompt || undefined}
         >
           {truncatePrompt(job.prompt)}

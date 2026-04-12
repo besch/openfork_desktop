@@ -231,7 +231,7 @@ export function DependencySetup({
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">
       <div className="max-w-2xl w-full space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-black bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent uppercase tracking-tighter">
+          <h1 className="text-3xl font-black bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent uppercase">
             System Setup
           </h1>
           <p className="text-muted-foreground">

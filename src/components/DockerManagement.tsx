@@ -356,7 +356,7 @@ export const DockerManagement = memo(() => {
         >
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5" />
-            <span className="text-sm font-bold tracking-tight uppercase">{error}</span>
+            <span className="text-sm font-bold uppercase">{error}</span>
           </div>
           <Button
             variant="ghost"
@@ -490,7 +490,7 @@ export const DockerManagement = memo(() => {
             <Container className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-black tracking-tighter text-white uppercase">
+            <h2 className="text-lg font-black text-white uppercase">
               Docker Management
             </h2>
             <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mt-0.5">
@@ -671,10 +671,10 @@ export const DockerManagement = memo(() => {
                   className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-[11px] text-white/90 truncate tracking-tight uppercase">
+                    <p className="font-black text-[11px] text-white/90 truncate uppercase">
                       {container.name}
                     </p>
-                    <p className="text-[10px] text-white/40 truncate font-bold uppercase tracking-tight mt-0.5">
+                    <p className="text-[10px] text-white/40 truncate font-bold uppercase mt-0.5">
                       {container.image}
                     </p>
                   </div>
@@ -756,10 +756,10 @@ export const DockerManagement = memo(() => {
                   className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-[11px] text-white/90 truncate tracking-tight uppercase">
+                    <p className="font-black text-[11px] text-white/90 truncate uppercase">
                       {image.repository}:{image.tag}
                     </p>
-                    <p className="text-[10px] text-white/40 font-bold uppercase tracking-tight flex items-center gap-2 mt-0.5">
+                    <p className="text-[10px] text-white/40 font-bold uppercase flex items-center gap-2 mt-0.5">
                       <span className="inline-flex items-center gap-1">
                         <HardDrive className="h-2.5 w-2.5" />
                         {image.size}

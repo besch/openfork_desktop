@@ -657,7 +657,7 @@ export function Monetize() {
                 {item.label}
               </p>
               <p
-                className={`text-2xl font-black tracking-tighter ${item.color} drop-shadow-2xl`}
+                className={`text-2xl font-black ${item.color} drop-shadow-2xl`}
               >
                 {item.value}
               </p>
