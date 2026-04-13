@@ -22,21 +22,17 @@ const communityOptions: {
   label: string;
   description: string;
 }[] = [
-  { value: "none", label: "Private", description: "Only my own jobs" },
+  { value: "none", label: "Private", description: "Only my own" },
+  { value: "all", label: "Public", description: "All public jobs" },
   {
     value: "trusted_users",
     label: "Trusted users",
-    description: "My jobs + selected users",
+    description: "Selected users",
   },
   {
     value: "trusted_projects",
     label: "Trusted projects",
-    description: "My jobs + selected projects",
-  },
-  {
-    value: "all",
-    label: "Public network",
-    description: "My jobs + all public jobs",
+    description: "Selected projects",
   },
 ];
 
@@ -50,7 +46,6 @@ export function JobPolicySettings({
 
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
-  // Track the last hydrated trustedIds to avoid redundant fetches
   const lastHydratedIds = useRef<string>("");
 
   useEffect(() => {
@@ -91,96 +86,97 @@ export function JobPolicySettings({
   }, [config.communityMode, config.trustedIds]);
 
   return (
-    <div className="space-y-5">
-      {/* Process own jobs toggle */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Label className="text-sm font-semibold text-white/90 tracking-normal">
+    <div className="space-y-4">
+      {/* Primary Policy Toggles */}
+      <div className="grid grid-cols-2 gap-x-8 pb-3 border-b border-white/5">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-semibold text-white/90 tracking-normal leading-tight">
             Process my own jobs first
           </Label>
-          <p className="text-[11px] text-white/70 mt-0.5 tracking-normal">
-            Pick up jobs you submitted before community jobs
-          </p>
-        </div>
-        <Switch
-          checked={config.processOwnJobs}
-          onCheckedChange={(v) => update({ processOwnJobs: v })}
-          disabled={disabled}
-        />
-      </div>
-
-      {/* Community mode selector */}
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold text-white/90 tracking-normal">
-          Community Jobs
-        </Label>
-        <div className="grid grid-cols-2 gap-2">
-          {communityOptions.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() =>
-                !disabled &&
-                update({ communityMode: opt.value, trustedIds: [] })
-              }
-              disabled={disabled}
-              className={`text-left px-3 py-2.5 rounded-lg border text-xs tracking-normal transition-all ${
-                config.communityMode === opt.value
-                  ? "border-amber-500/50 bg-amber-500/10 text-white"
-                  : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white/70"
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-            >
-              <span className="font-semibold block tracking-normal">
-                {opt.label}
-              </span>
-              <span className="text-[11px] opacity-70 block mt-0.5 leading-tight tracking-normal">
-                {opt.description}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Trusted target selectors — animate in when needed */}
-      {config.communityMode === "trusted_projects" && (
-        <div className="pl-3 border-l border-border/50">
-          <ProjectSelection
-            selectedProjects={selectedProjects}
-            onSelectedProjectsChange={(projects) =>
-              update({ trustedIds: projects.map((p) => p.id) })
-            }
+          <Switch
+            checked={config.processOwnJobs}
+            onCheckedChange={(v) => update({ processOwnJobs: v })}
             disabled={disabled}
           />
         </div>
-      )}
 
-      {config.communityMode === "trusted_users" && (
-        <div className="pl-3 border-l border-border/50">
-          <UserSelection
-            selectedUsers={selectedUsers}
-            onSelectedUsersChange={(users) =>
-              update({ trustedIds: users.map((u) => u.id) })
-            }
+        <div className="flex items-center justify-between">
+          <div>
+            <Label className="text-sm font-semibold text-white/90 tracking-normal">
+              Monetize mode
+            </Label>
+            <p className="text-[10px] text-white/50 mt-0.5 tracking-normal leading-tight">
+              Earn real money from paid jobs
+            </p>
+          </div>
+          <Switch
+            checked={config.monetizeMode}
+            onCheckedChange={(v) => update({ monetizeMode: v })}
             disabled={disabled}
           />
         </div>
-      )}
-
-      {/* Monetize toggle */}
-      <div className="flex items-center justify-between pt-1 border-t border-white/5">
-        <div>
-          <Label className="text-sm font-semibold text-white/90 tracking-normal">
-            Monetize mode
-          </Label>
-          <p className="text-[11px] text-white/70 mt-0.5 tracking-normal">
-            Earn real money — process only paid jobs
-          </p>
-        </div>
-        <Switch
-          checked={config.monetizeMode}
-          onCheckedChange={(v) => update({ monetizeMode: v })}
-          disabled={disabled}
-        />
       </div>
+
+      {/* Community — hidden when monetize is active */}
+      {!config.monetizeMode && (
+        <div className="space-y-3">
+          {/* Community mode selector */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-white/50 uppercase tracking-widest">
+              Community jobs
+            </Label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {communityOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() =>
+                    !disabled &&
+                    update({ communityMode: opt.value, trustedIds: [] })
+                  }
+                  disabled={disabled}
+                  className={`text-left px-2 py-1.5 rounded-lg border text-[10px] tracking-normal transition-all ${
+                    config.communityMode === opt.value
+                      ? "border-amber-500/50 bg-amber-500/10 text-white"
+                      : "border-white/10 bg-white/5 text-white/50 hover:border-white/20 hover:text-white/70"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  <span className="font-semibold block tracking-normal truncate">
+                    {opt.label}
+                  </span>
+                  <span className="text-[9px] opacity-60 block mt-0.5 leading-tight tracking-normal">
+                    {opt.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Trusted target selectors */}
+          {config.communityMode === "trusted_projects" && (
+            <div className="pl-3 border-l border-border/50">
+              <ProjectSelection
+                selectedProjects={selectedProjects}
+                onSelectedProjectsChange={(projects) =>
+                  update({ trustedIds: projects.map((p) => p.id) })
+                }
+                disabled={disabled}
+              />
+            </div>
+          )}
+
+          {config.communityMode === "trusted_users" && (
+            <div className="pl-3 border-l border-border/50">
+              <UserSelection
+                selectedUsers={selectedUsers}
+                onSelectedUsersChange={(users) =>
+                  update({ trustedIds: users.map((u) => u.id) })
+                }
+                disabled={disabled}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
