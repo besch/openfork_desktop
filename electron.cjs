@@ -474,7 +474,7 @@ ipcMain.handle("provider:update-config", async (event, providerId, routingConfig
   return new Promise((resolve) => {
     const request = net.request({
       method: "PATCH",
-      url: `${ORCHESTRATOR_API_URL}/api/dgn/provider/config`,
+      url: `${ORCHESTRATOR_API_URL}/api/dgn/provider/config?providerId=${encodeURIComponent(providerId)}`,
     });
     request.setHeader("Authorization", `Bearer ${session.access_token}`);
     request.setHeader("Content-Type", "application/json");

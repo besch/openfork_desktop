@@ -1,8 +1,10 @@
+import { useState, useEffect, useRef } from "react";
 import { ProjectSelection } from "./ProjectSelection";
 import { UserSelection } from "./UserSelection";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import type { Project, Profile, ProviderRoutingConfig, CommunityMode } from "@/types";
+import { supabase } from "@/supabase";
 
 interface JobPolicySettingsProps {
   config: ProviderRoutingConfig;
@@ -21,8 +23,47 @@ export function JobPolicySettings({ config, onChange, disabled }: JobPolicySetti
   const update = (patch: Partial<ProviderRoutingConfig>) =>
     onChange({ ...config, ...patch });
 
-  const selectedProjects: Project[] = [];
-  const selectedUsers: Profile[] = [];
+  const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
+  // Track the last hydrated trustedIds to avoid redundant fetches
+  const lastHydratedIds = useRef<string>("");
+
+  useEffect(() => {
+    const ids = config.trustedIds;
+    const idsKey = config.communityMode + ":" + ids.slice().sort().join(",");
+
+    if (idsKey === lastHydratedIds.current) return;
+    lastHydratedIds.current = idsKey;
+
+    if (ids.length === 0) {
+      setSelectedProjects([]);
+      setSelectedUsers([]);
+      return;
+    }
+
+    if (config.communityMode === "trusted_projects") {
+      setSelectedUsers([]);
+      supabase
+        .from("projects")
+        .select("id, title, slug, created_by, created_at, is_public")
+        .in("id", ids)
+        .then(({ data }) => {
+          setSelectedProjects((data as Project[]) ?? []);
+        });
+    } else if (config.communityMode === "trusted_users") {
+      setSelectedProjects([]);
+      supabase
+        .from("profiles")
+        .select("id, username")
+        .in("id", ids)
+        .then(({ data }) => {
+          setSelectedUsers((data as Profile[]) ?? []);
+        });
+    } else {
+      setSelectedProjects([]);
+      setSelectedUsers([]);
+    }
+  }, [config.communityMode, config.trustedIds]);
 
   return (
     <div className="space-y-5">
