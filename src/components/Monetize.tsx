@@ -373,7 +373,7 @@ export function Monetize() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
         <CardHeader className="pb-3 relative z-10">
           <CardTitle className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary text-white shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
+            <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
               <Gauge size={14} />
             </div>
             <span className="font-black tracking-widest uppercase text-[10px] text-white">
@@ -672,7 +672,7 @@ export function Monetize() {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
           <CardHeader className="pb-3 relative z-10">
             <CardTitle className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary text-white shadow-lg shadow-primary/20 flex items-center justify-center shrink-0">
+              <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
                 <Building2 size={16} />
               </div>
               <span className="font-black tracking-widest uppercase text-[10px] text-white">
@@ -775,7 +775,7 @@ export function Monetize() {
         <Card className="bg-surface/40 border-white/20 shadow-xl overflow-hidden group">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
+              <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/20 text-amber-500">
                 <ArrowDownToLine size={16} />
               </div>
               Withdraw Earnings
@@ -845,7 +845,7 @@ export function Monetize() {
         <Card className="bg-surface/40 border-white/20 shadow-xl overflow-hidden group">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary text-white shadow-sm shadow-primary/20">
+              <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/20 text-amber-500">
                 <DollarSign size={16} />
               </div>
               Recent Earnings

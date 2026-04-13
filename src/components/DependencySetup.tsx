@@ -257,11 +257,13 @@ export function DependencySetup({
           >
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-3 text-sm font-black uppercase tracking-widest text-white/90">
-                <img
-                  src="./logo.svg"
-                  alt=""
-                  className="h-4 w-4 brightness-0 invert opacity-80"
-                />
+                <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+                  <img
+                    src="./logo.svg"
+                    alt=""
+                    className="h-4 w-4 brightness-0 invert sepia(100%) saturate(10000%) hue-rotate(0deg) opacity-80"
+                  />
+                </div>
                 OpenFork Engine
                 {status?.docker.running ? (
                   <CheckCircle2 className="h-4 w-4 text-green-500 ml-auto" />
@@ -532,7 +534,9 @@ export function DependencySetup({
           >
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-3 text-sm font-black uppercase tracking-widest text-white/90">
-                <Cpu className="h-4 w-4" />
+                <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+                  <Cpu className="h-4 w-4" />
+                </div>
                 NVIDIA GPU
                 {status?.nvidia.available ? (
                   <CheckCircle2 className="h-4 w-4 text-green-500 ml-auto" />

@@ -138,33 +138,33 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-surface/40 border border-white/20 hover:border-white/30 hover:bg-surface/50 transition-all duration-500 group relative overflow-hidden shadow-sm">
-      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-      <div className="relative z-10 p-2 rounded-lg bg-white/5 border border-white/5 text-white/70 group-hover:text-white group-hover:scale-105 transition-all duration-500">
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-all duration-500 group relative overflow-hidden hover:bg-amber-500/20 shadow-sm">
+      <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+      <div className="relative z-10 p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/10 text-amber-500 group-hover:scale-105 transition-all duration-500">
         {getWorkflowIcon(job.workflow_type)}
       </div>
       <div className="relative z-10 flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-black text-[10px] tracking-widest text-white uppercase line-clamp-1">
+          <span className="font-black text-[11px] text-white/90 truncate uppercase tracking-wide line-clamp-1">
             {job.workflow_type?.replace(/_/g, " ") || "unknown workflow"}
           </span>
           <StatusBadge status={job.status} />
         </div>
         <p
-          className="text-[10px] text-white/70 line-clamp-1 mt-0.5 font-medium group-hover:text-white/90 transition-colors"
+          className="text-[10px] text-white/40 truncate font-bold uppercase mt-0.5 tracking-wide line-clamp-1 group-hover:text-white/60 transition-colors"
           title={job.prompt || undefined}
         >
           {truncatePrompt(job.prompt)}
         </p>
       </div>
       <div className="relative z-10 text-right shrink-0 flex flex-col justify-center">
-        <div className="text-[9px] font-black tracking-widest text-white/80 flex items-center justify-end group-hover:text-white transition-colors">
+        <div className="text-[9px] font-black tracking-wide text-white/90 flex items-center justify-end group-hover:text-white transition-colors uppercase">
           {job.user?.username ? (
             <a
               href={`https://openfork.video/${job.user.username}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-primary-active transition-colors cursor-pointer underline-offset-4 hover:underline"
+              className="hover:text-amber-400 transition-colors cursor-pointer underline-offset-4 hover:underline"
             >
               @{job.user.username.toUpperCase()}
             </a>
@@ -172,7 +172,7 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
             "UNKNOWN USER"
           )}
         </div>
-        <div className="text-[8px] font-black text-white/40 mt-0.5 uppercase tracking-[0.2em] flex items-center justify-end gap-2">
+        <div className="text-[8px] font-black text-white/40 mt-0.5 uppercase tracking-wide flex items-center justify-end gap-2">
           {job.duration_seconds && (
             <span className="flex items-center gap-1">
               <Clock size={8} className="opacity-50" />

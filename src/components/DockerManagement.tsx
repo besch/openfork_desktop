@@ -507,8 +507,8 @@ export const DockerManagement = memo(() => {
 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 flex items-center justify-center shrink-0">
-            <Container className="h-4 w-4 text-white" />
+          <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+            <Container className="h-4 w-4" />
           </div>
           <div>
             <h2 className="text-lg font-black text-white uppercase">
@@ -525,7 +525,7 @@ export const DockerManagement = memo(() => {
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 ${
                 diskSpaceError
                   ? "bg-destructive border border-destructive/50 text-white shadow-lg shadow-destructive/20"
-                  : "bg-primary border border-white/10 text-white shadow-lg shadow-primary/20"
+                  : "bg-black/40 border border-amber-500/20 text-amber-500 shadow-lg shadow-amber-500/20"
               }`}
             >
               <HardDrive className="h-3.5 w-3.5" />
@@ -554,7 +554,7 @@ export const DockerManagement = memo(() => {
           className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
+            <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
               <HardDrive className="h-4 w-4" />
             </div>
             <div className="text-left">

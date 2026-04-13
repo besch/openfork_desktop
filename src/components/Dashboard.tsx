@@ -36,7 +36,7 @@ const StatCard = memo(
         <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60">
           {title}
         </span>
-        <div className="p-2.5 rounded-lg bg-white/5 border border-white/5">
+        <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 shadow-sm shadow-amber-500/10 text-amber-500">
           {icon}
         </div>
       </div>
@@ -246,7 +246,7 @@ export const Dashboard = memo(() => {
         <StatCard
           title="In Queue"
           value={stats.pending}
-          icon={<Server size={20} className="text-muted-foreground" />}
+          icon={<Server size={20} />}
           className="text-yellow-400"
         />
         <StatCard
@@ -255,7 +255,7 @@ export const Dashboard = memo(() => {
           icon={
             <RefreshCw
               size={20}
-              className={`text-muted-foreground ${isProcessingAndRunning ? "animate-spin" : ""}`}
+              className={`${isProcessingAndRunning ? "animate-spin" : ""}`}
             />
           }
           className="text-blue-400"
@@ -263,13 +263,13 @@ export const Dashboard = memo(() => {
         <StatCard
           title="Completed"
           value={stats.completed}
-          icon={<CheckCircle size={20} className="text-muted-foreground" />}
+          icon={<CheckCircle size={20} />}
           className="text-green-400"
         />
         <StatCard
           title="Failed"
           value={stats.failed}
-          icon={<XCircle size={20} className="text-muted-foreground" />}
+          icon={<XCircle size={20} />}
           className="text-destructive-foreground"
         />
       </div>

@@ -86,7 +86,7 @@ export function UpdateNotification() {
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1.5 flex-1">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                  <div className="p-1.5 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/20 text-amber-500">
                     <Sparkles size={16} />
                   </div>
                   <h3 className="font-semibold text-lg leading-none">
