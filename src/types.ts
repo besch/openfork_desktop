@@ -59,7 +59,29 @@ export interface Project {
   slug: string;
 }
 
-export type JobPolicy = "all" | "mine" | "project" | "users" | "monetize";
+/** Community jobs this provider accepts alongside its own jobs. */
+export type CommunityMode = "none" | "trusted_users" | "trusted_projects" | "all";
+
+/**
+ * Unified provider routing config.
+ * Replaces the single JobPolicy enum with two orthogonal settings:
+ *   - processOwnJobs: poll own (mine-policy) jobs first
+ *   - communityMode: which community jobs to accept when idle
+ *   - monetizeMode: separate paid-job track
+ */
+export interface ProviderRoutingConfig {
+  processOwnJobs: boolean;
+  communityMode: CommunityMode;
+  trustedIds: string[]; // user IDs (trusted_users) or project IDs (trusted_projects)
+  monetizeMode: boolean;
+}
+
+export const DEFAULT_ROUTING_CONFIG: ProviderRoutingConfig = {
+  processOwnJobs: true,
+  communityMode: "none",
+  trustedIds: [],
+  monetizeMode: false,
+};
 
 export interface MonetizeWallet {
   pending_earnings_cents: number;

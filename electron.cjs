@@ -416,7 +416,7 @@ ipcMain.handle(
 
 ipcMain.on(
   "openfork_client:start",
-  async (event, service, policy, allowedIds) => {
+  async (event, service, routingConfig) => {
     if (!pythonManager || pythonManager.isRunning() || pendingClientStart) {
       return;
     }
@@ -455,17 +455,54 @@ ipcMain.on(
         }
       }
 
-      await pythonManager.start(service, policy, allowedIds);
+      await pythonManager.start(service, routingConfig);
 
-      // Wire up policy-aware disk cleanup now that the client is running
+      // Wire up disk cleanup (community mode informs cleanup policy)
       if (cleanupManager) {
-        cleanupManager.updatePolicy(policy);
+        const mode = routingConfig?.communityMode || "none";
+        const legacyPolicy = mode === "none" ? "mine" : mode === "all" ? "all" : "users";
+        cleanupManager.updatePolicy(legacyPolicy);
       }
     })().finally(() => {
       pendingClientStart = null;
     });
   },
 );
+
+ipcMain.handle("provider:update-config", async (event, providerId, routingConfig) => {
+  if (!session) return { success: false, error: "Not authenticated" };
+  return new Promise((resolve) => {
+    const request = net.request({
+      method: "PATCH",
+      url: `${ORCHESTRATOR_API_URL}/api/dgn/provider/config`,
+    });
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+    request.setHeader("Content-Type", "application/json");
+    let body = "";
+    request.on("response", (response) => {
+      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("end", () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          resolve({ success: response.statusCode < 400 });
+        }
+      });
+    });
+    request.on("error", (err) => {
+      console.error("provider:update-config error:", err.message);
+      resolve({ success: false, error: err.message });
+    });
+    const payload = {
+      process_own_jobs: routingConfig.processOwnJobs ?? false,
+      community_mode: routingConfig.communityMode ?? "none",
+      allowed_ids: routingConfig.trustedIds ?? [],
+      monetize_mode: routingConfig.monetizeMode ?? false,
+    };
+    request.write(JSON.stringify(payload));
+    request.end();
+  });
+});
 ipcMain.on("openfork_client:stop", () => {
   if (pythonManager) pythonManager.stop();
   if (cleanupManager) cleanupManager.resetPolicy();

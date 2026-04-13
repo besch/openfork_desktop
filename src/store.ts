@@ -5,11 +5,12 @@ import type {
   LogEntry,
   JobStats,
   Project,
-  JobPolicy,
+  ProviderRoutingConfig,
   DockerPullProgress,
   DependencyStatus,
   MonetizeWallet,
 } from "./types";
+import { DEFAULT_ROUTING_CONFIG } from "./types";
 import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
@@ -31,8 +32,7 @@ interface DGNClientState {
   projects: SearchProject[];
   selectedProjects: Project[];
   isLoading: boolean;
-  jobPolicy: JobPolicy;
-  allowedIds: string;
+  routingConfig: ProviderRoutingConfig;
   dockerPullProgress: DockerPullProgress | null;
   dependencyStatus: DependencyStatus | null;
   jobState: {
@@ -55,8 +55,7 @@ interface DGNClientState {
   subscribeToJobChanges: () => void;
   unsubscribeFromJobChanges: () => Promise<void>;
   setIsLoading: (loading: boolean) => void;
-  setSubscriptionPolicy: (policy: JobPolicy, ids: string) => Promise<void>;
-  setJobPolicy: (policy: JobPolicy) => void;
+  setRoutingConfig: (config: ProviderRoutingConfig) => Promise<void>;
   loadPersistentSettings: () => Promise<void>;
   savePersistentSettings: () => Promise<void>;
   setJobState: (state: {
@@ -121,8 +120,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   projects: [],
   selectedProjects: [],
   isLoading: true,
-  jobPolicy: "mine",
-  allowedIds: "",
+  routingConfig: DEFAULT_ROUTING_CONFIG,
   dockerPullProgress: null,
   dependencyStatus: null,
   jobState: createIdleJobState(),
@@ -158,11 +156,10 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setProviderId: (id) => set({ providerId: id }),
   clearLogs: () => set({ logs: [] }),
   setIsLoading: (loading) => set({ isLoading: loading }),
-  setJobPolicy: (policy) => set({ jobPolicy: policy }),
   setSelectedProjects: (projects) => set({ selectedProjects: projects }),
-  setSubscriptionPolicy: async (policy, ids) => {
+  setRoutingConfig: async (config) => {
     await get().unsubscribeFromJobChanges();
-    set({ jobPolicy: policy, allowedIds: ids });
+    set({ routingConfig: config });
     get().subscribeToJobChanges();
   },
   setSession: async (session) => {
@@ -245,15 +242,29 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     }
   },
   fetchStats: async () => {
-    const { session, jobPolicy, allowedIds } = get();
+    const { session, routingConfig } = get();
     if (!session?.user) {
       set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
       return;
     }
+    // Derive legacy policy string for the RPC (stats function still uses it)
+    const allowedIds = routingConfig.trustedIds.join(",");
+    let statsPolicy: string;
+    if (routingConfig.monetizeMode) {
+      statsPolicy = "monetize";
+    } else if (routingConfig.communityMode === "trusted_users") {
+      statsPolicy = "users";
+    } else if (routingConfig.communityMode === "trusted_projects") {
+      statsPolicy = "project";
+    } else if (routingConfig.communityMode === "all") {
+      statsPolicy = "all";
+    } else {
+      statsPolicy = "mine";
+    }
     try {
       const { data, error } = await supabase
         .rpc("fetch_dgn_job_stats_for_policy", {
-          p_policy: jobPolicy,
+          p_policy: statsPolicy,
           p_user_id: session.user.id,
           p_allowed_ids: allowedIds,
         })
@@ -269,16 +280,20 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     }
   },
   subscribeToJobChanges: () => {
-    const { session, fetchStats, jobSubscription, jobPolicy, allowedIds } =
-      get();
+    const { session, fetchStats, jobSubscription, routingConfig } = get();
     if (!session || !session.user || jobSubscription) {
       return;
     }
 
-    // For project/users policies, don't subscribe if there are no IDs.
-    if ((jobPolicy === "project" || jobPolicy === "users") && !allowedIds) {
+    const { communityMode, monetizeMode, processOwnJobs, trustedIds } = routingConfig;
+    const allowedIds = trustedIds.join(",");
+
+    // For trusted modes, don't subscribe if there are no IDs yet.
+    if (
+      (communityMode === "trusted_users" || communityMode === "trusted_projects") &&
+      trustedIds.length === 0
+    ) {
       set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
-      // Ensure no lingering subscription
       get().unsubscribeFromJobChanges();
       return;
     }
@@ -287,60 +302,47 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     let channelName: string;
     let postgresChangesOptions: JobRealtimeOptions;
 
-    switch (jobPolicy) {
-      case "mine":
-        channelName = `dgn-jobs-user-changes:${session.user.id}:${instanceId}`;
-        postgresChangesOptions = {
-          event: "*",
-          schema: "public",
-          table: "dgn_jobs",
-          filter: `user_id=eq.${session.user.id}`,
-        };
-        break;
-      case "project":
-        channelName = `dgn-jobs-project-changes:${allowedIds
-          .split(",")
-          .sort()
-          .join(",")}:${instanceId}`;
-        postgresChangesOptions = {
-          event: "*",
-          schema: "public",
-          table: "dgn_jobs",
-          filter: `project_id=in.(${allowedIds})`,
-        };
-        break;
-      case "users":
-        channelName = `dgn-jobs-users-changes:${allowedIds
-          .split(",")
-          .sort()
-          .join(",")}:${instanceId}`;
-        postgresChangesOptions = {
-          event: "*",
-          schema: "public",
-          table: "dgn_jobs",
-          filter: `user_id=in.(${allowedIds})`,
-        };
-        break;
-      case "all":
-        channelName = `dgn-jobs-all-changes:${instanceId}`;
-        postgresChangesOptions = {
-          event: "*",
-          schema: "public",
-          table: "dgn_jobs",
-        };
-        break;
-      case "monetize":
-        channelName = `dgn-jobs-monetize-changes:${instanceId}`;
-        postgresChangesOptions = {
-          event: "*",
-          schema: "public",
-          table: "dgn_jobs",
-          filter: `monetize_job=eq.true`,
-        };
-        break;
-      default:
-        // This case should not be reached if logic is correct
-        return;
+    if (monetizeMode) {
+      channelName = `dgn-jobs-monetize-changes:${instanceId}`;
+      postgresChangesOptions = {
+        event: "*",
+        schema: "public",
+        table: "dgn_jobs",
+        filter: `monetize_job=eq.true`,
+      };
+    } else if (communityMode === "trusted_projects") {
+      channelName = `dgn-jobs-project-changes:${trustedIds.sort().join(",")}:${instanceId}`;
+      postgresChangesOptions = {
+        event: "*",
+        schema: "public",
+        table: "dgn_jobs",
+        filter: `project_id=in.(${allowedIds})`,
+      };
+    } else if (communityMode === "trusted_users") {
+      channelName = `dgn-jobs-users-changes:${trustedIds.sort().join(",")}:${instanceId}`;
+      postgresChangesOptions = {
+        event: "*",
+        schema: "public",
+        table: "dgn_jobs",
+        filter: `user_id=in.(${allowedIds})`,
+      };
+    } else if (communityMode === "all") {
+      channelName = `dgn-jobs-all-changes:${instanceId}`;
+      postgresChangesOptions = {
+        event: "*",
+        schema: "public",
+        table: "dgn_jobs",
+      };
+    } else {
+      // communityMode === "none" — subscribe only to own jobs if processOwnJobs is set
+      if (!processOwnJobs) return;
+      channelName = `dgn-jobs-user-changes:${session.user.id}:${instanceId}`;
+      postgresChangesOptions = {
+        event: "*",
+        schema: "public",
+        table: "dgn_jobs",
+        filter: `user_id=eq.${session.user.id}`,
+      };
     }
 
     const channel = supabase
@@ -415,17 +417,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   loadPersistentSettings: async () => {
     try {
       const settings = await window.electronAPI.loadSettings();
-      if (settings) {
-        // Validate the loaded settings before applying them
-        const validatedJobPolicy: JobPolicy = (
-          ["all", "mine", "project", "users", "monetize"] as JobPolicy[]
-        ).includes(settings.jobPolicy as JobPolicy)
-          ? (settings.jobPolicy as JobPolicy)
-          : "mine";
-
-        set({
-          jobPolicy: validatedJobPolicy,
-        });
+      if (settings?.routingConfig) {
+        set({ routingConfig: { ...DEFAULT_ROUTING_CONFIG, ...settings.routingConfig } });
       }
     } catch (error) {
       console.error("Error loading persistent settings:", error);
@@ -433,10 +426,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   },
   savePersistentSettings: async () => {
     try {
-      const { jobPolicy } = get();
-      await window.electronAPI.saveSettings({
-        jobPolicy,
-      });
+      const { routingConfig } = get();
+      await window.electronAPI.saveSettings({ routingConfig });
     } catch (error) {
       console.error("Error saving persistent settings:", error);
     }

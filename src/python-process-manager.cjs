@@ -23,8 +23,7 @@ class PythonProcessManager {
 
     // Restart settings (stored when start() is called)
     this._lastService = null;
-    this._lastPolicy = null;
-    this._lastAllowedIds = null;
+    this._lastRoutingConfig = null;
     
     // Cleanup synchronization
     this._cleanupPromise = null;
@@ -239,7 +238,7 @@ class PythonProcessManager {
     this.authSubscription = subscription;
   }
 
-  async start(service, policy, allowedIds) {
+  async start(service, routingConfig) {
     if (!service) {
       console.error("Service type must be provided to start the DGN client.");
       this.mainWindow.webContents.send("openfork_client:log", {
@@ -278,21 +277,19 @@ class PythonProcessManager {
 
     // Store settings for restart capability
     this._lastService = service;
-    this._lastPolicy = policy;
-    this._lastAllowedIds = allowedIds;
+    this._lastRoutingConfig = routingConfig;
 
     const currentSession = data.session;
 
     const { command, args: initialArgs } = this.getPythonCommand();
-    const normalizedAllowedIds = Array.isArray(allowedIds)
-      ? allowedIds.map((id) => `${id}`.trim()).filter(Boolean)
-      : typeof allowedIds === "string"
-        ? allowedIds.split(",").map((id) => id.trim()).filter(Boolean)
-        : [];
 
     const dgnClientRootDir = app.isPackaged
       ? path.dirname(command)
       : path.join(__dirname, "..", "..", "client");
+
+    // Build CLI args from routingConfig
+    const rc = routingConfig || {};
+    const trustedIds = Array.isArray(rc.trustedIds) ? rc.trustedIds : [];
 
     // NOTE: tokens are NOT passed as CLI args (they would be visible in Task Manager).
     // Instead they are sent as the first stdin message immediately after spawn.
@@ -304,20 +301,24 @@ class PythonProcessManager {
       dgnClientRootDir,
       "--data-dir",
       this.userDataPath,
-      "--accept-policy",
-      policy,
+      "--community-mode",
+      rc.communityMode || "none",
       "--process-marker",
       "openfork_dgn_client_v1_marker",
     ];
 
-    if (
-      (policy === "project" || policy === "users") &&
-      normalizedAllowedIds.length > 0
-    ) {
-      args.push("--allowed-targets", normalizedAllowedIds.join(","));
+    if (rc.processOwnJobs) {
+      args.push("--process-own-jobs");
     }
 
-    if (policy === "monetize") {
+    if (
+      (rc.communityMode === "trusted_projects" || rc.communityMode === "trusted_users") &&
+      trustedIds.length > 0
+    ) {
+      args.push("--allowed-targets", trustedIds.join(","));
+    }
+
+    if (rc.monetizeMode) {
       args.push("--monetize-mode");
     }
 
@@ -733,9 +734,9 @@ class PythonProcessManager {
 
     // Start with the same settings
     console.log(
-      `Restarting Python client with service: ${this._lastService}, policy: ${this._lastPolicy}`
+      `Restarting Python client with service: ${this._lastService}`
     );
-    await this.start(this._lastService, this._lastPolicy, this._lastAllowedIds);
+    await this.start(this._lastService, this._lastRoutingConfig);
   }
 }
 

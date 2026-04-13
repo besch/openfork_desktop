@@ -9,6 +9,7 @@ import type {
   NvidiaStatus,
   ScheduleConfig,
   ScheduleStatus,
+  ProviderRoutingConfig,
 } from "./types";
 
 // Type for cleanup function returned by listeners
@@ -110,8 +111,9 @@ interface ElectronAPI {
   getOrchestratorApiUrl: () => Promise<string>;
 
   // DGN Client controls
-  startClient: (service: string, policy: string, allowedIds: string) => void;
+  startClient: (service: string, routingConfig: ProviderRoutingConfig) => void;
   stopClient: () => void;
+  updateProviderConfig: (providerId: string, routingConfig: ProviderRoutingConfig) => Promise<{ success: boolean; error?: string }>;
   cancelDownload: (serviceType: string) => void;
   cleanupProcesses: () => Promise<{ success: boolean; error?: string }>;
 

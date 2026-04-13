@@ -1,6 +1,6 @@
-import React, { useState, useCallback, memo, useMemo, useEffect } from "react";
+import React, { useCallback, memo, useEffect } from "react";
 import { useClientStore } from "@/store";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   CheckCircle,
   XCircle,
@@ -10,59 +10,11 @@ import {
   Play,
   Pause,
   RefreshCw,
-  Globe,
-  Lock,
-  Layout,
-  Users,
-  DollarSign,
 } from "lucide-react";
 
-import { type ComponentType } from "react";
-
-const policyInfo: Record<
-  JobPolicy,
-  {
-    title: string;
-    description: string;
-    icon: ComponentType<{ className?: string; size?: number | string }>;
-  }
-> = {
-  all: {
-    title: "Global",
-    description: "Share your GPU and use any GPU on the network",
-    icon: Globe,
-  },
-  mine: {
-    title: "Private",
-    description: "Reserved for your tasks only",
-    icon: Lock,
-  },
-  project: {
-    title: "Project",
-    description: "Share with authorized projects only",
-    icon: Layout,
-  },
-  users: {
-    title: "Users",
-    description: "Share with trusted collaborators only",
-    icon: Users,
-  },
-  monetize: {
-    title: "Monetize",
-    description: "Earn real money — paid by processed jobs",
-    icon: DollarSign,
-  },
-};
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobPolicySettings } from "./JobPolicySettings";
-import type { Project, Profile, JobPolicy } from "@/types";
+import type { ProviderRoutingConfig } from "@/types";
 
 const StatCard = memo(
   ({
@@ -80,19 +32,19 @@ const StatCard = memo(
       className={`relative overflow-hidden border-white/15 bg-surface/40 backdrop-blur-md ${className || ""}`}
     >
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-        <CardTitle className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60">
+      <div className="flex flex-row items-center justify-between space-y-0 pb-2 p-4 relative z-10">
+        <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60">
           {title}
-        </CardTitle>
+        </span>
         <div className="p-2.5 rounded-lg bg-white/5 border border-white/5">
           {icon}
         </div>
-      </CardHeader>
-      <CardContent className="relative z-10 pb-3">
+      </div>
+      <div className="relative z-10 px-4 pb-3">
         <div className="text-xl font-black text-white drop-shadow-2xl">
           {value.toLocaleString()}
         </div>
-      </CardContent>
+      </div>
     </Card>
   ),
 );
@@ -157,18 +109,9 @@ const PowerButton = memo(
     status: string;
   }) => {
     const buttonVariants = {
-      off: {
-        backgroundColor: "#22c55e", // Green
-        boxShadow: "0px 4px 15px rgba(34, 197, 94, 0.4)",
-      },
-      on: {
-        backgroundColor: "#ef4444", // Red
-        boxShadow: "0px 4px 15px rgba(239, 68, 68, 0.4)",
-      },
-      starting: {
-        backgroundColor: "#eab308", // Yellow
-        boxShadow: "0px 4px 15px rgba(234, 179, 8, 0.4)",
-      },
+      off: { backgroundColor: "#22c55e", boxShadow: "0px 4px 15px rgba(34, 197, 94, 0.4)" },
+      on: { backgroundColor: "#ef4444", boxShadow: "0px 4px 15px rgba(239, 68, 68, 0.4)" },
+      starting: { backgroundColor: "#eab308", boxShadow: "0px 4px 15px rgba(234, 179, 8, 0.4)" },
     };
 
     const iconAnimation = {
@@ -216,68 +159,46 @@ export const Dashboard = memo(() => {
   const {
     status,
     stats,
-    jobPolicy,
-    setSubscriptionPolicy,
-    setJobPolicy,
+    routingConfig,
+    setRoutingConfig,
     loadPersistentSettings,
     savePersistentSettings,
+    providerId,
   } = useClientStore();
-  // Subscribe to jobState for local status
   const jobState = useClientStore((state) => state.jobState);
 
-  const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
-
-  // Load persistent settings on component mount
   useEffect(() => {
     loadPersistentSettings();
   }, [loadPersistentSettings]);
 
-  // Use the job policy from the store instead of local state
-  const jobPolicyState = jobPolicy;
-
   const isRunning = status === "running" || status === "starting";
   const isDisabled = status === "starting" || status === "stopping";
-
-  const allowedIds = useMemo(() => {
-    if (jobPolicyState === "project") {
-      return selectedProjects.map((p) => p.id).join(",");
-    }
-    if (jobPolicyState === "users") {
-      return selectedUsers.map((u) => u.id).join(",");
-    }
-    return "";
-  }, [selectedProjects, selectedUsers, jobPolicyState]);
-
-  useEffect(() => {
-    setSubscriptionPolicy(jobPolicyState, allowedIds);
-  }, [jobPolicyState, allowedIds, setSubscriptionPolicy]);
 
   const handleToggle = useCallback(
     (checked: boolean) => {
       if (isDisabled) return;
-
       if (checked) {
-        window.electronAPI.startClient("auto", jobPolicy, allowedIds);
+        window.electronAPI.startClient("auto", routingConfig);
       } else {
         window.electronAPI.stopClient();
       }
     },
-    [isDisabled, jobPolicy, allowedIds],
+    [isDisabled, routingConfig],
   );
 
-  const handleJobPolicyChange = (policy: JobPolicy) => {
-    setJobPolicy(policy);
-    savePersistentSettings();
-  };
+  const handleRoutingConfigChange = useCallback(
+    async (newConfig: ProviderRoutingConfig) => {
+      await setRoutingConfig(newConfig);
+      savePersistentSettings();
+      // If the client is running, push the config update live (no restart needed)
+      if (isRunning && providerId) {
+        window.electronAPI.updateProviderConfig(providerId, newConfig);
+      }
+    },
+    [setRoutingConfig, savePersistentSettings, isRunning, providerId],
+  );
 
-  const isProcessingAndRunning =
-    status === "running" && jobState.status === "processing";
-
-  const showSubSettings = jobPolicy === "project" || jobPolicy === "users";
-
-  const currentInfo = policyInfo[jobPolicy];
-  const PolicyIcon = currentInfo.icon;
+  const isProcessingAndRunning = status === "running" && jobState.status === "processing";
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -295,94 +216,31 @@ export const Dashboard = memo(() => {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:block">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                  Job Execution Policy
-                </span>
-              </div>
-              <Select
-                value={jobPolicy}
-                onValueChange={(value) =>
-                  handleJobPolicyChange(value as JobPolicy)
-                }
-                disabled={isRunning || isDisabled}
+          {isRunning && (
+            <AnimatePresence>
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[10px] font-black uppercase tracking-widest text-emerald-400/60"
               >
-                <SelectTrigger className="w-32 h-10 text-xs bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
-                  <SelectValue placeholder="Policy" />
-                </SelectTrigger>
-                <SelectContent className="bg-surface/95 backdrop-blur-xl border-white/10">
-                  <SelectItem value="all" className="text-xs">
-                    All Public
-                  </SelectItem>
-                  <SelectItem value="mine" className="text-xs">
-                    Only Mine
-                  </SelectItem>
-                  <SelectItem value="project" className="text-xs">
-                    By Project
-                  </SelectItem>
-                  <SelectItem value="users" className="text-xs">
-                    By User
-                  </SelectItem>
-                  <SelectItem value="monetize" className="text-xs">
-                    Monetize
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+                Settings apply live
+              </motion.span>
+            </AnimatePresence>
+          )}
         </div>
       </header>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={jobPolicy}
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 10 }}
-          transition={{ duration: 0.2 }}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-500 backdrop-blur-md shadow-lg shadow-amber-500/5"
-        >
-          <div className="p-2 rounded-lg bg-amber-500/20 border border-amber-500/30">
-            <PolicyIcon size={18} />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] font-black uppercase tracking-widest opacity-60">
-              Active Strategy
-            </span>
-            <span className="text-sm font-bold leading-none text-white/90">
-              {currentInfo.description}
-            </span>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showSubSettings && (
-          <motion.section
-            key="settings-panel"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="overflow-hidden"
-          >
-            <Card className="bg-card/50 backdrop-blur-sm border-white/10">
-              <CardContent className="p-6 space-y-6">
-                <JobPolicySettings
-                  jobPolicy={jobPolicyState}
-                  selectedProjects={selectedProjects}
-                  onSelectedProjectsChange={setSelectedProjects}
-                  selectedUsers={selectedUsers}
-                  onSelectedUsersChange={setSelectedUsers}
-                  disabled={isRunning || isDisabled}
-                />
-              </CardContent>
-            </Card>
-          </motion.section>
-        )}
-      </AnimatePresence>
+      {/* Routing config panel — always visible, not disabled while running */}
+      <Card className="bg-card/50 backdrop-blur-sm border-white/10">
+        <CardContent className="p-6">
+          <JobPolicySettings
+            config={routingConfig}
+            onChange={handleRoutingConfigChange}
+            disabled={isDisabled}
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -397,9 +255,7 @@ export const Dashboard = memo(() => {
           icon={
             <RefreshCw
               size={20}
-              className={`text-muted-foreground ${
-                isProcessingAndRunning ? "animate-spin" : ""
-              }`}
+              className={`text-muted-foreground ${isProcessingAndRunning ? "animate-spin" : ""}`}
             />
           }
           className="text-blue-400"
