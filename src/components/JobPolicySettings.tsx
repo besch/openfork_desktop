@@ -134,16 +134,16 @@ export function JobPolicySettings({
                     update({ communityMode: opt.value, trustedIds: [] })
                   }
                   disabled={disabled}
-                  className={`text-left px-2 py-1.5 rounded-lg border text-[10px] tracking-normal transition-all ${
+                  className={`text-left px-2 py-1.5 rounded-lg border text-xs tracking-normal transition-all ${
                     config.communityMode === opt.value
                       ? "border-amber-500/50 bg-amber-500/10 text-white"
                       : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white/70"
                   } disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
-                  <span className="font-semibold block tracking-normal truncate">
+                  <span className="font-semibold block tracking-wider uppercase truncate">
                     {opt.label}
                   </span>
-                  <span className="text-[9px] opacity-60 block mt-0.5 leading-tight tracking-normal">
+                  <span className="text-[10px] opacity-60 block mt-0.5 leading-tight tracking-normal">
                     {opt.description}
                   </span>
                 </button>
