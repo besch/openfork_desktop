@@ -554,7 +554,7 @@ export const DockerManagement = memo(() => {
           className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white group-hover:scale-110 transition-transform duration-500 flex items-center justify-center shrink-0">
+            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
               <HardDrive className="h-4 w-4" />
             </div>
             <div className="text-left">
@@ -600,11 +600,11 @@ export const DockerManagement = memo(() => {
 
       {/* Download Progress Card */}
       {isDownloading && (
-        <Card className="relative overflow-hidden group transition-all duration-500 border-white/20 bg-primary/5 backdrop-blur-xl shadow-2xl shadow-primary/10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-primary)_15%,transparent),transparent)]" />
+        <Card className="relative overflow-hidden group transition-all duration-500 border-amber-500/50 bg-amber-500/10 backdrop-blur-xl shadow-2xl shadow-amber-500/10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-amber-500)_15%,transparent),transparent)]" />
           <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-2">
             <CardTitle className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/40 text-white flex items-center justify-center shrink-0">
+              <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
                 <Download className="h-4 w-4 animate-bounce" />
               </div>
               <div>
@@ -633,7 +633,7 @@ export const DockerManagement = memo(() => {
               </div>
               <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
                 <motion.div
-                  className="absolute inset-y-0 left-0 bg-primary rounded-full overflow-hidden"
+                  className="absolute inset-y-0 left-0 bg-amber-500 rounded-full overflow-hidden"
                   initial={{ width: 0 }}
                   animate={{ width: `${dockerPullProgress?.progress || 0}%` }}
                   transition={{ duration: 0.5, ease: "backOut" }}
@@ -651,8 +651,8 @@ export const DockerManagement = memo(() => {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
         <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
           <CardTitle className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
-              <Container className="h-4 w-4 text-white" />
+            <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+              <Container className="h-4 w-4" />
             </div>
             <div>
               <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
@@ -677,13 +677,13 @@ export const DockerManagement = memo(() => {
               {containers.map((container) => (
                 <div
                   key={container.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/[0.08] transition-all duration-500 group/row"
+                  className="flex items-center justify-between p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-all duration-500 group/row hover:bg-amber-500/20"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-[11px] text-white/90 truncate uppercase">
+                    <p className="font-black text-[11px] text-white/90 truncate uppercase tracking-wide">
                       {container.name}
                     </p>
-                    <p className="text-[10px] text-white/40 truncate font-bold uppercase mt-0.5">
+                    <p className="text-[10px] text-white/40 truncate font-bold uppercase mt-0.5 tracking-wide">
                       {container.image}
                     </p>
                   </div>
@@ -728,7 +728,7 @@ export const DockerManagement = memo(() => {
         )}
         <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
           <CardTitle className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary border border-white/10 shadow-lg shadow-primary/30 text-white flex items-center justify-center shrink-0">
+            <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
               <HardDrive className="h-5 w-5" />
             </div>
             <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
@@ -762,13 +762,13 @@ export const DockerManagement = memo(() => {
               {images.map((image) => (
                 <div
                   key={image.id}
-                  className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-white/5 hover:border-primary/30 hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-2.5 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-colors hover:bg-amber-500/20"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-[11px] text-white/90 truncate uppercase">
+                    <p className="font-black text-[11px] text-white/90 truncate uppercase tracking-wide">
                       {image.repository}:{image.tag}
                     </p>
-                    <p className="text-[10px] text-white/40 font-bold uppercase flex items-center gap-2 mt-0.5">
+                    <p className="text-[10px] text-white/40 font-bold uppercase flex items-center gap-2 mt-0.5 tracking-wide">
                       <span className="inline-flex items-center gap-1">
                         <HardDrive className="h-2.5 w-2.5" />
                         {image.size}
