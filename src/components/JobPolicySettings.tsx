@@ -123,7 +123,7 @@ export function JobPolicySettings({
           {/* Community mode selector */}
           <div className="space-y-1.5">
             <Label className="text-xs text-white/50 uppercase tracking-widest">
-              Community jobs
+              Job Execution Policy
             </Label>
             <div className="grid grid-cols-4 gap-1.5">
               {communityOptions.map((opt) => (
@@ -137,7 +137,7 @@ export function JobPolicySettings({
                   className={`text-left px-2 py-1.5 rounded-lg border text-[10px] tracking-normal transition-all ${
                     config.communityMode === opt.value
                       ? "border-amber-500/50 bg-amber-500/10 text-white"
-                      : "border-white/10 bg-white/5 text-white/50 hover:border-white/20 hover:text-white/70"
+                      : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white/70"
                   } disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
                   <span className="font-semibold block tracking-normal truncate">
