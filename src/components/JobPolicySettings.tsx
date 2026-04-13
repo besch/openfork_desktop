@@ -3,7 +3,12 @@ import { ProjectSelection } from "./ProjectSelection";
 import { UserSelection } from "./UserSelection";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import type { Project, Profile, ProviderRoutingConfig, CommunityMode } from "@/types";
+import type {
+  Project,
+  Profile,
+  ProviderRoutingConfig,
+  CommunityMode,
+} from "@/types";
 import { supabase } from "@/supabase";
 
 interface JobPolicySettingsProps {
@@ -12,14 +17,34 @@ interface JobPolicySettingsProps {
   disabled?: boolean;
 }
 
-const communityOptions: { value: CommunityMode; label: string; description: string }[] = [
+const communityOptions: {
+  value: CommunityMode;
+  label: string;
+  description: string;
+}[] = [
   { value: "none", label: "Private", description: "Only my own jobs" },
-  { value: "trusted_users", label: "Trusted users", description: "My jobs + selected users" },
-  { value: "trusted_projects", label: "Trusted projects", description: "My jobs + selected projects" },
-  { value: "all", label: "Public network", description: "My jobs + all public jobs" },
+  {
+    value: "trusted_users",
+    label: "Trusted users",
+    description: "My jobs + selected users",
+  },
+  {
+    value: "trusted_projects",
+    label: "Trusted projects",
+    description: "My jobs + selected projects",
+  },
+  {
+    value: "all",
+    label: "Public network",
+    description: "My jobs + all public jobs",
+  },
 ];
 
-export function JobPolicySettings({ config, onChange, disabled }: JobPolicySettingsProps) {
+export function JobPolicySettings({
+  config,
+  onChange,
+  disabled,
+}: JobPolicySettingsProps) {
   const update = (patch: Partial<ProviderRoutingConfig>) =>
     onChange({ ...config, ...patch });
 
@@ -70,8 +95,10 @@ export function JobPolicySettings({ config, onChange, disabled }: JobPolicySetti
       {/* Process own jobs toggle */}
       <div className="flex items-center justify-between">
         <div>
-          <Label className="text-sm font-semibold text-white/90">Process my own jobs first</Label>
-          <p className="text-[11px] text-white/40 mt-0.5">
+          <Label className="text-sm font-semibold text-white/90 tracking-normal">
+            Process my own jobs first
+          </Label>
+          <p className="text-[11px] text-white/70 mt-0.5 tracking-normal">
             Pick up jobs you submitted before community jobs
           </p>
         </div>
@@ -84,21 +111,30 @@ export function JobPolicySettings({ config, onChange, disabled }: JobPolicySetti
 
       {/* Community mode selector */}
       <div className="space-y-2">
-        <Label className="text-sm font-semibold text-white/90">Community jobs</Label>
+        <Label className="text-sm font-semibold text-white/90 tracking-normal">
+          Community Jobs
+        </Label>
         <div className="grid grid-cols-2 gap-2">
           {communityOptions.map((opt) => (
             <button
               key={opt.value}
-              onClick={() => !disabled && update({ communityMode: opt.value, trustedIds: [] })}
+              onClick={() =>
+                !disabled &&
+                update({ communityMode: opt.value, trustedIds: [] })
+              }
               disabled={disabled}
-              className={`text-left px-3 py-2.5 rounded-lg border text-xs transition-all ${
+              className={`text-left px-3 py-2.5 rounded-lg border text-xs tracking-normal transition-all ${
                 config.communityMode === opt.value
                   ? "border-amber-500/50 bg-amber-500/10 text-white"
-                  : "border-white/10 bg-white/5 text-white/50 hover:border-white/20 hover:text-white/70"
+                  : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white/70"
               } disabled:opacity-40 disabled:cursor-not-allowed`}
             >
-              <span className="font-semibold block">{opt.label}</span>
-              <span className="text-[10px] opacity-60">{opt.description}</span>
+              <span className="font-semibold block tracking-normal">
+                {opt.label}
+              </span>
+              <span className="text-[11px] opacity-70 block mt-0.5 leading-tight tracking-normal">
+                {opt.description}
+              </span>
             </button>
           ))}
         </div>
@@ -132,8 +168,10 @@ export function JobPolicySettings({ config, onChange, disabled }: JobPolicySetti
       {/* Monetize toggle */}
       <div className="flex items-center justify-between pt-1 border-t border-white/5">
         <div>
-          <Label className="text-sm font-semibold text-white/90">Monetize mode</Label>
-          <p className="text-[11px] text-white/40 mt-0.5">
+          <Label className="text-sm font-semibold text-white/90 tracking-normal">
+            Monetize mode
+          </Label>
+          <p className="text-[11px] text-white/70 mt-0.5 tracking-normal">
             Earn real money — process only paid jobs
           </p>
         </div>
