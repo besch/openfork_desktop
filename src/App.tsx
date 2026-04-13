@@ -331,10 +331,10 @@ function App() {
                 icon={LayoutDashboard}
                 label="Dashboard"
               />
-              <TabTrigger value="chart" icon={BarChartIcon} label="Chart" />
               <TabTrigger value="docker" icon={Container} label="Docker" />
-              <TabTrigger value="history" icon={History} label="History" />
               <TabTrigger value="monetize" icon={DollarSign} label="Monetize" />
+              <TabTrigger value="history" icon={History} label="History" />
+              <TabTrigger value="chart" icon={BarChartIcon} label="Chart" />
               <TabTrigger value="logs" icon={Terminal} label="Logs" />
             </TabsList>
 

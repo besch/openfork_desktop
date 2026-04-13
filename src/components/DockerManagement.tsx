@@ -55,45 +55,43 @@ export const DockerManagement = memo(() => {
   const [showStorageSettings, setShowStorageSettings] = useState(false);
   const [showCompactionBanner, setShowCompactionBanner] = useState(false);
   const [compacting, setCompacting] = useState(false);
-  const [compactionResult, setCompactionResult] = useState<
-    { ok: boolean; message: string } | null
-  >(null);
+  const [compactionResult, setCompactionResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
   );
   const status = useClientStore((state) => state.status);
 
-  const describeDockerState = useCallback(
-    (nextStatus: DockerStatus) => {
-      if (nextStatus.error === "DOCKER_WINDOWS_CONTAINERS") {
-        if (nextStatus.availableEngines?.wsl) {
-          return "Docker Desktop is running Windows containers. Switch it to Linux containers, or change OpenFork to the OpenFork WSL backend below.";
-        }
-
-        return "Docker Desktop is running Windows containers. Switch it to Linux containers to use OpenFork.";
+  const describeDockerState = useCallback((nextStatus: DockerStatus) => {
+    if (nextStatus.error === "DOCKER_WINDOWS_CONTAINERS") {
+      if (nextStatus.availableEngines?.wsl) {
+        return "Docker Desktop is running Windows containers. Switch it to Linux containers, or change OpenFork to the OpenFork WSL backend below.";
       }
 
-      if (nextStatus.error === "DOCKER_PERMISSION_DENIED") {
-        return "Docker is installed, but your user cannot access the Docker socket yet. Log out and back in, then retry.";
+      return "Docker Desktop is running Windows containers. Switch it to Linux containers to use OpenFork.";
+    }
+
+    if (nextStatus.error === "DOCKER_PERMISSION_DENIED") {
+      return "Docker is installed, but your user cannot access the Docker socket yet. Log out and back in, then retry.";
+    }
+
+    if (nextStatus.error === "DOCKER_API_UNREACHABLE") {
+      return "OpenFork detected the WSL Docker daemon, but its API is not reachable from Windows yet.";
+    }
+
+    if (nextStatus.error === "WSL_DISTRO_MISSING") {
+      if (nextStatus.availableEngines?.desktop) {
+        return "The OpenFork WSL distro is missing. Switch OpenFork to Docker Desktop below, or reinstall the local engine.";
       }
 
-      if (nextStatus.error === "DOCKER_API_UNREACHABLE") {
-        return "OpenFork detected the WSL Docker daemon, but its API is not reachable from Windows yet.";
-      }
+      return "The OpenFork WSL distro is missing. Reinstall the local engine to restore Docker access.";
+    }
 
-      if (nextStatus.error === "WSL_DISTRO_MISSING") {
-        if (nextStatus.availableEngines?.desktop) {
-          return "The OpenFork WSL distro is missing. Switch OpenFork to Docker Desktop below, or reinstall the local engine.";
-        }
-
-        return "The OpenFork WSL distro is missing. Reinstall the local engine to restore Docker access.";
-      }
-
-      return "Docker is not ready right now.";
-    },
-    [],
-  );
+    return "Docker is not ready right now.";
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -380,9 +378,9 @@ export const DockerManagement = memo(() => {
                   Reclaim physical disk space
                 </p>
                 <p className="text-xs text-amber-300/70">
-                  Docker images were removed but the WSL disk file (VHDX) doesn't
-                  shrink automatically. Compact it to recover space on Windows.
-                  This requires stopping the engine and UAC elevation.
+                  Docker images were removed but the WSL disk file (VHDX)
+                  doesn't shrink automatically. Compact it to recover space on
+                  Windows. This requires stopping the engine and UAC elevation.
                 </p>
                 {compactionResult && (
                   <p
@@ -404,27 +402,50 @@ export const DockerManagement = memo(() => {
                     const result = await window.electronAPI.reclaimDiskSpace();
                     setCompacting(false);
                     if (result.success) {
-                      setCompactionResult({ ok: true, message: "Compaction complete — space reclaimed." });
+                      setCompactionResult({
+                        ok: true,
+                        message: "Compaction complete — space reclaimed.",
+                      });
                       // Refresh disk space display
-                      const diskResult = await window.electronAPI.getDiskSpace();
+                      const diskResult =
+                        await window.electronAPI.getDiskSpace();
                       if (diskResult.success) setDiskSpace(diskResult.data);
                     } else if (result.error === "CLIENT_RUNNING") {
-                      setCompactionResult({ ok: false, message: result.message || "Stop the engine first." });
+                      setCompactionResult({
+                        ok: false,
+                        message: result.message || "Stop the engine first.",
+                      });
                     } else if (result.error === "NOT_WSL_MODE") {
-                      setCompactionResult({ ok: false, message: "Not applicable — using Docker Desktop." });
+                      setCompactionResult({
+                        ok: false,
+                        message: "Not applicable — using Docker Desktop.",
+                      });
                     } else {
-                      setCompactionResult({ ok: false, message: result.message || result.error || "Compaction failed." });
+                      setCompactionResult({
+                        ok: false,
+                        message:
+                          result.message ||
+                          result.error ||
+                          "Compaction failed.",
+                      });
                     }
                   }}
                 >
-                  {compacting ? <Loader size="xs" className="mr-1" /> : <HardDrive className="h-3 w-3 mr-1" />}
+                  {compacting ? (
+                    <Loader size="xs" className="mr-1" />
+                  ) : (
+                    <HardDrive className="h-3 w-3 mr-1" />
+                  )}
                   Compact Now
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   className="h-8 w-8 p-0 text-amber-300/60 hover:text-amber-300"
-                  onClick={() => { setShowCompactionBanner(false); setCompactionResult(null); }}
+                  onClick={() => {
+                    setShowCompactionBanner(false);
+                    setCompactionResult(null);
+                  }}
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -524,19 +545,6 @@ export const DockerManagement = memo(() => {
               className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
             />
           </Button>
-          <Button
-            variant="destructive"
-            onClick={handlePurgeOpenFork}
-            disabled={actionLoading !== null}
-            className="rounded-lg h-8 text-[10px] font-black uppercase tracking-widest px-4"
-          >
-            {actionLoading === "purge-openfork" ? (
-              <Loader size="xs" className="mr-2" />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5 mr-2" />
-            )}
-            Purge All
-          </Button>
         </div>
       </header>
 
@@ -601,7 +609,8 @@ export const DockerManagement = memo(() => {
               </div>
               <div>
                 <span className="font-black text-xs uppercase tracking-widest text-white">
-                  {dockerPullProgress?.status || "Downloading"} {dockerPullProgress?.image}
+                  {dockerPullProgress?.status || "Downloading"}{" "}
+                  {dockerPullProgress?.image}
                 </span>
               </div>
             </CardTitle>
@@ -739,15 +748,15 @@ export const DockerManagement = memo(() => {
               ) : (
                 <Trash2 className="h-3.5 w-3.5 mr-2" />
               )}
-              Purge Sync
+              Delete All Docker Images
             </Button>
           )}
         </CardHeader>
         <CardContent className="px-4 pb-4">
           {images.length === 0 ? (
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/20 text-center py-8">
-                No OpenFork Docker images found
-              </p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-white/20 text-center py-8">
+              No OpenFork Docker images found
+            </p>
           ) : (
             <div className="space-y-2">
               {images.map((image) => (
