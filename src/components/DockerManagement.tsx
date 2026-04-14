@@ -289,28 +289,28 @@ export const DockerManagement = memo(() => {
     );
   };
 
-  const handlePurgeOpenFork = () => {
-    showConfirmDialog(
-      "Purge All Data",
-      "This will surgically remove ALL OpenFork containers, images, and associated volumes. It is the most reliable way to recover space without affecting your other Docker projects. Large images will need re-downloading if needed again. Proceed?",
-      async () => {
-        setActionLoading("purge-openfork");
-        try {
-          const result = await window.electronAPI.purgeOpenForkData();
-          if (result.success) {
-            await fetchData();
-            // Refresh disk space after purge
-            const diskResult = await window.electronAPI.getDiskSpace();
-            if (diskResult.success) setDiskSpace(diskResult.data);
-          } else {
-            setError(result.error || "Failed to purge OpenFork data");
-          }
-        } finally {
-          setActionLoading(null);
-        }
-      },
-    );
-  };
+  // const handlePurgeOpenFork = () => {
+  //   showConfirmDialog(
+  //     "Purge All Data",
+  //     "This will surgically remove ALL OpenFork containers, images, and associated volumes. It is the most reliable way to recover space without affecting your other Docker projects. Large images will need re-downloading if needed again. Proceed?",
+  //     async () => {
+  //       setActionLoading("purge-openfork");
+  //       try {
+  //         const result = await window.electronAPI.purgeOpenForkData();
+  //         if (result.success) {
+  //           await fetchData();
+  //           // Refresh disk space after purge
+  //           const diskResult = await window.electronAPI.getDiskSpace();
+  //           if (diskResult.success) setDiskSpace(diskResult.data);
+  //         } else {
+  //           setError(result.error || "Failed to purge OpenFork data");
+  //         }
+  //       } finally {
+  //         setActionLoading(null);
+  //       }
+  //     },
+  //   );
+  // };
 
   const isDownloading =
     dockerPullProgress !== null &&
