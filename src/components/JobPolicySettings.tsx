@@ -95,7 +95,7 @@ export function JobPolicySettings({
           </Label>
           <Switch
             checked={config.processOwnJobs}
-            onCheckedChange={(v) => update({ processOwnJobs: v })}
+            onCheckedChange={(v: boolean) => update({ processOwnJobs: v })}
             disabled={disabled}
           />
         </div>
@@ -111,7 +111,7 @@ export function JobPolicySettings({
           </div>
           <Switch
             checked={config.monetizeMode}
-            onCheckedChange={(v) => update({ monetizeMode: v })}
+            onCheckedChange={(v: boolean) => update({ monetizeMode: v })}
             disabled={disabled}
           />
         </div>
