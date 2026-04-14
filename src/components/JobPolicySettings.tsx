@@ -131,7 +131,11 @@ export function JobPolicySettings({
                   key={opt.value}
                   onClick={() =>
                     !disabled &&
-                    update({ communityMode: opt.value, trustedIds: [] })
+                    update({
+                      communityMode: opt.value,
+                      trustedIds: [],
+                      ...(opt.value === "none" && { processOwnJobs: true }),
+                    })
                   }
                   disabled={disabled}
                   className={`text-left px-2 py-1.5 rounded-lg border text-xs tracking-normal transition-all ${
