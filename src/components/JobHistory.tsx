@@ -452,7 +452,7 @@ export const JobHistory = memo(() => {
   if (loading && jobs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px] gap-4">
-        <Loader size="lg" variant="white" />
+        <Loader size="lg" variant="primary" />
         <span className="text-muted-foreground font-medium animate-pulse">
           Synchronizing your work history...
         </span>
