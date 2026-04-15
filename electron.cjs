@@ -2022,9 +2022,16 @@ async function runElevatedPowerShell(scriptPath, args = []) {
     ];
 
     // Use PowerShell array literal syntax @('arg1', 'arg2') for -ArgumentList.
-    // This is much more robust than a single string with nested quotes.
+    // IMPORTANT: Start-Process -ArgumentList joins array elements with spaces when
+    // constructing the child process command line. Any argument that contains spaces
+    // (e.g. the script path under "C:\...\Openfork Client\resources\...") must be
+    // wrapped in embedded double-quotes so the child powershell.exe sees it as one token.
     const argumentArray = innerArgs
-      .map((arg) => `'${arg.toString().replace(/'/g, "''")}'`)
+      .map((arg) => {
+        const s = arg.toString().replace(/'/g, "''");
+        // Embed double-quotes inside the PS single-quoted string for args with spaces
+        return s.includes(" ") ? `'"${s}"'` : `'${s}'`;
+      })
       .join(", ");
 
     // Use -PassThru to capture the process object and check ExitCode after -Wait.
