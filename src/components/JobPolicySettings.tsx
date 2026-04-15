@@ -22,17 +22,22 @@ const communityOptions: {
   label: string;
   description: string;
 }[] = [
-  { value: "none", label: "Private", description: "Only my own" },
-  { value: "all", label: "Public", description: "All public jobs" },
+  { value: "none", label: "Private", description: "Process only my own jobs" },
+  {
+    value: "all",
+    label: "Public",
+    description:
+      "Process public jobs and get your jobs processed by other clients",
+  },
   {
     value: "trusted_users",
     label: "Trusted users",
-    description: "Selected users",
+    description: "Process jobs for trusted users",
   },
   {
     value: "trusted_projects",
     label: "Trusted projects",
-    description: "Selected projects",
+    description: "Process jobs for trusted projects",
   },
 ];
 
@@ -147,7 +152,7 @@ export function JobPolicySettings({
                   <span className="font-semibold block tracking-wider uppercase truncate">
                     {opt.label}
                   </span>
-                  <span className="text-[10px] opacity-60 block mt-0.5 leading-tight tracking-normal">
+                  <span className="text-[10px] block mt-0.5 leading-tight tracking-normal">
                     {opt.description}
                   </span>
                 </button>
