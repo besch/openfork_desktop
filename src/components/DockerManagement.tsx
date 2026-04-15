@@ -322,17 +322,6 @@ export const DockerManagement = memo(() => {
         ? "Docker Desktop"
         : "OpenFork WSL";
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <Loader size="lg" variant="white" />
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">
-          Initializing Docker Engine...
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <ConfirmationDialog
@@ -549,6 +538,11 @@ export const DockerManagement = memo(() => {
       </header>
 
       <Card className="group relative overflow-hidden transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md shadow-lg">
+        {loading && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300">
+            <Loader size="md" variant="primary" />
+          </div>
+        )}
         <button
           onClick={() => setShowStorageSettings(!showStorageSettings)}
           className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
@@ -648,6 +642,11 @@ export const DockerManagement = memo(() => {
 
       {/* Containers Card */}
       <Card className="group relative overflow-hidden transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md shadow-lg">
+        {loading && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300">
+            <Loader size="md" variant="primary" />
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
         <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
           <CardTitle className="flex items-center gap-3">
@@ -716,9 +715,14 @@ export const DockerManagement = memo(() => {
 
       {/* Images Card */}
       <Card className="relative overflow-hidden bg-card/50 backdrop-blur-sm border-white/10">
+        {loading && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300">
+            <Loader size="md" variant="primary" />
+          </div>
+        )}
         {actionLoading?.startsWith("remove-") && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-md">
-            <Loader size="lg" variant="white" className="mb-4" />
+            <Loader size="lg" variant="primary" className="mb-4" />
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
               {actionLoading === "remove-all"
                 ? "Purging Repository..."
@@ -752,7 +756,7 @@ export const DockerManagement = memo(() => {
             </Button>
           )}
         </CardHeader>
-        <CardContent className="px-4 pb-4">
+        <CardContent className="px-4 pb-4 relative">
           {images.length === 0 ? (
             <p className="text-[10px] font-black uppercase tracking-widest text-white/20 text-center py-8">
               No OpenFork Docker images found
