@@ -18,6 +18,7 @@ import {
   Cpu,
   HardDrive,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import type { DependencyStatus, DockerEnginePreference } from "@/types";
 
 type Platform = "win32" | "linux" | "darwin";
@@ -247,7 +248,7 @@ export function DependencySetup({
               status?.docker.running
                 ? "border-green-500/50 bg-green-500/5"
                 : isInstalling
-                  ? "border-orange-500/50 bg-orange-500/5"
+                  ? "border-amber-500/50 bg-amber-500/10 backdrop-blur-xl shadow-2xl shadow-amber-500/10"
                   : status?.docker.installed
                     ? "border-yellow-500/50 bg-yellow-500/5"
                     : status?.docker.error === "WSL_DISTRO_MISSING"
@@ -479,11 +480,15 @@ export function DependencySetup({
                       </p>
 
                       {/* Progress bar */}
-                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-2 bg-primary rounded-full transition-all duration-500"
-                          style={{ width: `${installPercent}%` }}
-                        />
+                      <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+                        <motion.div
+                          className="absolute inset-y-0 left-0 bg-amber-500 rounded-full overflow-hidden"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${installPercent}%` }}
+                          transition={{ duration: 0.5, ease: "backOut" }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+                        </motion.div>
                       </div>
 
                       {/* Scrollable log terminal */}
