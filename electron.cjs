@@ -2027,11 +2027,12 @@ async function runElevatedPowerShell(scriptPath, args = []) {
       .map((arg) => `'${arg.toString().replace(/'/g, "''")}'`)
       .join(", ");
 
-    const command = `Start-Process powershell -ArgumentList @(${argumentArray}) -Verb RunAs -Wait -WindowStyle Hidden`;
+    // Use -PassThru to capture the process object and check ExitCode after -Wait.
+    // Without this, a non-zero exit from the elevated PowerShell is silently swallowed.
+    const command = `$p = Start-Process powershell -ArgumentList @(${argumentArray}) -Verb RunAs -Wait -PassThru -WindowStyle Hidden; if ($p.ExitCode -ne 0) { exit $p.ExitCode }`;
 
     console.log(`Requesting elevation for: ${scriptPath}`);
 
-    // Use execFile to avoid one layer of CMD/shell parsing
     const child = execFile(
       "powershell.exe",
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
@@ -2632,6 +2633,15 @@ ipcMain.handle("deps:check-docker", async () => {
 
 // Phase mapping: parse a log line and return { phase, percent } if it matches a known step
 function parseInstallPhase(line) {
+  // Dynamic download progress: "Downloading Ubuntu rootfs... 45% (58.6 MB / 130.2 MB)"
+  const dlMatch = line.match(/Downloading Ubuntu rootfs\.\.\. (\d+)%/);
+  if (dlMatch) {
+    const dlPct = parseInt(dlMatch[1], 10);
+    // Map 0-100% download into the 18-27% range (Installing Ubuntu starts at 28%)
+    const percent = 18 + Math.floor((dlPct / 100) * 9);
+    return { phase: "Downloading Ubuntu (~130MB)", percent };
+  }
+
   const phases = [
     {
       re: /Checking Windows Subsystem|Checking system/i,
@@ -2649,7 +2659,12 @@ function parseInstallPhase(line) {
       percent: 18,
     },
     {
-      re: /Importing Ubuntu|Installing Ubuntu without launch/i,
+      re: /Download complete/i,
+      phase: "Download complete",
+      percent: 27,
+    },
+    {
+      re: /Importing |Installing Ubuntu without launch/i,
       phase: "Installing Ubuntu",
       percent: 28,
     },

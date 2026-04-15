@@ -364,7 +364,9 @@ export function DependencySetup({
                             </SelectItem>
                             <SelectItem
                               value="desktop"
-                              disabled={!status?.docker.availableEngines?.desktop}
+                              disabled={
+                                !status?.docker.availableEngines?.desktop
+                              }
                             >
                               Docker Desktop
                             </SelectItem>
@@ -472,7 +474,7 @@ export function DependencySetup({
                   {isInstalling && (
                     <div className="space-y-3 mt-2">
                       {/* Phase label */}
-                      <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-white animate-pulse">
                         {installPhase || "Starting setup…"}
                       </p>
 
