@@ -1,0 +1,174 @@
+"use strict";
+
+const dockerEngine = require("./docker-engine.cjs");
+const wslUtils = require("./wsl-utils.cjs");
+
+let _getMainWindow;
+
+function init({ getMainWindow }) {
+  _getMainWindow = getMainWindow;
+}
+
+let dockerMonitorInterval = null;
+let lastContainersJson = "";
+let lastImagesJson = "";
+let dockerMonitorConsecutiveFailures = 0;
+const DOCKER_MONITOR_MAX_FAILURES = 3;
+
+// Cached Docker routing — avoids expensive resolveDockerStatus on every list call
+let _cachedRoutingResult = null;
+let _cachedRoutingTimestamp = 0;
+const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
+
+/**
+ * Ensures that OPENFORK_DOCKER_HOST is correctly set for the active Docker engine.
+ * Uses a short-lived cache to avoid calling resolveDockerStatus() on every IPC call.
+ * Returns the resolved Docker status.
+ */
+async function ensureDockerRouting() {
+  const now = Date.now();
+  if (_cachedRoutingResult && now - _cachedRoutingTimestamp < ROUTING_CACHE_TTL_MS) {
+    return _cachedRoutingResult;
+  }
+  const status = await dockerEngine.resolveDockerStatus({
+    allowNativeStart: false,
+    wslHostTimeoutMs: 5000,
+  });
+  _cachedRoutingResult = status;
+  _cachedRoutingTimestamp = now;
+  return status;
+}
+
+async function checkDockerUpdates() {
+  const mainWindow = _getMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  try {
+    const dockerStatus = await dockerEngine.resolveDockerStatus({
+      allowNativeStart: false,
+      wslHostTimeoutMs: 5000,
+    });
+
+    // Also update the routing cache so list handlers stay in sync
+    _cachedRoutingResult = dockerStatus;
+    _cachedRoutingTimestamp = Date.now();
+
+    if (!dockerStatus.running) {
+      dockerMonitorConsecutiveFailures++;
+
+      if (
+        process.platform === "win32" &&
+        dockerStatus.error === "WSL_DISTRO_MISSING"
+      ) {
+        mainWindow.webContents.send("docker:wsl-distro-missing", {
+          distroName: await wslUtils.getWslDistroName(),
+        });
+      }
+
+      // Only clear the display after consecutive failures to avoid
+      // transient WSL Docker API timeouts from flickering the UI.
+      if (dockerMonitorConsecutiveFailures >= DOCKER_MONITOR_MAX_FAILURES) {
+        if (lastContainersJson !== "") {
+          lastContainersJson = "";
+          mainWindow.webContents.send("docker:containers-update", []);
+        }
+        if (lastImagesJson !== "") {
+          lastImagesJson = "";
+          mainWindow.webContents.send("docker:images-update", []);
+        }
+      } else {
+        console.log(
+          `Docker monitor: not running (${dockerMonitorConsecutiveFailures}/${DOCKER_MONITOR_MAX_FAILURES} failures, error: ${dockerStatus.error || "none"}). Keeping current display.`,
+        );
+      }
+      return;
+    }
+
+    // Docker is running — reset the failure counter
+    dockerMonitorConsecutiveFailures = 0;
+
+    // Check containers
+    const containersOutput = await dockerEngine.execDockerCommand(
+      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
+    );
+    if (containersOutput !== lastContainersJson) {
+      lastContainersJson = containersOutput;
+      const containers = containersOutput
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            const container = JSON.parse(line);
+            return {
+              id: container.ID,
+              name: container.Names,
+              image: container.Image,
+              status: container.Status,
+              state: container.State,
+              created: container.CreatedAt,
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(Boolean);
+      mainWindow.webContents.send("docker:containers-update", containers);
+    }
+
+    // Check images
+    const imagesOutput = await dockerEngine.execDockerCommand(
+      'docker images --format "{{json .}}"',
+    );
+    if (imagesOutput !== lastImagesJson) {
+      lastImagesJson = imagesOutput;
+      const images = imagesOutput
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            const img = JSON.parse(line);
+            return {
+              id: img.ID,
+              repository: img.Repository,
+              tag: img.Tag,
+              size: img.Size,
+              created: img.CreatedAt || img.CreatedSince,
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter((img) => {
+          if (!img) return false;
+          return `${img.repository}:${img.tag}`.toLowerCase().includes("openfork");
+        });
+      mainWindow.webContents.send("docker:images-update", images);
+    }
+  } catch {
+    // Silent fail for background monitor — count as a failure
+    dockerMonitorConsecutiveFailures++;
+  }
+}
+
+function startDockerMonitoring() {
+  if (dockerMonitorInterval) return;
+  console.log("Starting Docker background monitoring...");
+  checkDockerUpdates();
+  dockerMonitorInterval = setInterval(checkDockerUpdates, 5000);
+}
+
+function stopDockerMonitoring() {
+  if (dockerMonitorInterval) {
+    console.log("Stopping Docker background monitoring...");
+    clearInterval(dockerMonitorInterval);
+    dockerMonitorInterval = null;
+  }
+}
+
+module.exports = {
+  init,
+  ensureDockerRouting,
+  checkDockerUpdates,
+  startDockerMonitoring,
+  stopDockerMonitoring,
+};
