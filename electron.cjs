@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
 const path = require("path");
 const http = require("http");
+const os = require("os");
 
 const Store = require("electron-store").default;
 const { createClient } = require("@supabase/supabase-js");
@@ -12,6 +13,84 @@ const {
 const { DockerCleanupManager } = require("./src/docker-cleanup-manager.cjs");
 const { autoUpdater } = require("electron-updater");
 const process = require("process");
+const { execFile: _execFile } = require("child_process");
+
+function openExternal(url) {
+  // On Linux running inside WSL (Windows host), use explorer.exe to open URLs
+  // in the host browser. On native Linux, use the standard shell.openExternal.
+  if (process.platform === "linux" && process.env.OPENFORK_WSL_DISTRO) {
+    try {
+      _execFile("explorer.exe", [url], (err) => {
+        if (err) shell.openExternal(url);
+      });
+      return;
+    } catch {
+      shell.openExternal(url);
+    }
+  }
+  shell.openExternal(url);
+}
+
+// --- LINUX APPIMAGE PROTOCOL REGISTRATION ---
+
+/**
+ * When running as an AppImage, there is no install step, so the OS never
+ * sees a .desktop file and cannot route openfork-desktop-app:// deep links
+ * back to the app.  Fix this by writing a .desktop file into the user's
+ * local applications directory on first launch and registering it with
+ * xdg-mime.  Runs silently on failure — this is best-effort.
+ *
+ * For .deb installs, electron-builder's postinstall hook calls
+ * update-desktop-database automatically, so this function is a no-op there.
+ */
+async function registerAppImageProtocolHandler() {
+  if (process.platform !== "linux") return;
+
+  // APPIMAGE env var is set by the AppImage runtime; absent for deb/rpm installs
+  // which already handle .desktop registration through the package manager.
+  const appImagePath = process.env.APPIMAGE;
+  if (!appImagePath) return;
+
+  const desktopDir = path.join(os.homedir(), ".local", "share", "applications");
+  const desktopFile = "openfork-client.desktop";
+  const desktopFilePath = path.join(desktopDir, desktopFile);
+
+  const desktopContent = [
+    "[Desktop Entry]",
+    "Name=Openfork Client",
+    "Type=Application",
+    "Terminal=false",
+    `Exec=${appImagePath} %u`,
+    "MimeType=x-scheme-handler/openfork-desktop-app;",
+    "Categories=Network;AudioVideo;",
+    "Comment=Collaborative movie creation platform",
+  ].join("\n") + "\n";
+
+  try {
+    const { promises: fsp } = require("fs");
+    await fsp.mkdir(desktopDir, { recursive: true });
+    await fsp.writeFile(desktopFilePath, desktopContent, "utf8");
+
+    await new Promise((resolve) => {
+      _execFile(
+        "xdg-mime",
+        ["default", desktopFile, "x-scheme-handler/openfork-desktop-app"],
+        { timeout: 5000 },
+        (err) => {
+          if (err) console.warn("xdg-mime registration failed:", err.message);
+          resolve();
+        },
+      );
+    });
+
+    // Best-effort — not all distros have update-desktop-database
+    _execFile("update-desktop-database", [desktopDir], { timeout: 5000 }, () => {});
+
+    console.log("Linux AppImage protocol handler registered.");
+  } catch (err) {
+    console.error("Failed to register AppImage protocol handler:", err.message);
+  }
+}
 
 // --- PROTOCOL & INITIALIZATION ---
 
@@ -163,7 +242,7 @@ async function googleLogin() {
   // and then redirect back to Electron with the session.
   const syncUrl = `${ORCHESTRATOR_API_URL}/auth/electron-login`;
   console.log(`Opening auth URL: ${syncUrl}`);
-  shell.openExternal(syncUrl);
+  openExternal(syncUrl);
 }
 
 async function logout() {
@@ -226,7 +305,7 @@ function createWindow() {
 
   // Ensure all target="_blank" links open in the system's default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    openExternal(url);
     return { action: "deny" };
   });
 
@@ -341,6 +420,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  registerAppImageProtocolHandler();
   createWindow();
 
   app.on("activate", () => {
@@ -670,7 +750,7 @@ ipcMain.handle("monetize:open-stripe-onboard", async () => {
       `${ORCHESTRATOR_API_URL}/api/stripe/connect/onboard`,
     );
     if (data.url) {
-      shell.openExternal(data.url);
+      openExternal(data.url);
       return { success: true };
     }
     return { error: data.error || "No URL returned" };
@@ -688,7 +768,7 @@ ipcMain.handle("monetize:open-stripe-dashboard", async () => {
     );
     console.log("[Stripe] Dashboard response:", data);
     if (data.url) {
-      shell.openExternal(data.url);
+      openExternal(data.url);
       return { success: true };
     }
     return { error: data.error || "No URL returned" };
@@ -699,7 +779,7 @@ ipcMain.handle("monetize:open-stripe-dashboard", async () => {
 });
 
 ipcMain.on("open-external", (event, url) => {
-  shell.openExternal(url);
+  openExternal(url);
 });
 
 // Add persistence handlers for job policy settings
@@ -3075,7 +3155,7 @@ ipcMain.handle("deps:open-docker-download", () => {
     linux: "https://docs.docker.com/engine/install/",
   };
   const url = urls[process.platform] || urls.linux;
-  shell.openExternal(url);
+  openExternal(url);
   return { success: true };
 });
 

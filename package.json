@@ -80,6 +80,12 @@
     "productName": "Openfork Client",
     "icon": "public/icon.png",
     "artifactName": "${productName}-${os}-${arch}.${ext}",
+    "protocols": [
+      {
+        "name": "OpenFork Desktop App",
+        "schemes": ["openfork-desktop-app"]
+      }
+    ],
     "publish": {
       "provider": "github"
     },
@@ -123,7 +129,7 @@
       "icon": "public/icon.ico"
     },
     "linux": {
-      "target": "AppImage",
+      "target": ["AppImage", "deb"],
       "icon": "public/logo.png"
     },
     "nsis": {
