@@ -124,6 +124,10 @@
         "to": "bin/setup-linux.sh"
       },
       {
+        "from": "scripts/uninstall-engine.ps1",
+        "to": "bin/uninstall-engine.ps1"
+      },
+      {
         "from": "scripts/compact-wsl.ps1",
         "to": "scripts/compact-wsl.ps1"
       },
