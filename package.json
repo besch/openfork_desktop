@@ -83,7 +83,9 @@
     "protocols": [
       {
         "name": "OpenFork Desktop App",
-        "schemes": ["openfork-desktop-app"]
+        "schemes": [
+          "openfork-desktop-app"
+        ]
       }
     ],
     "publish": {
@@ -141,8 +143,12 @@
       "icon": "public/icon.ico"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
-      "icon": "public/logo.png"
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/logo.png",
+      "maintainer": "Openfork <openforkvideo@gmail.com>"
     },
     "nsis": {
       "oneClick": false,
