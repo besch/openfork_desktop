@@ -46,6 +46,8 @@ function parseInstallPhase(line) {
     { re: /Enabling Sparse VHD/i, phase: "Optimizing disk storage", percent: 60 },
     { re: /Ensuring WSL is running/i, phase: "Running setup inside WSL…", percent: 63 },
     { re: /\[Linux\].*Installing Docker/i, phase: "Installing Docker Engine", percent: 70 },
+    { re: /\[Linux\].*Downloading and installing Docker/i, phase: "Downloading Docker packages", percent: 72 },
+    { re: /\[Linux\].*Docker Engine installed/i, phase: "Docker Engine installed", percent: 78 },
     { re: /\[Linux\].*Docker is already/i, phase: "Docker already present", percent: 65 },
     { re: /\[Linux\].*Installing NVIDIA/i, phase: "Installing NVIDIA Container Toolkit", percent: 80 },
     { re: /\[Linux\].*Updating package lists/i, phase: "Updating packages for NVIDIA toolkit", percent: 82 },
