@@ -302,6 +302,9 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
   const distroExists = await wslUtils.checkDistroExists(wslDistro);
   if (!distroExists) {
     console.log(`WSL distro '${wslDistro}' is missing`);
+    // Clear the cached distro name so the next call auto-detects whatever
+    // distro is available rather than re-checking this dead one every poll.
+    wslUtils.resetWslDistro();
     return {
       installed: false,
       running: false,

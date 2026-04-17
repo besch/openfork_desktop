@@ -59,6 +59,10 @@ export const DockerManagement = memo(() => {
     ok: boolean;
     message: string;
   } | null>(null);
+  const [engineSwitchNotice, setEngineSwitchNotice] = useState<{
+    from: string;
+    to: string;
+  } | null>(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
@@ -167,6 +171,16 @@ export const DockerManagement = memo(() => {
     });
     return cleanup;
   }, []);
+
+  // Auto-refresh when the active Docker engine changes (e.g. WSL distro unregistered
+  // → fell back to Docker Desktop, or Docker Desktop uninstalled → fell back to WSL).
+  useEffect(() => {
+    const cleanup = window.electronAPI.onEngineSwitch((data) => {
+      setEngineSwitchNotice(data);
+      fetchData();
+    });
+    return cleanup;
+  }, [fetchData]);
 
   // Subscribe to app-wide Docker monitoring updates.
   useEffect(() => {
@@ -333,6 +347,40 @@ export const DockerManagement = memo(() => {
         confirmButtonText="Confirm"
         cancelButtonText="Cancel"
       />
+
+      {engineSwitchNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-blue-500/10 border border-blue-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+        >
+          <div className="flex items-center gap-3">
+            <RefreshCw className="h-4 w-4 text-blue-400 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-widest text-blue-300">
+              Docker engine auto-switched:{" "}
+              <span className="text-white">
+                {engineSwitchNotice.from === "wsl"
+                  ? "OpenFork WSL"
+                  : "Docker Desktop"}
+              </span>{" "}
+              →{" "}
+              <span className="text-white">
+                {engineSwitchNotice.to === "wsl"
+                  ? "OpenFork WSL"
+                  : "Docker Desktop"}
+              </span>
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEngineSwitchNotice(null)}
+            className="text-blue-300 hover:bg-blue-500/20 h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
+      )}
 
       {error && (
         <motion.div

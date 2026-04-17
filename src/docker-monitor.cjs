@@ -15,6 +15,9 @@ let lastImagesJson = "";
 let dockerMonitorConsecutiveFailures = 0;
 const DOCKER_MONITOR_MAX_FAILURES = 3;
 
+// Track the active engine across polls so we can emit an event when it changes.
+let _lastKnownActiveEngine = null;
+
 // Cached Docker routing — avoids expensive resolveDockerStatus on every list call
 let _cachedRoutingResult = null;
 let _cachedRoutingTimestamp = 0;
@@ -52,6 +55,20 @@ async function checkDockerUpdates() {
     // Also update the routing cache so list handlers stay in sync
     _cachedRoutingResult = dockerStatus;
     _cachedRoutingTimestamp = Date.now();
+
+    // Detect active-engine changes and notify the renderer so DockerManagement
+    // can refresh without waiting for the user to click the refresh button.
+    const nextEngine = dockerStatus.activeEngine ?? null;
+    if (nextEngine && _lastKnownActiveEngine && nextEngine !== _lastKnownActiveEngine) {
+      console.log(
+        `Docker engine switched: ${_lastKnownActiveEngine} → ${nextEngine}`,
+      );
+      mainWindow.webContents.send("docker:engine-switched", {
+        from: _lastKnownActiveEngine,
+        to: nextEngine,
+      });
+    }
+    if (nextEngine) _lastKnownActiveEngine = nextEngine;
 
     if (!dockerStatus.running) {
       dockerMonitorConsecutiveFailures++;

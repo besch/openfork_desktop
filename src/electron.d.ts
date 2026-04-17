@@ -213,6 +213,9 @@ interface ElectronAPI {
   cancelInstall: () => Promise<{ success: boolean; error?: string }>;
   resetWslDistro: () => Promise<{ success: boolean }>;
   onWslDistroMissing: (callback: () => void) => CleanupFn;
+  onEngineSwitch: (
+    callback: (data: { from: string; to: string }) => void,
+  ) => CleanupFn;
 
   // Disk Management
   getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
