@@ -48,6 +48,8 @@ function parseInstallPhase(line) {
     { re: /\[Linux\].*Installing Docker/i, phase: "Installing Docker Engine", percent: 70 },
     { re: /\[Linux\].*Docker is already/i, phase: "Docker already present", percent: 65 },
     { re: /\[Linux\].*Installing NVIDIA/i, phase: "Installing NVIDIA Container Toolkit", percent: 80 },
+    { re: /\[Linux\].*Updating package lists/i, phase: "Updating packages for NVIDIA toolkit", percent: 82 },
+    { re: /\[Linux\].*Downloading and installing NVIDIA/i, phase: "Installing NVIDIA toolkit packages", percent: 84 },
     { re: /\[Linux\].*NVIDIA Container Toolkit is already/i, phase: "NVIDIA toolkit present", percent: 80 },
     { re: /\[Linux\].*Configuring Docker/i, phase: "Configuring Docker TCP", percent: 88 },
     { re: /\[Linux\].*Waiting for Docker daemon/i, phase: "Starting Docker daemon", percent: 93 },
