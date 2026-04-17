@@ -554,6 +554,7 @@ function register(ipcMain) {
   });
 
   ipcMain.handle("get-available-drives", async () => {
+    if (process.platform !== "win32") return [];
     return new Promise((resolve) => {
       const psCommand =
         "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{Name='FreeGB';Expression={[math]::Round($_.Free/1GB, 1)}} | ConvertTo-Json";

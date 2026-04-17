@@ -212,6 +212,7 @@ interface ElectronAPI {
   ) => CleanupFn;
   cancelInstall: () => Promise<{ success: boolean; error?: string }>;
   resetWslDistro: () => Promise<{ success: boolean }>;
+  fixLinuxDockerPermissions: () => Promise<{ success: boolean; error?: string }>;
   onWslDistroMissing: (callback: () => void) => CleanupFn;
   onEngineSwitch: (
     callback: (data: { from: string; to: string }) => void,

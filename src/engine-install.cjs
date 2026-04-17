@@ -207,9 +207,11 @@ async function handleInstallEngine(installPath) {
     return { success: true };
   } else {
     // Linux pkexec handler (no progress streaming on Linux)
+    const os = require("os");
+    const username = os.userInfo().username;
     return new Promise((resolve) => {
       console.log(`Using setup script: ${scriptPath}`);
-      exec(`pkexec bash "${scriptPath}"`, (error) => {
+      exec(`pkexec bash "${scriptPath}" "${username}"`, (error) => {
         if (error) {
           console.error("Installation process error:", error.message);
           resolve({ success: false, error: error.message });

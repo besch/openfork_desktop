@@ -1,6 +1,7 @@
 "use strict";
 
-const { execFile } = require("child_process");
+const { execFile, exec } = require("child_process");
+const os = require("os");
 
 const dockerEngine = require("./docker-engine.cjs");
 const wslUtils = require("./wsl-utils.cjs");
@@ -41,6 +42,24 @@ function register(ipcMain) {
   ipcMain.handle("deps:reset-wsl-distro", () => {
     wslUtils.resetWslDistro();
     return { success: true };
+  });
+
+  // --- LINUX DOCKER PERMISSIONS FIX ---
+
+  ipcMain.handle("deps:fix-linux-docker-permissions", async () => {
+    if (process.platform !== "linux") return { success: false, error: "Not on Linux" };
+    const username = os.userInfo().username;
+    return new Promise((resolve) => {
+      exec(`pkexec /usr/sbin/usermod -aG docker ${username}`, (error) => {
+        if (error) {
+          console.error("Failed to add user to docker group:", error.message);
+          resolve({ success: false, error: error.message });
+        } else {
+          console.log(`Added ${username} to docker group via pkexec`);
+          resolve({ success: true });
+        }
+      });
+    });
   });
 
   // --- NVIDIA CHECK ---

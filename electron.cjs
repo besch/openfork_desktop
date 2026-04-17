@@ -23,20 +23,78 @@ const engineInstall = require("./src/engine-install.cjs");
 const ipcDocker = require("./src/ipc-docker.cjs");
 const ipcDeps = require("./src/ipc-deps.cjs");
 
-function openExternal(url) {
-  // On Linux running inside WSL (Windows host), use explorer.exe to open URLs
-  // in the host browser. On native Linux, use the standard shell.openExternal.
-  if (process.platform === "linux" && process.env.OPENFORK_WSL_DISTRO) {
+function execFilePromise(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    _execFile(command, args, options, (err) => {
+      if (err) return reject(err);
+      resolve();
+    });
+  });
+}
+
+async function tryLinuxFallbackOpen(url) {
+  const fallbackCommands = [
+    ["xdg-open", [url]],
+    ["gio", ["open", url]],
+    ["sensible-browser", [url]],
+  ];
+
+  for (const [command, args] of fallbackCommands) {
     try {
-      _execFile("explorer.exe", [url], (err) => {
-        if (err) shell.openExternal(url);
+      await execFilePromise(command, args, {
+        detached: true,
+        stdio: "ignore",
+        env: process.env,
       });
+      console.log(`Opened URL with ${command}: ${url}`);
       return;
-    } catch {
-      shell.openExternal(url);
+    } catch (err) {
+      console.warn(`Failed to open URL with ${command}: ${err.message}`);
     }
   }
-  shell.openExternal(url);
+
+  console.error(`Could not open URL on Linux, no opener succeeded: ${url}`);
+}
+
+async function openExternal(url) {
+  // On Linux running inside WSL (Windows host), use explorer.exe to open URLs
+  // in the host browser. On native Linux, prefer xdg-open/gio directly because
+  // shell.openExternal can sometimes appear to succeed without actually opening.
+  if (process.platform === "linux" && process.env.OPENFORK_WSL_DISTRO) {
+    try {
+      await execFilePromise("explorer.exe", [url], {
+        detached: true,
+        stdio: "ignore",
+        env: process.env,
+      });
+      console.log(`Opened URL in Windows host browser via explorer.exe: ${url}`);
+      return;
+    } catch (err) {
+      console.warn(
+        "explorer.exe failed to open URL, falling back to Linux opener:",
+        err.message,
+      );
+    }
+  }
+
+  if (process.platform === "linux") {
+    try {
+      await tryLinuxFallbackOpen(url);
+      return;
+    } catch (err) {
+      console.warn(`Linux fallback opener failed; trying shell.openExternal: ${err.message}`);
+    }
+  }
+
+  try {
+    await shell.openExternal(url);
+    console.log(`Opened external URL: ${url}`);
+  } catch (err) {
+    console.error(`shell.openExternal failed for URL: ${url}`, err);
+    if (process.platform === "linux") {
+      await tryLinuxFallbackOpen(url);
+    }
+  }
 }
 
 // --- LINUX APPIMAGE PROTOCOL REGISTRATION ---
@@ -103,6 +161,16 @@ async function registerAppImageProtocolHandler() {
   } catch (err) {
     console.error("Failed to register AppImage protocol handler:", err.message);
   }
+}
+
+// --- LINUX GPU WORKAROUND ---
+// On Linux systems without proper EGL/Mesa drivers (e.g. machines with only
+// NVIDIA proprietary drivers not yet installed) Electron's GPU process fails
+// to initialize and floods the log with EGL errors before falling back to
+// software rendering.  Disabling GPU up-front avoids the noise.  Software
+// rendering is sufficient for this app's UI.
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("disable-gpu");
 }
 
 // --- PROTOCOL & INITIALIZATION ---
@@ -196,7 +264,7 @@ async function googleLogin() {
   // and then redirect back to Electron with the session.
   const syncUrl = `${ORCHESTRATOR_API_URL}/auth/electron-login`;
   console.log(`Opening auth URL: ${syncUrl}`);
-  openExternal(syncUrl);
+  return openExternal(syncUrl);
 }
 
 async function logout() {

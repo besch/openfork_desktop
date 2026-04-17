@@ -110,6 +110,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onInstallProgress: (callback) => createListener("deps:install-progress", callback),
   cancelInstall: () => ipcRenderer.invoke("deps:cancel-install"),
   resetWslDistro: () => ipcRenderer.invoke("deps:reset-wsl-distro"),
+  fixLinuxDockerPermissions: () => ipcRenderer.invoke("deps:fix-linux-docker-permissions"),
   onWslDistroMissing: (callback) => createListener("docker:wsl-distro-missing", callback),
   onEngineSwitch: (callback) => createListener("docker:engine-switched", callback),
 

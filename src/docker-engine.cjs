@@ -11,6 +11,9 @@ const settings = require("./settings.cjs");
 const WINDOWS_DOCKER_API_PORT = 2375;
 
 let _getMainWindow;
+// On Linux, set when the user is in the docker group but hasn't re-logged in yet.
+// Commands are then wrapped with `sg docker -c "..."` to pick up the group mid-session.
+let useSgDocker = false;
 
 function init({ getMainWindow }) {
   _getMainWindow = getMainWindow;
@@ -110,7 +113,10 @@ async function execDockerCommand(command) {
         },
       );
     } else {
-      exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
+      const effectiveCommand = (process.platform === "linux" && useSgDocker)
+        ? `sg docker -c ${JSON.stringify(command)}`
+        : command;
+      exec(effectiveCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
         if (error) {
           if (
             error.message.includes("is not running") ||
@@ -165,7 +171,10 @@ function runDockerCheckCommand(
       );
       return;
     }
-    exec(cmd, { timeout: timeoutMs ?? 10000 }, (error, stdout, stderr) => {
+    const effectiveCmd = (process.platform === "linux" && useSgDocker)
+      ? `sg docker -c ${JSON.stringify(cmd)}`
+      : cmd;
+    exec(effectiveCmd, { timeout: timeoutMs ?? 10000 }, (error, stdout, stderr) => {
       if (error) {
         console.log(`Check command '${cmd}' failed: ${error.message}`);
         console.log(`Stdout: ${stdout}`);
@@ -475,13 +484,21 @@ async function resolveDockerStatus(
     if (infoResult.success) {
       return { installed: true, running: true, activeEngine: "linux" };
     }
+    const error = classifyDockerCheckError(infoResult.error, infoResult.stderr);
+    if (error === "DOCKER_PERMISSION_DENIED") {
+      // User was just added to the docker group but hasn't re-logged in.
+      // sg picks up the new group membership mid-session.
+      const sgResult = await runDockerCheckCommand('sg docker -c "docker info"');
+      if (sgResult.success) {
+        useSgDocker = true;
+        return { installed: true, running: true, activeEngine: "linux" };
+      }
+    }
     return {
       installed: true,
       running: false,
       activeEngine: "linux",
-      error:
-        classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
-        undefined,
+      error: error || undefined,
     };
   }
 

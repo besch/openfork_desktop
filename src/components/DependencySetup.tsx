@@ -29,6 +29,7 @@ export function DependencySetup({
   const [isChecking, setIsChecking] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isFixingPermissions, setIsFixingPermissions] = useState(false);
   const [availableDrives, setAvailableDrives] = useState<
     { name: string; freeGB: number }[]
   >([]);
@@ -136,9 +137,10 @@ export function DependencySetup({
     });
 
     try {
-      const drivePath = canChooseInstallDrive
-        ? `${selectedDrive}:\\OpenFork\\wsl`
-        : undefined;
+      const drivePath =
+        platform === "win32" && canChooseInstallDrive
+          ? `${selectedDrive}:\\OpenFork\\wsl`
+          : undefined;
       const result = await window.electronAPI.installEngine(drivePath);
       if (result?.success) {
         await checkDependencies();
@@ -150,6 +152,21 @@ export function DependencySetup({
       setIsInstalling(false);
     }
   }, [canChooseInstallDrive, isInstalling, checkDependencies, selectedDrive]);
+
+  const handleFixLinuxPermissions = useCallback(async () => {
+    if (isFixingPermissions) return;
+    setIsFixingPermissions(true);
+    try {
+      const result = await window.electronAPI.fixLinuxDockerPermissions();
+      if (result?.success) {
+        await checkDependencies();
+      } else {
+        console.error("Failed to fix Docker permissions:", result?.error);
+      }
+    } finally {
+      setIsFixingPermissions(false);
+    }
+  }, [isFixingPermissions, checkDependencies]);
 
   const handleCancelInstall = useCallback(async () => {
     if (isCancelling) return;
@@ -254,6 +271,24 @@ export function DependencySetup({
                   <p className="text-xs text-muted-foreground">
                     {dockerStatusDescription}
                   </p>
+                  {platform === "linux" &&
+                    status.docker.error === "DOCKER_PERMISSION_DENIED" && (
+                      <Button
+                        onClick={handleFixLinuxPermissions}
+                        disabled={isFixingPermissions}
+                        className="w-full mt-2"
+                        variant="outline"
+                      >
+                        {isFixingPermissions ? (
+                          <>
+                            <Loader className="h-3.5 w-3.5 mr-2" />
+                            Fixing permissions…
+                          </>
+                        ) : (
+                          "Fix Docker Permissions"
+                        )}
+                      </Button>
+                    )}
                 </>
               ) : (
                 <>

@@ -103,10 +103,19 @@ class PythonProcessManager {
        };
     }
     
-    // Fallback: Look for compiled executable in desktop/bin
+    // Fallback: Look for compiled executable in desktop/bin/client, or desktop/bin itself
+    // when the binary was placed directly at that path (not inside a bin/ subdirectory).
     const exeName = isWin ? "client.exe" : "client";
-    const binPath = path.join(__dirname, "..", "bin", exeName);
-    
+    const binDir = path.join(__dirname, "..", "bin");
+    let binPath = path.join(binDir, exeName);
+    try {
+      const binStat = fs.statSync(binDir);
+      if (binStat.isFile()) {
+        // 'bin' is the executable itself, not a directory
+        binPath = binDir;
+      }
+    } catch (_) {}
+
     console.log("Dev mode: Python venv not found, falling back to compiled executable.");
     return {
       command: binPath,
