@@ -80,6 +80,7 @@
     "productName": "Openfork Client",
     "icon": "public/icon.png",
     "artifactName": "${productName}-${os}-${arch}.${ext}",
+    "afterPack": "scripts/after-pack.cjs",
     "protocols": [
       {
         "name": "OpenFork Desktop App",
@@ -145,6 +146,11 @@
       ],
       "icon": "public/logo.png",
       "maintainer": "Openfork <openforkvideo@gmail.com>"
+    },
+    "appImage": {
+      "executableArgs": [
+        "--no-sandbox"
+      ]
     },
     "nsis": {
       "oneClick": false,

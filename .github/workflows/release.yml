@@ -116,7 +116,20 @@ jobs:
       - name: Build React app
         run: npm run build
 
+      - name: Build and release Linux AppImage
+        if: runner.os == 'Linux'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux AppImage --publish=always
+
+      - name: Build and release Linux deb
+        if: runner.os == 'Linux'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --linux deb --publish=always
+
       - name: Build and release Electron app
+        if: runner.os == 'Windows'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release

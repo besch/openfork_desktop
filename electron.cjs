@@ -126,7 +126,7 @@ async function registerAppImageProtocolHandler() {
       "Name=Openfork Client",
       "Type=Application",
       "Terminal=false",
-      `Exec=${appImagePath} %u`,
+      `Exec=${appImagePath} --no-sandbox %u`,
       "MimeType=x-scheme-handler/openfork-desktop-app;",
       "Categories=Network;AudioVideo;",
       "Comment=Collaborative movie creation platform",
