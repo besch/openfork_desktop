@@ -191,7 +191,36 @@ function register(ipcMain) {
           }
         }
       } else {
-        output = await runExecFile("nvidia-smi", nvidiaSmiArgs, { timeout: 10000 });
+        try {
+          output = await runExecFile("nvidia-smi", nvidiaSmiArgs, { timeout: 10000 });
+        } catch {
+          // --query-gpu=cuda_version is not supported on all nvidia-smi versions.
+          // Fall back: query just the name, then parse CUDA version from plain output.
+          let nameOut;
+          try {
+            nameOut = await runExecFile(
+              "nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], { timeout: 10000 }
+            );
+          } catch {
+            return { available: false, gpu: null, cudaVersion: null, isOutdated: false };
+          }
+          let plainOut = "";
+          try {
+            plainOut = await runExecFile("nvidia-smi", [], { timeout: 10000 });
+          } catch { /* best-effort */ }
+          const gpuName = nameOut.toString().trim().split("\n")[0].trim() || null;
+          const cudaMatch = plainOut.toString().match(/CUDA Version:\s*(\d+\.\d+)/);
+          const cudaVersion = cudaMatch ? cudaMatch[1] : null;
+          let isOutdated = false;
+          if (cudaVersion) {
+            const [major, minor] = cudaVersion.split(".").map(Number);
+            const [minMajor, minMinor] = MIN_CUDA_VERSION.split(".").map(Number);
+            if (major < minMajor || (major === minMajor && minor < minMinor)) {
+              isOutdated = true;
+            }
+          }
+          return { available: true, gpu: gpuName, cudaVersion, isOutdated };
+        }
       }
 
       const lines = output.toString().trim().split("\n");

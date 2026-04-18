@@ -211,7 +211,19 @@ async function handleInstallEngine(installPath) {
     const username = os.userInfo().username;
     return new Promise((resolve) => {
       console.log(`Using setup script: ${scriptPath}`);
-      exec(`pkexec bash "${scriptPath}" "${username}"`, (error) => {
+      // AppImage mounts under /tmp/.mount_* which is read-only; pkexec bash
+      // cannot read the script from there. Copy it to a writable temp path first.
+      const tmpScript = path.join(os.tmpdir(), "openfork-setup-linux.sh");
+      try {
+        fs.copyFileSync(scriptPath, tmpScript);
+        fs.chmodSync(tmpScript, 0o755);
+      } catch (copyErr) {
+        console.error("Failed to copy setup script to temp location:", copyErr.message);
+        resolve({ success: false, error: copyErr.message });
+        return;
+      }
+      execFile("pkexec", ["bash", tmpScript, username], (error) => {
+        try { fs.unlinkSync(tmpScript); } catch (_) {}
         if (error) {
           console.error("Installation process error:", error.message);
           resolve({ success: false, error: error.message });
