@@ -119,6 +119,17 @@ async function registerAppImageProtocolHandler() {
   const desktopDir = path.join(os.homedir(), ".local", "share", "applications");
   const desktopFile = "openfork-client.desktop";
   const desktopFilePath = path.join(desktopDir, desktopFile);
+  const iconName = "openfork-client";
+  const iconDir = path.join(
+    os.homedir(),
+    ".local",
+    "share",
+    "icons",
+    "hicolor",
+    "512x512",
+    "apps",
+  );
+  const iconPath = path.join(iconDir, `${iconName}.png`);
 
   const desktopContent =
     [
@@ -127,6 +138,7 @@ async function registerAppImageProtocolHandler() {
       "Type=Application",
       "Terminal=false",
       `Exec=${appImagePath} --no-sandbox %u`,
+      `Icon=${iconName}`,
       "MimeType=x-scheme-handler/openfork-desktop-app;",
       "Categories=Network;AudioVideo;",
       "Comment=Collaborative movie creation platform",
@@ -135,6 +147,8 @@ async function registerAppImageProtocolHandler() {
   try {
     const { promises: fsp } = require("fs");
     await fsp.mkdir(desktopDir, { recursive: true });
+    await fsp.mkdir(iconDir, { recursive: true });
+    await fsp.copyFile(path.join(__dirname, "dist", "logo.png"), iconPath);
     await fsp.writeFile(desktopFilePath, desktopContent, "utf8");
 
     await new Promise((resolve) => {
