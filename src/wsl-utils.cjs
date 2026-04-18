@@ -39,11 +39,12 @@ function choosePreferredWslDistro(distros) {
   const userDistros = distros.filter(
     (name) => !/^docker-desktop(?:-data)?$/i.test(name),
   );
-  const preferred =
+  return (
     userDistros.find((name) => /^openfork$/i.test(name)) ||
     userDistros.find((name) => /^ubuntu(?:-.+)?$/i.test(name)) ||
-    userDistros[0];
-  return preferred || "Ubuntu";
+    userDistros[0] ||
+    null
+  );
 }
 
 async function getWslDistroName() {
@@ -66,18 +67,25 @@ async function getWslDistroName() {
     _store.delete("wslDistro");
   }
 
-  _resolvedWslDistro = choosePreferredWslDistro(distros);
-  if (distros.length > 0) {
-    console.log(`Auto-detected WSL distro: ${_resolvedWslDistro}`);
-  } else {
-    console.warn("No usable WSL distros found, defaulting to Ubuntu");
+  const detected = choosePreferredWslDistro(distros);
+  if (detected) {
+    _resolvedWslDistro = detected;
+    console.log(`Auto-detected WSL distro: ${detected}`);
   }
-
-  return _resolvedWslDistro;
+  // Return null without caching so the next call re-detects once a distro is installed.
+  return detected;
 }
 
 function resetWslDistro() {
   _store.delete("wslDistro");
+  _resolvedWslDistro = null;
+}
+
+// Clears only the in-memory cache without touching the persisted store value.
+// Use this when a cached distro name is found to be missing at runtime — the
+// next call will re-detect whatever is available, while the store entry remains
+// in case the distro is re-registered later.
+function invalidateWslDistroCache() {
   _resolvedWslDistro = null;
 }
 
@@ -170,6 +178,7 @@ module.exports = {
   choosePreferredWslDistro,
   getWslDistroName,
   resetWslDistro,
+  invalidateWslDistroCache,
   setWslDistro,
   getWslIpAddress,
   getWindowsDockerApiHosts,

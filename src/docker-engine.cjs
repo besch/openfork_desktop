@@ -306,14 +306,20 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
   if (process.platform !== "win32") return { installed: false, running: false };
 
   const wslDistro = await wslUtils.getWslDistroName();
+  if (!wslDistro) {
+    // No suitable WSL distro found (e.g. only docker-desktop internal distros exist).
+    // Return silently — no spam, re-detection happens on the next poll.
+    return { installed: false, running: false, isNative: false };
+  }
   process.env.OPENFORK_WSL_DISTRO = wslDistro;
 
   const distroExists = await wslUtils.checkDistroExists(wslDistro);
   if (!distroExists) {
     console.log(`WSL distro '${wslDistro}' is missing`);
-    // Clear the cached distro name so the next call auto-detects whatever
-    // distro is available rather than re-checking this dead one every poll.
-    wslUtils.resetWslDistro();
+    // Invalidate only the in-memory cache so the next poll re-detects whatever
+    // distro is available, while the store entry is preserved in case the same
+    // distro is re-registered.
+    wslUtils.invalidateWslDistroCache();
     return {
       installed: false,
       running: false,
