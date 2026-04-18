@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/loader";
 import {
   CheckCircle2,
-  XCircle,
   AlertCircle,
   Download,
   RefreshCw,
@@ -17,7 +16,7 @@ import type { DependencyStatus } from "@/types";
 type Platform = "win32" | "linux" | "darwin";
 
 interface DependencySetupProps {
-  onReady: () => void;
+  onReady: (status: DependencyStatus) => void;
   initialStatus: DependencyStatus;
 }
 
@@ -44,25 +43,28 @@ export function DependencySetup({
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const installDrive = status?.docker.installDrive;
+  const wslDistroExists = !!status?.docker.wslDistro;
   const isWindows = platform === "win32";
   const isBridgeStarting =
     status?.docker.error === "DOCKER_API_UNREACHABLE" ||
     !!status?.docker.isStarting;
+  const isInstallStateFromMain =
+    !!status?.docker.isStarting && !status?.docker.installed && !isInstalling;
   const canChooseInstallDrive = !status?.docker.installed;
   const dockerStatusHeadline = status?.docker.installed
     ? status.docker.error === "DOCKER_PERMISSION_DENIED"
-        ? "Docker access needs a permission refresh"
-        : isWindows
-          ? isBridgeStarting
-            ? "OpenFork Ubuntu is starting…"
-            : "OpenFork Ubuntu is installed but not running"
-          : status.docker.isNative
-            ? status.docker.isStarting
-              ? "Docker is starting…"
-              : "Docker is not running"
-            : isBridgeStarting
-              ? "AI Engine is starting and exposing its Docker API"
-              : "AI Engine is installed but not running"
+      ? "Docker access needs a permission refresh"
+      : isWindows
+        ? isBridgeStarting
+          ? "OpenFork Ubuntu is starting…"
+          : "OpenFork Ubuntu is installed but not running"
+        : status.docker.isNative
+          ? status.docker.isStarting
+            ? "Docker is starting…"
+            : "Docker is not running"
+          : isBridgeStarting
+            ? "AI Engine is starting and exposing its Docker API"
+            : "AI Engine is installed but not running"
     : "";
   const dockerStatusDescription = status?.docker.installed
     ? status.docker.error === "DOCKER_PERMISSION_DENIED"
@@ -71,9 +73,9 @@ export function DependencySetup({
         ? isBridgeStarting
           ? "OpenFork is waiting for the Docker API inside the dedicated Ubuntu distro to become reachable from Windows. This usually takes a few seconds after WSL boots."
           : "Repair or restart the dedicated OpenFork Ubuntu engine to use local workflows."
-          : isBridgeStarting
-            ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
-            : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."
+        : isBridgeStarting
+          ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
+          : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."
     : "";
 
   // Auto-scroll log terminal to bottom when new lines arrive
@@ -107,13 +109,13 @@ export function DependencySetup({
       const depStatus: DependencyStatus = {
         docker: dockerResult,
         nvidia: nvidiaResult,
-        allReady: dockerResult.installed && dockerResult.running,
+        allReady: dockerResult.installed,
       };
 
       setStatus(depStatus);
 
       if (depStatus.allReady) {
-        setTimeout(() => onReady(), 300);
+        setTimeout(() => onReady(depStatus), 300);
       }
     } catch (error) {
       console.error("Failed to check dependencies:", error);
@@ -143,16 +145,23 @@ export function DependencySetup({
           ? `${selectedDrive}:\\OpenFork\\wsl`
           : undefined;
       const result = await window.electronAPI.installEngine(drivePath);
-      if (result?.success) {
+      if (result?.error !== "cancelled") {
         await checkDependencies();
-      } else if (result?.error !== "cancelled") {
+      }
+      if (!result?.success && result?.error !== "cancelled") {
         console.error("Installation failed:", result?.error);
       }
     } finally {
       cleanup();
       setIsInstalling(false);
     }
-  }, [canChooseInstallDrive, isInstalling, checkDependencies, selectedDrive]);
+  }, [
+    canChooseInstallDrive,
+    isInstalling,
+    checkDependencies,
+    platform,
+    selectedDrive,
+  ]);
 
   const handleFixLinuxPermissions = useCallback(async () => {
     if (isFixingPermissions) return;
@@ -229,11 +238,13 @@ export function DependencySetup({
                 ? "border-green-500/50 bg-green-500/5"
                 : isInstalling
                   ? "border-amber-500/50 bg-amber-500/10 backdrop-blur-xl shadow-2xl shadow-amber-500/10"
+                  : isInstallStateFromMain
+                    ? "border-amber-500/50 bg-amber-500/10"
                   : status?.docker.installed
                     ? "border-yellow-500/50 bg-yellow-500/5"
                     : status?.docker.error === "WSL_DISTRO_MISSING"
                       ? "border-yellow-500/50 bg-yellow-500/5"
-                      : "border-red-500/50 bg-red-500/5"
+                      : "border-amber-500/50 bg-amber-500/5"
             }`}
           >
             <CardHeader className="pb-2">
@@ -250,12 +261,14 @@ export function DependencySetup({
                   <CheckCircle2 className="h-4 w-4 text-green-500 ml-auto" />
                 ) : isInstalling ? (
                   <Download className="h-4 w-4 text-orange-500 ml-auto" />
+                ) : isInstallStateFromMain ? (
+                  <Download className="h-4 w-4 text-amber-500 ml-auto" />
                 ) : status?.docker.installed ? (
                   <AlertCircle className="h-4 w-4 text-yellow-500 ml-auto" />
                 ) : status?.docker.error === "WSL_DISTRO_MISSING" ? (
                   <AlertCircle className="h-4 w-4 text-yellow-500 ml-auto" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-red-500 ml-auto" />
+                  <AlertCircle className="h-4 w-4 text-amber-500 ml-auto" />
                 )}
               </CardTitle>
             </CardHeader>
@@ -293,17 +306,30 @@ export function DependencySetup({
                 </>
               ) : (
                 <>
-                  {!isInstalling && (
+                  {isInstallStateFromMain ? (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                        Installing OpenFork Ubuntu...
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        OpenFork is still provisioning Ubuntu and Docker inside
+                        WSL. Keep this window open while setup finishes.
+                      </p>
+                    </div>
+                  ) : !isInstalling && (
                     <div className="space-y-1">
                       {!status?.docker.isNative &&
                         (isWindows ? (
                           <>
                             <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
-                              OpenFork Ubuntu not installed
+                              {wslDistroExists
+                                ? "Docker setup incomplete"
+                                : "OpenFork Ubuntu not installed"}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              OpenFork will install its own Ubuntu distro and
-                              Docker runtime automatically.
+                              {wslDistroExists
+                                ? "The OpenFork Ubuntu distro was created but Docker did not finish installing. Click Repair to retry."
+                                : "OpenFork will install its own Ubuntu distro and Docker runtime automatically."}
                             </p>
                           </>
                         ) : (
@@ -371,13 +397,15 @@ export function DependencySetup({
                     )}
 
                   {/* Install button — shown when not installing */}
-                  {!isInstalling && !status?.docker.isNative && (
+                  {!isInstalling &&
+                    !isInstallStateFromMain &&
+                    !status?.docker.isNative && (
                     <Button
                       onClick={handleInstallEngine}
                       className="w-full mt-2 relative overflow-hidden group"
                       disabled={status?.docker.isStarting}
                     >
-                      {!status?.docker.installed ? (
+                      {!status?.docker.installed && !wslDistroExists ? (
                         <>
                           <Download className="h-3.5 w-3.5 mr-2" />
                           {isWindows

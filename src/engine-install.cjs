@@ -19,7 +19,23 @@ function init({ app, getMainWindow, setWslDistro }) {
 let currentInstallProcess = null;
 let currentInstallCancelled = false;
 let currentInstallDistro = null;
+let currentInstallActive = false;
+let currentInstallPath = null;
 const INSTALL_PROGRESS_LOG = "C:\\Windows\\Temp\\openfork_install_progress.log";
+
+function readInstallProgressTail(maxLines = 80) {
+  try {
+    const content = fs.readFileSync(INSTALL_PROGRESS_LOG, "utf8");
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(-maxLines)
+      .join("\n");
+  } catch (_) {
+    return "";
+  }
+}
 
 // --- PHASE PARSING ---
 
@@ -110,7 +126,7 @@ function runElevatedPowerShell(scriptPath, args = []) {
           currentInstallCancelled = false;
           resolve({ success: false, error: "cancelled" });
         } else if (error) {
-          console.error("Elevation failed or was cancelled:", error.message);
+          console.error("Elevated setup failed:", error.message);
           resolve({ success: false, error: error.message });
         } else {
           resolve({ success: true });
@@ -143,6 +159,9 @@ async function handleInstallEngine(installPath) {
 
   if (process.platform === "win32") {
     console.log(`Using setup script: ${scriptPath}`);
+    const distroName = "OpenFork";
+    currentInstallActive = true;
+    currentInstallPath = installPath || null;
 
     // Clear the progress log before starting
     try { fs.writeFileSync(INSTALL_PROGRESS_LOG, "", "utf8"); } catch (_) {}
@@ -181,25 +200,36 @@ async function handleInstallEngine(installPath) {
       }
     }, 500);
 
-    currentInstallDistro = "OpenFork";
+    currentInstallDistro = distroName;
     const setupArgs = [
       "-DistroName",
-      "OpenFork",
+      distroName,
       ...(installPath ? ["-InstallPath", installPath] : []),
     ];
 
     let result;
+    let progressTail = "";
     try {
       result = await runElevatedPowerShell(scriptPath, setupArgs);
     } finally {
+      if (result && !result.success && result.error !== "cancelled") {
+        progressTail = readInstallProgressTail();
+      }
+      currentInstallActive = false;
+      currentInstallPath = null;
       currentInstallDistro = null;
       clearInterval(watchInterval);
-      try { fs.unlinkSync(INSTALL_PROGRESS_LOG); } catch (_) {}
+      if (!result || result.success || result.error === "cancelled") {
+        try { fs.unlinkSync(INSTALL_PROGRESS_LOG); } catch (_) {}
+      }
     }
 
     if (!result.success) {
-      console.error("Installation process error:", result.error);
-      return { success: false, error: result.error };
+      const detailedError = progressTail
+        ? `${result.error}\n${progressTail}`
+        : result.error;
+      console.error("Installation process error:", detailedError);
+      return { success: false, error: detailedError };
     }
 
     // Persist the distro name so all subsequent checks (Docker, monitoring) use it
@@ -251,10 +281,19 @@ function handleCancelInstall() {
   return { success: true };
 }
 
+function getCurrentInstallState() {
+  return {
+    active: currentInstallActive,
+    distro: currentInstallDistro,
+    installPath: currentInstallPath,
+  };
+}
+
 module.exports = {
   init,
   parseInstallPhase,
   runElevatedPowerShell,
   handleInstallEngine,
   handleCancelInstall,
+  getCurrentInstallState,
 };

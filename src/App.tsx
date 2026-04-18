@@ -127,7 +127,7 @@ function App() {
         const status: DependencyStatus = {
           docker: dockerResult,
           nvidia: nvidiaResult,
-          allReady: dockerResult.installed && dockerResult.running,
+          allReady: dockerResult.installed,
         };
 
         setDependencyStatus(status);
@@ -229,13 +229,11 @@ function App() {
     );
   }
 
-  // Show dependency setup if Docker is not ready
+  // Show dependency setup only until the local engine is installed.
   if (dependencyStatus && !dependencyStatus.allReady) {
     return (
       <DependencySetup
-        onReady={() =>
-          setDependencyStatus({ ...dependencyStatus, allReady: true })
-        }
+        onReady={(readyStatus) => setDependencyStatus(readyStatus)}
         initialStatus={dependencyStatus}
       />
     );

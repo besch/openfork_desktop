@@ -131,7 +131,8 @@ export interface DockerStatus {
   isNative?: boolean;
   isStarting?: boolean;
   storagePath?: string;
-  activeEngine?: "desktop" | "wsl" | "linux";
+  wslDistro?: string;
+  activeEngine?: "wsl" | "linux";
   enginePreference?: DockerEnginePreference;
   availableEngines?: {
     desktop: boolean;

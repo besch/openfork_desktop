@@ -20,6 +20,17 @@ function register(ipcMain) {
 
   ipcMain.handle("deps:check-docker", async () => {
     try {
+      const installState = engineInstall.getCurrentInstallState?.();
+      if (process.platform === "win32" && installState?.active) {
+        const installDriveMatch = installState.installPath?.match(/^([A-Za-z]):\\/);
+        return {
+          installed: false,
+          running: false,
+          isNative: false,
+          isStarting: true,
+          installDrive: installDriveMatch ? installDriveMatch[1].toUpperCase() : undefined,
+        };
+      }
       return await dockerEngine.resolveDockerStatus({ allowNativeStart: true });
     } catch (err) {
       console.error("Unexpected error checking Docker:", err);

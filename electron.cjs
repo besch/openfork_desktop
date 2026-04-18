@@ -225,6 +225,10 @@ engineInstall.init({
   getMainWindow: () => mainWindow,
   setWslDistro: wslUtils.setWslDistro,
 });
+dockerEngine.init({
+  getMainWindow: () => mainWindow,
+  getInstallState: engineInstall.getCurrentInstallState,
+});
 
 ipcDocker.init({
   app,
@@ -278,6 +282,34 @@ async function logout() {
   session = null;
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("auth:session", null);
+  }
+}
+
+async function hydrateInitialSession() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    session = data.session;
+  } catch (error) {
+    const message = error?.message || String(error);
+    if (
+      message.includes("Invalid Refresh Token") ||
+      message.includes("refresh_token_not_found")
+    ) {
+      console.warn(
+        "Stored Supabase refresh token is invalid. Clearing local session.",
+      );
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch (signOutError) {
+        console.warn(
+          "Failed to clear local session after invalid refresh token:",
+          signOutError?.message || signOutError,
+        );
+      }
+      session = null;
+      return;
+    }
+    throw error;
   }
 }
 
@@ -370,8 +402,12 @@ function createWindow() {
   });
 
   mainWindow.webContents.on("did-finish-load", async () => {
-    const { data } = await supabase.auth.getSession();
-    session = data.session;
+    try {
+      await hydrateInitialSession();
+    } catch (error) {
+      console.error("Failed to hydrate initial session:", error);
+      session = null;
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("auth:session", session);
     }

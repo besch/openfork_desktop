@@ -7,14 +7,18 @@ const wslUtils = require("./wsl-utils.cjs");
 const dockerStorage = require("./docker-storage.cjs");
 
 const WINDOWS_DOCKER_API_PORT = 2375;
+const WSL_DOCKER_CHECK_TIMEOUT_MS = 30000;
+const WSL_LINUX_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 let _getMainWindow;
+let _getInstallState;
 // On Linux, set when the user is in the docker group but hasn't re-logged in yet.
 // Commands are then wrapped with `sg docker -c "..."` to pick up the group mid-session.
 let useSgDocker = false;
 
-function init({ getMainWindow }) {
-  _getMainWindow = getMainWindow;
+function init({ getMainWindow, getInstallState }) {
+  if (getMainWindow) _getMainWindow = getMainWindow;
+  if (getInstallState) _getInstallState = getInstallState;
 }
 
 // --- SECURITY HELPERS ---
@@ -59,9 +63,33 @@ function emitCompactionSuggested() {
   }
 }
 
+function getActiveWindowsInstallStatus() {
+  if (process.platform !== "win32" || typeof _getInstallState !== "function") {
+    return null;
+  }
+
+  const installState = _getInstallState();
+  if (!installState?.active) return null;
+
+  const installDriveMatch = installState.installPath?.match(/^([A-Za-z]):\\/);
+  return {
+    installed: false,
+    running: false,
+    isNative: false,
+    isStarting: true,
+    installDrive: installDriveMatch ? installDriveMatch[1].toUpperCase() : undefined,
+    wslDistro: installState.distro || "OpenFork",
+  };
+}
+
 // --- DOCKER COMMAND EXECUTION ---
 
 async function execDockerCommand(command) {
+  const installStatus = getActiveWindowsInstallStatus();
+  if (installStatus && command.startsWith("docker ")) {
+    return "";
+  }
+
   const wslDistro =
     process.platform === "win32" ? await wslUtils.getWslDistroName() : null;
   return new Promise((resolve, reject) => {
@@ -72,18 +100,30 @@ async function execDockerCommand(command) {
         return;
       }
       // Use -- separator which is more robust for passing complex strings to WSL
-      const args = ["-d", wslDistro, "--", "sudo", "bash", "-c", command];
+      const args = [
+        "-d",
+        wslDistro,
+        "--",
+        "sudo",
+        "env",
+        `PATH=${WSL_LINUX_PATH}`,
+        "bash",
+        "-c",
+        command,
+      ];
       execFile(
         "wsl.exe",
         args,
         { maxBuffer: 1024 * 1024 * 10 },
-        (error, stdout) => {
+        (error, stdout, stderr) => {
           if (error) {
-            const msg = error.message.toLowerCase();
+            const msg = `${error.message}\n${stderr || ""}`.toLowerCase();
             if (
               msg.includes("is not running") ||
               msg.includes("connection refused") ||
-              msg.includes("distribution with the supplied name could not be found")
+              msg.includes("distribution with the supplied name could not be found") ||
+              msg.includes("docker: command not found") ||
+              msg.includes("the command 'docker' could not be found in this wsl 2 distro")
             ) {
               resolve("");
               return;
@@ -123,6 +163,12 @@ async function execDockerCommand(command) {
 function classifyDockerCheckError(errorMessage = "", stderr = "") {
   const combined = `${errorMessage}\n${stderr}`.toLowerCase();
   if (combined.includes("permission denied")) return "DOCKER_PERMISSION_DENIED";
+  if (
+    combined.includes("docker: command not found") ||
+    combined.includes("the command 'docker' could not be found in this wsl 2 distro")
+  ) {
+    return "DOCKER_CLI_NOT_FOUND";
+  }
   return null;
 }
 
@@ -132,20 +178,35 @@ function runDockerCheckCommand(
 ) {
   return new Promise((resolve) => {
     if (useWsl && process.platform === "win32") {
-      const args = ["-d", wslDistro, "--user", wslUser, "--", "bash", "-lc", cmd];
+      const args = [
+        "-d",
+        wslDistro,
+        "--user",
+        wslUser,
+        "--",
+        "env",
+        `PATH=${WSL_LINUX_PATH}`,
+        "bash",
+        "-lc",
+        cmd,
+      ];
       execFile(
         "wsl.exe",
         args,
-        { timeout: timeoutMs ?? 15000 },
+        { timeout: timeoutMs ?? WSL_DOCKER_CHECK_TIMEOUT_MS },
         (error, stdout, stderr) => {
           if (error) {
-            console.log(`Check command '${cmd}' failed: ${error.message}`);
-            console.log(`WSL Stdout: ${stdout}`);
-            console.log(`WSL Stderr: ${stderr}`);
+            const errorCode = classifyDockerCheckError(error.message, stderr);
+            if (errorCode !== "DOCKER_CLI_NOT_FOUND") {
+              console.log(`Check command '${cmd}' failed: ${error.message}`);
+              console.log(`WSL Stdout: ${stdout}`);
+              console.log(`WSL Stderr: ${stderr}`);
+            }
             resolve({
               success: false,
               error: error.message,
               stderr: stderr?.trim() || "",
+              code: errorCode || undefined,
             });
             return;
           }
@@ -238,6 +299,12 @@ async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
 async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
   if (process.platform !== "win32") return { installed: false, running: false };
 
+  const installStatus = getActiveWindowsInstallStatus();
+  if (installStatus) {
+    delete process.env.OPENFORK_DOCKER_HOST;
+    return installStatus;
+  }
+
   const wslDistro = await wslUtils.getWslDistroName();
   if (!wslDistro) {
     delete process.env.OPENFORK_WSL_DISTRO;
@@ -272,9 +339,12 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
   const versionResult = await runDockerCheckCommand("docker --version", {
     useWsl: true,
     wslDistro,
+    timeoutMs: WSL_DOCKER_CHECK_TIMEOUT_MS,
   });
   if (!versionResult.success) {
-    console.log(`Docker CLI not found inside WSL distro '${wslDistro}'`);
+    if (versionResult.code !== "DOCKER_CLI_NOT_FOUND") {
+      console.log(`Docker CLI not found inside WSL distro '${wslDistro}'`);
+    }
     return {
       installed: false,
       running: false,
@@ -282,6 +352,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
       installDrive,
       storagePath,
       error:
+        versionResult.code ||
         classifyDockerCheckError(versionResult.error, versionResult.stderr) ||
         undefined,
       wslDistro,
@@ -291,6 +362,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
   const infoResult = await runDockerCheckCommand("docker info", {
     useWsl: true,
     wslDistro,
+    timeoutMs: WSL_DOCKER_CHECK_TIMEOUT_MS,
   });
   if (!infoResult.success) {
     console.log(
@@ -304,6 +376,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
       installDrive,
       storagePath,
       error:
+        infoResult.code ||
         classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
         undefined,
       wslDistro,
@@ -412,6 +485,17 @@ async function resolveDockerStatus(
     return decorate(buildRunningWslStatus(wsl));
   }
 
+  if (wsl.isStarting) {
+    delete process.env.OPENFORK_DOCKER_HOST;
+    return decorate({
+      installed: false,
+      running: false,
+      isNative: false,
+      isStarting: true,
+      installDrive: wsl.installDrive,
+    });
+  }
+
   if (wsl.installed) {
     return decorate(buildWslStatus(wsl));
   }
@@ -422,6 +506,7 @@ async function resolveDockerStatus(
     running: false,
     isNative: false,
     error: wsl.error,
+    ...(wsl.wslDistro ? { wslDistro: wsl.wslDistro } : {}),
   });
 }
 
@@ -438,4 +523,5 @@ module.exports = {
   resolveWindowsDockerApiEndpoint,
   checkWslDockerStatus,
   resolveDockerStatus,
+  getActiveWindowsInstallStatus,
 };
