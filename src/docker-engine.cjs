@@ -2,11 +2,9 @@
 
 const { exec, execFile } = require("child_process");
 const http = require("http");
-const fs = require("fs");
 
 const wslUtils = require("./wsl-utils.cjs");
 const dockerStorage = require("./docker-storage.cjs");
-const settings = require("./settings.cjs");
 
 const WINDOWS_DOCKER_API_PORT = 2375;
 
@@ -42,11 +40,10 @@ function escapeShellArg(arg) {
 // --- DOCKER ROUTING ---
 
 /**
- * Returns true when Docker commands are routed through WSL (not native Docker Desktop).
- * OPENFORK_DOCKER_HOST is set only when the WSL Docker TCP endpoint was resolved.
+ * Returns true when Windows is operating against the dedicated OpenFork WSL distro.
  */
 function isUsingWslDocker() {
-  return process.platform === "win32" && !!process.env.OPENFORK_DOCKER_HOST;
+  return process.platform === "win32" && !!process.env.OPENFORK_WSL_DISTRO;
 }
 
 /**
@@ -70,22 +67,8 @@ async function execDockerCommand(command) {
   return new Promise((resolve, reject) => {
     // WSL ROBUSTNESS: On Windows, use execFile to avoid CMD shell escaping issues
     if (process.platform === "win32" && command.startsWith("docker ")) {
-      // When OPENFORK_DOCKER_HOST is not set, Docker Desktop is the active engine.
-      // Route directly to the native docker.exe instead of through WSL.
-      if (!process.env.OPENFORK_DOCKER_HOST) {
-        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
-          if (error) {
-            const msg = error.message.toLowerCase();
-            if (msg.includes("is not running") || msg.includes("connection refused")) {
-              resolve("");
-              return;
-            }
-            console.error(`Docker command error: ${error.message}`);
-            reject(error);
-            return;
-          }
-          resolve(stdout.trim());
-        });
+      if (!wslDistro) {
+        resolve("");
         return;
       }
       // Use -- separator which is more robust for passing complex strings to WSL
@@ -250,56 +233,6 @@ async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
   return null;
 }
 
-// --- NATIVE DOCKER CHECK ---
-
-async function checkNativeDocker() {
-  if (process.platform !== "win32") return { installed: false, running: false };
-  return new Promise((resolve) => {
-    const commonPath =
-      "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe";
-    const hasDockerExe = fs.existsSync(commonPath);
-    const dockerCmd = hasDockerExe ? `"${commonPath}"` : "docker.exe";
-    exec("where docker.exe", (error, stdout) => {
-      const inPath = !error && stdout.trim().length > 0;
-      if (!inPath && !hasDockerExe) {
-        resolve({ installed: false, running: false });
-        return;
-      }
-      exec(
-        'tasklist /FI "IMAGENAME eq Docker Desktop.exe" /NH',
-        (err, stdout) => {
-          const processRunning = !err && stdout.includes("Docker Desktop.exe");
-          // Advanced check: verify if the Docker named pipe exists (most reliable indicator)
-          const pipePath = "\\\\.\\pipe\\docker_engine";
-          const pipeExists = fs.existsSync(pipePath);
-          // Check which container mode Docker Desktop is exposing.
-          // OpenFork requires Linux containers.
-          exec(
-            `${dockerCmd} version --format "{{.Server.Os}}"`,
-            (versionError, versionStdout) => {
-              const serverOs = versionStdout.trim().toLowerCase() || null;
-              const storagePath = dockerStorage.resolveDockerDesktopStoragePath();
-              resolve({
-                installed: true,
-                running: serverOs === "linux",
-                isNative: true,
-                isProcessRunning: processRunning || pipeExists,
-                installDrive:
-                  dockerStorage.getDriveLetterFromPath(storagePath) ||
-                  wslUtils.getWindowsSystemDriveLetter(),
-                storagePath,
-                serverOs,
-                isWindowsContainers: serverOs === "windows",
-                lastError: versionError?.message,
-              });
-            },
-          );
-        },
-      );
-    });
-  });
-}
-
 // --- WSL DOCKER CHECK ---
 
 async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
@@ -307,6 +240,8 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
 
   const wslDistro = await wslUtils.getWslDistroName();
   if (!wslDistro) {
+    delete process.env.OPENFORK_WSL_DISTRO;
+    delete process.env.OPENFORK_DOCKER_HOST;
     // No suitable WSL distro found (e.g. only docker-desktop internal distros exist).
     // Return silently — no spam, re-detection happens on the next poll.
     return { installed: false, running: false, isNative: false };
@@ -316,6 +251,8 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
   const distroExists = await wslUtils.checkDistroExists(wslDistro);
   if (!distroExists) {
     console.log(`WSL distro '${wslDistro}' is missing`);
+    delete process.env.OPENFORK_WSL_DISTRO;
+    delete process.env.OPENFORK_DOCKER_HOST;
     // Invalidate only the in-memory cache so the next poll re-detects whatever
     // distro is available, while the store entry is preserved in case the same
     // distro is re-registered.
@@ -410,18 +347,6 @@ function withWindowsDockerMetadata(status, { preference, native, wsl }) {
   };
 }
 
-function buildRunningNativeStatus(native) {
-  delete process.env.OPENFORK_DOCKER_HOST;
-  return {
-    installed: true,
-    running: true,
-    isNative: true,
-    installDrive: native.installDrive,
-    storagePath: native.storagePath,
-    activeEngine: "desktop",
-  };
-}
-
 function buildRunningWslStatus(wsl) {
   process.env.OPENFORK_DOCKER_HOST = wsl.dockerHost;
   return {
@@ -431,40 +356,6 @@ function buildRunningWslStatus(wsl) {
     installDrive: wsl.installDrive,
     storagePath: wsl.storagePath,
     activeEngine: "wsl",
-  };
-}
-
-async function buildNativeStatus(native, { allowNativeStart } = {}) {
-  delete process.env.OPENFORK_DOCKER_HOST;
-  if (native.isWindowsContainers) {
-    return {
-      installed: true,
-      running: false,
-      isNative: true,
-      installDrive: native.installDrive,
-      storagePath: native.storagePath,
-      error: "DOCKER_WINDOWS_CONTAINERS",
-    };
-  }
-  if (!native.isProcessRunning && allowNativeStart) {
-    console.log("Docker Desktop is not running. Attempting auto-start...");
-    const startResult = await startNativeDocker();
-    return {
-      installed: true,
-      running: false,
-      isNative: true,
-      installDrive: native.installDrive,
-      storagePath: native.storagePath,
-      isStarting: startResult.success,
-    };
-  }
-  return {
-    installed: true,
-    running: false,
-    isNative: true,
-    installDrive: native.installDrive,
-    storagePath: native.storagePath,
-    isStarting: !!native.isProcessRunning,
   };
 }
 
@@ -508,70 +399,29 @@ async function resolveDockerStatus(
     };
   }
 
-  const preference = settings.getDockerEnginePreference();
-  const [native, wsl] = await Promise.all([
-    checkNativeDocker(),
-    checkWslDockerStatus({ hostTimeoutMs: wslHostTimeoutMs }),
-  ]);
-
+  const wsl = await checkWslDockerStatus({ hostTimeoutMs: wslHostTimeoutMs });
+  const native = { installed: false, running: false };
   const decorate = (status) =>
-    withWindowsDockerMetadata(status, { preference, native, wsl });
+    withWindowsDockerMetadata(status, {
+      preference: "wsl",
+      native,
+      wsl,
+    });
 
-  if (preference === "desktop" && native.installed) {
-    return decorate(
-      native.running
-        ? buildRunningNativeStatus(native)
-        : await buildNativeStatus(native, { allowNativeStart }),
-    );
+  if (wsl.running) {
+    return decorate(buildRunningWslStatus(wsl));
   }
-  if (preference === "wsl" && wsl.installed) {
-    return decorate(wsl.running ? buildRunningWslStatus(wsl) : buildWslStatus(wsl));
+
+  if (wsl.installed) {
+    return decorate(buildWslStatus(wsl));
   }
-  if (preference === "desktop" && !native.installed && wsl.installed) {
-    return decorate(wsl.running ? buildRunningWslStatus(wsl) : buildWslStatus(wsl));
-  }
-  if (preference === "wsl" && !wsl.installed && native.installed) {
-    return decorate(
-      native.running
-        ? buildRunningNativeStatus(native)
-        : await buildNativeStatus(native, { allowNativeStart }),
-    );
-  }
-  if (native.running) return decorate(buildRunningNativeStatus(native));
-  if (wsl.running) return decorate(buildRunningWslStatus(wsl));
-  if (wsl.installed && native.isWindowsContainers) return decorate(buildWslStatus(wsl));
-  if (native.installed) return decorate(await buildNativeStatus(native, { allowNativeStart }));
-  if (wsl.installed) return decorate(buildWslStatus(wsl));
 
   delete process.env.OPENFORK_DOCKER_HOST;
-  return decorate({ installed: false, running: false, error: wsl.error });
-}
-
-async function startNativeDocker() {
-  if (process.platform !== "win32") return { success: false };
-  return new Promise((resolve) => {
-    console.log("Attempting to start Docker Desktop...");
-    const dockerDesktopPath =
-      "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe";
-    if (!fs.existsSync(dockerDesktopPath)) {
-      console.error("Docker Desktop GUI executable not found at default path.");
-      resolve({ success: false, error: "DOCKER_DESKTOP_NOT_FOUND" });
-      return;
-    }
-    const command = `Start-Process "${dockerDesktopPath}"`;
-    execFile(
-      "powershell.exe",
-      ["-NoProfile", "-Command", command],
-      (error) => {
-        if (error) {
-          console.error("Failed to launch Docker Desktop:", error.message);
-          resolve({ success: false, error: error.message });
-        } else {
-          console.log("Docker Desktop launch command sent.");
-          resolve({ success: true });
-        }
-      },
-    );
+  return decorate({
+    installed: false,
+    running: false,
+    isNative: false,
+    error: wsl.error,
   });
 }
 
@@ -586,8 +436,6 @@ module.exports = {
   runDockerCheckCommand,
   pingDockerApiHost,
   resolveWindowsDockerApiEndpoint,
-  checkNativeDocker,
   checkWslDockerStatus,
   resolveDockerStatus,
-  startNativeDocker,
 };

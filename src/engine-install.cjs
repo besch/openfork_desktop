@@ -181,11 +181,12 @@ async function handleInstallEngine(installPath) {
       }
     }, 500);
 
-    const distroName = installPath ? "OpenFork" : "Ubuntu";
-    currentInstallDistro = distroName;
-    const setupArgs = installPath
-      ? ["-InstallPath", installPath, "-DistroName", "OpenFork"]
-      : [];
+    currentInstallDistro = "OpenFork";
+    const setupArgs = [
+      "-DistroName",
+      "OpenFork",
+      ...(installPath ? ["-InstallPath", installPath] : []),
+    ];
 
     let result;
     try {
@@ -245,7 +246,7 @@ function handleCancelInstall() {
   // Also try to kill the full process tree (includes elevated child)
   try { execSync(`taskkill /F /T /PID ${pid}`); } catch (_) {}
   // Attempt to unregister the partially installed distro
-  const distroToClean = currentInstallDistro || "Ubuntu";
+  const distroToClean = currentInstallDistro || "OpenFork";
   try { execSync(`wsl --unregister ${distroToClean}`, { timeout: 15000 }); } catch (_) {}
   return { success: true };
 }

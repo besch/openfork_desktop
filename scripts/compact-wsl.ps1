@@ -3,8 +3,35 @@ param(
     [string]$DistroName
 )
 
+function Test-OpenForkManagedDistro {
+    param([string]$Name)
+
+    try {
+        $probe = wsl.exe -d $Name --user root -- bash -lc @'
+if [ -f /etc/openfork-managed ]; then
+  echo managed
+elif id -u openfork >/dev/null 2>&1 \
+  && [ -f /etc/sudoers.d/openfork ] \
+  && grep -q "default=openfork" /etc/wsl.conf 2>/dev/null \
+  && grep -q "tcp://0.0.0.0:2375" /etc/docker/daemon.json 2>/dev/null; then
+  echo legacy-managed
+else
+  echo unmanaged
+fi
+'@
+        $probe = ($probe | Out-String).Trim()
+        return ($LASTEXITCODE -eq 0) -and ($probe -in @("managed", "legacy-managed"))
+    } catch {
+        return $false
+    }
+}
+
 try {
     Write-Host "Reclaiming disk space for WSL distribution: $DistroName..."
+
+    if (-not (Test-OpenForkManagedDistro -Name $DistroName)) {
+        throw "Refusing to compact '$DistroName' because it is not recognized as an OpenFork-managed distro."
+    }
     
     # 1. Get the VHDX path from registry
     $registryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
@@ -32,21 +59,23 @@ try {
     
     # 3. Create diskpart script
     $tempFile = New-TemporaryFile
-    $diskpartScript = @"
+    try {
+        $diskpartScript = @"
 select vdisk file="$vhdxPath"
 attach vdisk readonly
 compact vdisk
 detach vdisk
 exit
 "@
-    $diskpartScript | Out-File -FilePath $tempFile -Encoding ascii
+        $diskpartScript | Out-File -FilePath $tempFile -Encoding ascii
     
-    # 4. Run diskpart as admin
-    Write-Host "Running diskpart compaction..."
-    $process = Start-Process diskpart -ArgumentList "/s `"$($tempFile.FullName)`"" -Verb RunAs -Wait -PassThru
-    
-    Remove-Item $tempFile -Force
-    
+        # 4. Run diskpart as admin
+        Write-Host "Running diskpart compaction..."
+        $process = Start-Process diskpart -ArgumentList "/s `"$($tempFile.FullName)`"" -Verb RunAs -Wait -PassThru
+    } finally {
+        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+    }
+
     if ($process.ExitCode -eq 0) {
         Write-Host "Successfully reclaimed disk space."
         exit 0

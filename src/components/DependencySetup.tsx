@@ -44,32 +44,33 @@ export function DependencySetup({
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const installDrive = status?.docker.installDrive;
+  const isWindows = platform === "win32";
   const isBridgeStarting =
     status?.docker.error === "DOCKER_API_UNREACHABLE" ||
     !!status?.docker.isStarting;
   const canChooseInstallDrive = !status?.docker.installed;
   const dockerStatusHeadline = status?.docker.installed
-    ? status.docker.error === "DOCKER_WINDOWS_CONTAINERS"
-      ? "Docker Desktop is running Windows containers"
-      : status.docker.error === "DOCKER_PERMISSION_DENIED"
+    ? status.docker.error === "DOCKER_PERMISSION_DENIED"
         ? "Docker access needs a permission refresh"
-        : status.docker.isNative
-          ? status.docker.isStarting
-            ? "Docker Desktop is starting…"
-            : "Docker Desktop is not running"
-          : isBridgeStarting
-            ? "AI Engine is starting and exposing its Docker API"
-            : "AI Engine is installed but not running"
+        : isWindows
+          ? isBridgeStarting
+            ? "OpenFork Ubuntu is starting…"
+            : "OpenFork Ubuntu is installed but not running"
+          : status.docker.isNative
+            ? status.docker.isStarting
+              ? "Docker is starting…"
+              : "Docker is not running"
+            : isBridgeStarting
+              ? "AI Engine is starting and exposing its Docker API"
+              : "AI Engine is installed but not running"
     : "";
   const dockerStatusDescription = status?.docker.installed
-    ? status.docker.error === "DOCKER_WINDOWS_CONTAINERS"
-      ? "OpenFork requires Linux containers. Switch Docker Desktop from Windows containers to Linux containers, then retry the check."
-      : status.docker.error === "DOCKER_PERMISSION_DENIED"
-        ? "Docker is installed, but your user cannot access it yet. If you just finished setup on Linux, log out and back in before retrying."
-        : status.docker.isNative
-          ? status.docker.isStarting
-            ? "OpenFork detected Docker Desktop and is attempting to start it automatically. This may take a minute."
-            : "Docker Desktop was detected but is not running. Please start it to use the local AI Engine."
+    ? status.docker.error === "DOCKER_PERMISSION_DENIED"
+      ? "Docker is installed, but your user cannot access it yet. If you just finished setup on Linux, log out and back in before retrying."
+      : isWindows
+        ? isBridgeStarting
+          ? "OpenFork is waiting for the Docker API inside the dedicated Ubuntu distro to become reachable from Windows. This usually takes a few seconds after WSL boots."
+          : "Repair or restart the dedicated OpenFork Ubuntu engine to use local workflows."
           : isBridgeStarting
             ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
             : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."
@@ -215,8 +216,8 @@ export function DependencySetup({
             System Setup
           </h1>
           <p className="text-muted-foreground">
-            OpenFork requires a Docker and an NVIDIA GPU to run workflows on
-            your machine.
+            OpenFork requires its local AI engine and an NVIDIA GPU to run
+            workflows on your machine.
           </p>
         </div>
 
@@ -294,33 +295,15 @@ export function DependencySetup({
                 <>
                   {!isInstalling && (
                     <div className="space-y-1">
-                      {/* Only show installation message if Docker Desktop is NOT installed */}
-                      {/* If Docker Desktop is installed but not running, that case is handled above */}
                       {!status?.docker.isNative &&
-                        (status?.docker.error === "WSL_DISTRO_MISSING" ? (
+                        (isWindows ? (
                           <>
                             <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
-                              Docker is not installed
+                              OpenFork Ubuntu not installed
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              OpenFork uses Docker to run the virtual machine.
-                              Docker is not installed on your system.
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Would you like to install it now? You can also{" "}
-                              <button
-                                onClick={() =>
-                                  window.electronAPI.openExternal(
-                                    platform === "win32"
-                                      ? "https://www.docker.com/products/docker-desktop"
-                                      : "https://docs.docker.com/engine/install/",
-                                  )
-                                }
-                                className="text-yellow-500 cursor-pointer hover:underline hover:text-yellow-400"
-                              >
-                                install Docker
-                              </button>{" "}
-                              yourself.
+                              OpenFork will install its own Ubuntu distro and
+                              Docker runtime automatically.
                             </p>
                           </>
                         ) : (
@@ -330,9 +313,7 @@ export function DependencySetup({
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Docker is required to run OpenFork.
-                              {platform === "win32"
-                                ? " It will be installed automatically using a dedicated WSL+Ubuntu environment."
-                                : " It will be installed automatically."}
+                              {" It will be installed automatically."}
                             </p>
                           </>
                         ))}
@@ -344,16 +325,16 @@ export function DependencySetup({
                     !status?.docker.isNative &&
                     installDrive && (
                       <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-muted-foreground">
-                        Existing Ubuntu detected on{" "}
+                        Existing OpenFork Ubuntu storage detected on{" "}
                         <span className="font-semibold text-foreground">
                           {installDrive}: drive
-                        </span>{" "}
-                        (e.g. Docker Desktop). OpenFork will be installed as a
-                        separate environment on the drive you choose below.
+                        </span>
+                        . OpenFork installs its Docker engine inside this
+                        dedicated distro.
                       </div>
                     )}
 
-                  {/* Drive selector — Windows only, hidden while installing or when Docker Desktop is installed */}
+                  {/* Drive selector — Windows only, hidden while installing */}
                   {platform === "win32" &&
                     !isInstalling &&
                     !status?.docker.isNative &&
@@ -389,35 +370,26 @@ export function DependencySetup({
                       </div>
                     )}
 
-                  {/* Install button — shown when not installing and Docker Desktop is NOT installed */}
+                  {/* Install button — shown when not installing */}
                   {!isInstalling && !status?.docker.isNative && (
                     <Button
                       onClick={handleInstallEngine}
                       className="w-full mt-2 relative overflow-hidden group"
                       disabled={status?.docker.isStarting}
                     >
-                      {/* Show "Install Local AI Engine" if no Docker found (WSL distro missing or not installed) */}
-                      {/* Show "Retry Check" if Docker Desktop is installed but not running */}
                       {!status?.docker.installed ? (
                         <>
                           <Download className="h-3.5 w-3.5 mr-2" />
-                          {status?.docker.error === "WSL_DISTRO_MISSING"
-                            ? "Install Docker"
+                          {isWindows
+                            ? "Install OpenFork Ubuntu"
                             : "Install Local AI Engine"}
-                        </>
-                      ) : status?.docker.isNative ? (
-                        <>
-                          <RefreshCw
-                            className={`h-4 w-4 mr-2 ${status?.docker.isStarting ? "animate-spin" : ""}`}
-                          />
-                          {status?.docker.isStarting
-                            ? "Starting Docker…"
-                            : "Retry Check"}
                         </>
                       ) : (
                         <>
                           <Download className="h-3.5 w-3.5 mr-2" />
-                          Install Local AI Engine
+                          {isWindows
+                            ? "Repair OpenFork Ubuntu"
+                            : "Install Local AI Engine"}
                         </>
                       )}
                       <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />

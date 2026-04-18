@@ -28,7 +28,6 @@ export const DockerManagement = memo(() => {
   const [platform, setPlatform] = useState<"win32" | "linux" | "darwin">(
     "win32",
   );
-  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
   const [images, setImages] = useState<DockerImage[]>([]);
   const [containers, setContainers] = useState<DockerContainer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,11 +70,7 @@ export const DockerManagement = memo(() => {
 
   const describeDockerState = useCallback((nextStatus: DockerStatus) => {
     if (nextStatus.error === "DOCKER_WINDOWS_CONTAINERS") {
-      if (nextStatus.availableEngines?.wsl) {
-        return "Docker Desktop is running Windows containers. Switch it to Linux containers, or change OpenFork to the OpenFork WSL backend below.";
-      }
-
-      return "Docker Desktop is running Windows containers. Switch it to Linux containers to use OpenFork.";
+      return "Docker Desktop is no longer supported for Windows workflows. Install or repair the OpenFork Ubuntu engine instead.";
     }
 
     if (nextStatus.error === "DOCKER_PERMISSION_DENIED") {
@@ -83,15 +78,11 @@ export const DockerManagement = memo(() => {
     }
 
     if (nextStatus.error === "DOCKER_API_UNREACHABLE") {
-      return "OpenFork detected the WSL Docker daemon, but its API is not reachable from Windows yet.";
+      return "OpenFork detected the Docker daemon inside its Ubuntu distro, but the API is not reachable from Windows yet.";
     }
 
     if (nextStatus.error === "WSL_DISTRO_MISSING") {
-      if (nextStatus.availableEngines?.desktop) {
-        return "The OpenFork WSL distro is missing. Switch OpenFork to Docker Desktop below, or reinstall the local engine.";
-      }
-
-      return "The OpenFork WSL distro is missing. Reinstall the local engine to restore Docker access.";
+      return "The OpenFork Ubuntu distro is missing. Reinstall the local engine to restore Docker access.";
     }
 
     return "Docker is not ready right now.";
@@ -102,7 +93,6 @@ export const DockerManagement = memo(() => {
     setError(null);
     try {
       const nextDockerStatus = await window.electronAPI.checkDocker();
-      setDockerStatus(nextDockerStatus);
 
       if (!nextDockerStatus.running) {
         setImages([]);
@@ -172,8 +162,7 @@ export const DockerManagement = memo(() => {
     return cleanup;
   }, []);
 
-  // Auto-refresh when the active Docker engine changes (e.g. WSL distro unregistered
-  // → fell back to Docker Desktop, or Docker Desktop uninstalled → fell back to WSL).
+  // Auto-refresh when the active Docker engine changes.
   useEffect(() => {
     const cleanup = window.electronAPI.onEngineSwitch((data) => {
       setEngineSwitchNotice(data);
@@ -332,9 +321,7 @@ export const DockerManagement = memo(() => {
   const engineLabel =
     platform === "linux"
       ? "Linux Docker"
-      : dockerStatus?.isNative
-        ? "Docker Desktop"
-        : "OpenFork WSL";
+      : "OpenFork Ubuntu";
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -360,14 +347,14 @@ export const DockerManagement = memo(() => {
               Docker engine auto-switched:{" "}
               <span className="text-white">
                 {engineSwitchNotice.from === "wsl"
-                  ? "OpenFork WSL"
-                  : "Docker Desktop"}
+                  ? "OpenFork Ubuntu"
+                  : "Unavailable"}
               </span>{" "}
               →{" "}
               <span className="text-white">
                 {engineSwitchNotice.to === "wsl"
-                  ? "OpenFork WSL"
-                  : "Docker Desktop"}
+                  ? "OpenFork Ubuntu"
+                  : "Unavailable"}
               </span>
             </span>
           </div>
@@ -455,7 +442,8 @@ export const DockerManagement = memo(() => {
                     } else if (result.error === "NOT_WSL_MODE") {
                       setCompactionResult({
                         ok: false,
-                        message: "Not applicable — using Docker Desktop.",
+                        message:
+                          "Not applicable — OpenFork Ubuntu is not active.",
                       });
                     } else {
                       setCompactionResult({

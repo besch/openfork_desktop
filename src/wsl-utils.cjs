@@ -41,8 +41,7 @@ function choosePreferredWslDistro(distros) {
   );
   return (
     userDistros.find((name) => /^openfork$/i.test(name)) ||
-    userDistros.find((name) => /^ubuntu(?:-.+)?$/i.test(name)) ||
-    userDistros[0] ||
+    userDistros.find((name) => /^ubuntu$/i.test(name)) ||
     null
   );
 }

@@ -5,8 +5,35 @@ param(
     [string]$NewLocation
 )
 
+function Test-OpenForkManagedDistro {
+    param([string]$Name)
+
+    try {
+        $probe = wsl.exe -d $Name --user root -- bash -lc @'
+if [ -f /etc/openfork-managed ]; then
+  echo managed
+elif id -u openfork >/dev/null 2>&1 \
+  && [ -f /etc/sudoers.d/openfork ] \
+  && grep -q "default=openfork" /etc/wsl.conf 2>/dev/null \
+  && grep -q "tcp://0.0.0.0:2375" /etc/docker/daemon.json 2>/dev/null; then
+  echo legacy-managed
+else
+  echo unmanaged
+fi
+'@
+        $probe = ($probe | Out-String).Trim()
+        return ($LASTEXITCODE -eq 0) -and ($probe -in @("managed", "legacy-managed"))
+    } catch {
+        return $false
+    }
+}
+
 try {
-    Write-Host "Starting Lite Relocation for $DistroName to $NewLocation..."
+    Write-Host "Starting OpenFork engine relocation for $DistroName to $NewLocation..."
+
+    if (-not (Test-OpenForkManagedDistro -Name $DistroName)) {
+        throw "Refusing to relocate '$DistroName' because it is not recognized as an OpenFork-managed distro."
+    }
     
     # 1. Ensure the new location exists
     if (-not (Test-Path $NewLocation)) {
@@ -18,13 +45,10 @@ try {
     wsl --terminate $DistroName
     wsl --unregister $DistroName
     
-    # 3. Download a fresh rootfs - We'll use a specific Ubuntu 22.04 or 24.04 tiny image if possible
-    # For now, we'll re-trigger the standard installer which handles the import
+    # 3. The Electron caller re-runs setup-wsl.ps1 with -InstallPath afterwards
+    # to create a fresh OpenFork distro at the new location.
     Write-Host "Triggering fresh install on the new drive..."
-    
-    # We pass the new location as an environment variable or argument to the setup script
-    # This script is intended to be called by electron.cjs which will then run setup-wsl.ps1
-    
+
     Write-Host "Lite Relocation basic steps complete. Drive is now clean."
     exit 0
 } catch {

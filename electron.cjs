@@ -516,18 +516,23 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
 
   pendingClientStart = (async () => {
     if (process.platform === "win32") {
-      process.env.OPENFORK_WSL_DISTRO = await wslUtils.getWslDistroName();
+      const wslDistro = await wslUtils.getWslDistroName();
+      if (wslDistro) {
+        process.env.OPENFORK_WSL_DISTRO = wslDistro;
+      } else {
+        delete process.env.OPENFORK_WSL_DISTRO;
+      }
 
       const dockerStatus = await dockerEngine.resolveDockerStatus({
         allowNativeStart: false,
       });
       if (!dockerStatus.running) {
         const message =
-          dockerStatus.error === "DOCKER_WINDOWS_CONTAINERS"
-            ? "Docker Desktop is running Windows containers. Switch it to Linux containers before starting OpenFork."
-            : dockerStatus.error === "DOCKER_API_UNREACHABLE"
-              ? "Docker is installed in WSL, but its API is not reachable from Windows yet."
-              : "Docker is not ready yet. Please retry once the engine is running.";
+          dockerStatus.error === "DOCKER_API_UNREACHABLE"
+            ? "OpenFork Ubuntu is running, but its Docker API is not reachable from Windows yet."
+            : dockerStatus.error === "WSL_DISTRO_MISSING"
+              ? "OpenFork Ubuntu is missing. Reinstall the local AI engine before starting OpenFork."
+              : "OpenFork Ubuntu is not ready yet. Please retry once the engine is running.";
 
         console.error(message);
 

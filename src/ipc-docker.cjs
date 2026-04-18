@@ -330,22 +330,14 @@ function register(ipcMain) {
         let driveLetter = wslUtils.getWindowsSystemDriveLetter();
         let storagePath = `${driveLetter}:\\`;
 
-        if (dockerEngine.isUsingWslDocker()) {
-          const wslStoragePath = await wslUtils.resolveWslStoragePath(
-            await wslUtils.getWslDistroName(),
-          );
-          if (wslStoragePath) {
-            storagePath = wslStoragePath;
-            driveLetter =
-              dockerStorage.getDriveLetterFromPath(wslStoragePath) || driveLetter;
-          }
-        } else {
-          const nativeStoragePath = dockerStorage.resolveDockerDesktopStoragePath();
-          if (nativeStoragePath) {
-            storagePath = nativeStoragePath;
-            driveLetter =
-              dockerStorage.getDriveLetterFromPath(nativeStoragePath) || driveLetter;
-          }
+        const wslDistro = await wslUtils.getWslDistroName();
+        const wslStoragePath = wslDistro
+          ? await wslUtils.resolveWslStoragePath(wslDistro)
+          : null;
+        if (wslStoragePath) {
+          storagePath = wslStoragePath;
+          driveLetter =
+            dockerStorage.getDriveLetterFromPath(wslStoragePath) || driveLetter;
         }
 
         const psCommand = `Get-PSDrive ${driveLetter} | Select-Object Free, Used | ConvertTo-Json`;
@@ -450,8 +442,7 @@ function register(ipcMain) {
         success: false,
         error: "NOT_WSL_MODE",
         message:
-          "Disk compaction is only available when using WSL Docker. " +
-          "Native Docker Desktop manages its own storage automatically.",
+          "Disk compaction is only available after the OpenFork Ubuntu engine is installed.",
       };
     }
 
