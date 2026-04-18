@@ -1,0 +1,1097 @@
+{
+  "services": {
+    "wan22": {
+      "label": "WAN 2.2 (Video)",
+      "selector_label": "WAN 2.2",
+      "selector_description": "Fast generation, entry-level",
+      "group_label": "WAN 2.2",
+      "prod_image": "beschiak/openfork-wan22-8gb:latest",
+      "docker_image_name": "openfork-wan22",
+      "dev_compose_file": "docker-compose.wan22.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 160,
+      "category": "video",
+      "description": "High-quality video (Text/Image-to-Video)"
+    },
+    "wan22-16gb": {
+      "label": "WAN 2.2 Q6K (16GB)",
+      "selector_label": "WAN 2.2 Q6K",
+      "selector_description": "Higher quality quantization",
+      "group_label": "WAN 2.2",
+      "prod_image": "beschiak/openfork-wan22-16gb:latest",
+      "docker_image_name": "openfork-wan22-16gb",
+      "dev_compose_file": "docker-compose.wan22-16gb.yaml",
+      "vram_required_mb": 16000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 190,
+      "category": "video",
+      "description": "High-quality video (Text/Image-to-Video)"
+    },
+    "wan22-24gb": {
+      "label": "WAN 2.2 Q8 (24GB)",
+      "selector_label": "WAN 2.2 Q8",
+      "selector_description": "Best WAN quality",
+      "group_label": "WAN 2.2",
+      "prod_image": "beschiak/openfork-wan22-24gb:latest",
+      "docker_image_name": "openfork-wan22-24gb",
+      "dev_compose_file": "docker-compose.wan22-24gb.yaml",
+      "vram_required_mb": 24000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 220,
+      "category": "video",
+      "description": "High-quality video (Text/Image-to-Video)"
+    },
+    "hunyuan-video-24gb": {
+      "label": "Hunyuan 1.5 (24GB)",
+      "selector_label": "Hunyuan Fast 24GB",
+      "selector_description": "480p preview, faster",
+      "group_label": "Hunyuan 1.5",
+      "prod_image": "beschiak/openfork-hunyuan-video-24gb:latest",
+      "docker_image_name": "openfork-hunyuan-video-24gb",
+      "dev_compose_file": "docker-compose.hunyuan-video-24gb.yaml",
+      "vram_required_mb": 24000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 180,
+      "category": "video",
+      "description": "Tencent's SOTA FP8 video model"
+    },
+    "hunyuan-video-16gb": {
+      "label": "Hunyuan 1.5 FP8 (16GB)",
+      "selector_label": "Hunyuan Fast",
+      "selector_description": "480p preview, RTX 40/50",
+      "group_label": "Hunyuan 1.5",
+      "gpu_compatibility": "RTX 40/50 Series",
+      "prod_image": "beschiak/openfork-hunyuan-video-16gb:latest",
+      "docker_image_name": "openfork-hunyuan-video-16gb",
+      "dev_compose_file": "docker-compose.hunyuan-video-16gb.yaml",
+      "vram_required_mb": 16000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 160,
+      "category": "video",
+      "description": "Tencent's SOTA FP8 video model"
+    },
+    "ltx23-video-24gb": {
+      "label": "LTX-2.3 Audio-Video (24GB)",
+      "selector_label": "LTX-2.3 Audio+Video",
+      "selector_description": "Native synchronized audio+video",
+      "group_label": "LTX-2.3",
+      "prod_image": "beschiak/openfork-ltx23-wan2gp:latest",
+      "docker_image_name": "openfork-ltx23-wan2gp",
+      "dev_compose_file": "docker-compose.ltx23-wan2gp.yaml",
+      "vram_required_mb": 24000,
+      "backend": "wan2gp",
+      "disk_required_gb": 170,
+      "min_cuda_version": 12.4,
+      "category": "video",
+      "description": "LTX-2.3 22B: native audio+video generation (24GB)"
+    },
+    "ltx23-video-16gb": {
+      "label": "LTX-2.3 Audio-Video (16GB)",
+      "selector_label": "LTX-2.3 Audio+Video (16GB)",
+      "selector_description": "Lower resolution, 16GB VRAM",
+      "group_label": "LTX-2.3",
+      "prod_image": "beschiak/openfork-ltx23-wan2gp:latest",
+      "docker_image_name": "openfork-ltx23-wan2gp",
+      "dev_compose_file": "docker-compose.ltx23-wan2gp.yaml",
+      "vram_required_mb": 16000,
+      "backend": "wan2gp",
+      "disk_required_gb": 170,
+      "min_cuda_version": 12.4,
+      "category": "video",
+      "description": "LTX-2.3 22B: native audio+video generation (16GB, lower resolution)"
+    },
+    "ltx23-video-32gb": {
+      "label": "LTX-2.3 Audio-Video (32GB)",
+      "selector_label": "LTX-2.3 HD Audio+Video",
+      "selector_description": "1024x576 HD, ~6.4s",
+      "group_label": "LTX-2.3",
+      "prod_image": "beschiak/openfork-ltx23-wan2gp:latest",
+      "docker_image_name": "openfork-ltx23-wan2gp",
+      "dev_compose_file": "docker-compose.ltx23-wan2gp.yaml",
+      "vram_required_mb": 32000,
+      "backend": "wan2gp",
+      "disk_required_gb": 170,
+      "min_cuda_version": 12.4,
+      "category": "video",
+      "description": "LTX-2.3 22B: HD audio+video (1024x576), 32GB VRAM"
+    },
+    "ltx23-video-8gb": {
+      "label": "LTX-2.3 Audio-Video (8GB)",
+      "selector_label": "LTX-2.3 Audio+Video (8GB)",
+      "selector_description": "Q4_K_M quantized, 512x288",
+      "group_label": "LTX-2.3",
+      "prod_image": "beschiak/openfork-ltx23-wan2gp:latest",
+      "docker_image_name": "openfork-ltx23-wan2gp-8gb",
+      "dev_compose_file": "docker-compose.ltx23-wan2gp.yaml",
+      "vram_required_mb": 8000,
+      "backend": "wan2gp",
+      "disk_required_gb": 170,
+      "min_cuda_version": 12.4,
+      "category": "video",
+      "description": "LTX-2.3 22B: native audio+video generation (8GB, Q4 quantized)"
+    },
+    "zimage-turbo-8gb": {
+      "label": "Z-Image Turbo (8GB)",
+      "selector_label": "Z-Image Turbo (8GB)",
+      "selector_description": "Fast text-to-image, ControlNet",
+      "group_label": "Z-Image",
+      "prod_image": "beschiak/openfork-zimage-8gb:latest",
+      "docker_image_name": "openfork-zimage-8gb",
+      "dev_compose_file": "docker-compose.zimage-8gb.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 120,
+      "category": "image",
+      "description": "ControlNet & Flux Image Gen"
+    },
+    "zimage-full-8gb": {
+      "label": "Z-Image Full (GGUF / 8GB)",
+      "selector_label": "Z-Image Full (GGUF / 8GB)",
+      "selector_description": "High quality, GGUF optimized",
+      "group_label": "Z-Image",
+      "prod_image": "beschiak/openfork-zimage-full-8gb:latest",
+      "docker_image_name": "openfork-zimage-full-8gb",
+      "dev_compose_file": "docker-compose.zimage-full-8gb.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 120,
+      "category": "image",
+      "description": "High-quality Z-Image (Q4_K_M GGUF)"
+    },
+    "zimage-full-16gb": {
+      "label": "Z-Image Full (FP8 / 16GB)",
+      "selector_label": "Z-Image Full (FP8 / 16GB)",
+      "selector_description": "High quality, FP8 weights",
+      "group_label": "Z-Image",
+      "prod_image": "beschiak/openfork-zimage-full-16gb:latest",
+      "docker_image_name": "openfork-zimage-full-16gb",
+      "dev_compose_file": "docker-compose.zimage-full-16gb.yaml",
+      "vram_required_mb": 16000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 140,
+      "category": "image",
+      "description": "Z-Image with FP8 weights (High Quality)"
+    },
+    "zimage-full-24gb": {
+      "label": "Z-Image Full (BF16 / 24GB)",
+      "selector_label": "Z-Image Full (BF16 / 24GB)",
+      "selector_description": "Best quality, Full BF16 weights",
+      "group_label": "Z-Image",
+      "prod_image": "beschiak/openfork-zimage-full-24gb:latest",
+      "docker_image_name": "openfork-zimage-full-24gb",
+      "dev_compose_file": "docker-compose.zimage-full-24gb.yaml",
+      "vram_required_mb": 24000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 160,
+      "category": "image",
+      "description": "Z-Image with Full BF16 weights (Best Quality)"
+    },
+    "anima-16gb": {
+      "label": "Anima (16GB)",
+      "selector_label": "Anima",
+      "selector_description": "Anime concepts and styles (2B, Qwen based)",
+      "group_label": "Anima",
+      "prod_image": "beschiak/openfork-anima-16gb:latest",
+      "docker_image_name": "openfork-anima-16gb",
+      "dev_compose_file": "docker-compose.anima-16gb.yaml",
+      "vram_required_mb": 16000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 140,
+      "category": "image",
+      "description": "Anima text-to-image illustration model"
+    },
+    "anima-8gb": {
+      "label": "Anima (8GB)",
+      "selector_label": "Anima (8GB)",
+      "selector_description": "Anime concepts and styles (Optimized for 8GB VRAM)",
+      "group_label": "Anima",
+      "prod_image": "beschiak/openfork-anima-8gb:latest",
+      "docker_image_name": "openfork-anima-8gb",
+      "dev_compose_file": "docker-compose.anima-8gb.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 140,
+      "category": "image",
+      "description": "Anima text-to-image illustration model (8GB tier)"
+    },
+    "qwen": {
+      "label": "Qwen Edit FP8 (12GB)",
+      "selector_label": "Qwen Edit FP8",
+      "selector_description": "Best quality editing",
+      "group_label": "Qwen Edit",
+      "prod_image": "beschiak/openfork-qwen-12gb:latest",
+      "docker_image_name": "openfork-qwen-12gb",
+      "dev_compose_file": "docker-compose.qwen.yaml",
+      "vram_required_mb": 12000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 120,
+      "category": "image",
+      "description": "Instruction-based image editing"
+    },
+    "qwen-8gb": {
+      "label": "Qwen Edit Q4 (8GB)",
+      "selector_label": "Qwen Edit Q4",
+      "selector_description": "Instruction editing",
+      "group_label": "Qwen Edit",
+      "prod_image": "beschiak/openfork-qwen-8gb:latest",
+      "docker_image_name": "openfork-qwen-8gb",
+      "dev_compose_file": "docker-compose.qwen-8gb.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 120,
+      "category": "image",
+      "description": "Instruction-based image editing"
+    },
+    "qwen-turbo-8gb": {
+      "label": "Qwen Turbo Q4 (8GB)",
+      "selector_label": "Qwen Turbo",
+      "selector_description": "Ultra-fast editing (2 steps)",
+      "group_label": "Qwen Edit",
+      "prod_image": "beschiak/openfork-qwen-image-turbo-8gb:latest",
+      "docker_image_name": "openfork-qwen-image-turbo-8gb",
+      "dev_compose_file": "docker-compose.qwen-turbo-8gb.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 120,
+      "category": "image",
+      "description": "Ultra-fast instruction-based editing (2 steps)"
+    },
+    "vibevoice": {
+      "label": "VibeVoice (TTS)",
+      "selector_label": "VibeVoice 1.5B",
+      "selector_description": "Multi-speaker, emotional control",
+      "prod_image": "beschiak/openfork-vibevoice-8gb:latest",
+      "docker_image_name": "openfork-vibevoice",
+      "dev_compose_file": "docker-compose.vibevoice.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 80,
+      "category": "audio",
+      "description": "Clone-ready text-to-speech"
+    },
+    "chatterbox": {
+      "label": "Chatterbox (TTS)",
+      "selector_label": "Chatterbox",
+      "selector_description": "Expressive, voice cloning",
+      "prod_image": "beschiak/openfork-chatterbox-8gb:latest",
+      "docker_image_name": "openfork-chatterbox",
+      "dev_compose_file": "docker-compose.chatterbox.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 80,
+      "category": "audio",
+      "description": "High-quality voice cloning"
+    },
+    "qwen3-tts": {
+      "label": "Qwen3-TTS (8GB)",
+      "selector_label": "Qwen3-TTS",
+      "selector_description": "Multilingual, 9 speakers, voice design",
+      "prod_image": "beschiak/openfork-qwen3-tts-8gb:latest",
+      "docker_image_name": "openfork-qwen3-tts",
+      "dev_compose_file": "docker-compose.qwen3-tts.yaml",
+      "vram_required_mb": 8000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "Alibaba's multilingual TTS with 9 premium voices"
+    },
+    "qwen3-tts-16gb": {
+      "label": "Qwen3-TTS 1.7B (16GB)",
+      "prod_image": "beschiak/openfork-qwen3-tts-16gb:latest",
+      "docker_image_name": "openfork-qwen3-tts-16gb",
+      "dev_compose_file": "docker-compose.qwen3-tts.yaml",
+      "vram_required_mb": 16000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 120,
+      "category": "audio",
+      "description": "Alibaba's multilingual TTS with voice design (1.7B)"
+    },
+    "diffrhythm": {
+      "label": "DiffRhythm (Music)",
+      "selector_label": "DiffRhythm (Music)",
+      "selector_description": "Standard music generation",
+      "group_label": "DiffRhythm",
+      "prod_image": "beschiak/openfork-diffrhythm-8gb:latest",
+      "docker_image_name": "openfork-diffrhythm",
+      "dev_compose_file": "docker-compose.diffrhythm.yaml",
+      "vram_required_mb": 8000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "AI-powered music composition"
+    },
+    "stream-diffvsr-upscaler": {
+      "label": "Stream-DiffVSR (Upscaler)",
+      "selector_label": "DiffVSR",
+      "selector_description": "8GB VRAM video upscaler",
+      "group_label": "Stream-DiffVSR",
+      "prod_image": "beschiak/openfork-stream-diffvsr-8gb:latest",
+      "docker_image_name": "openfork-stream-diffvsr-8gb",
+      "dev_compose_file": "docker-compose.stream-diffvsr.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 80,
+      "category": "utils",
+      "description": "Stream-DiffVSR Video/Image"
+    },
+    "stable-audio": {
+      "label": "Stable Audio Open 1.0 (Sound FX)",
+      "prod_image": "beschiak/openfork-stable-audio-8gb:latest",
+      "docker_image_name": "openfork-stable-audio",
+      "dev_compose_file": "docker-compose.stable-audio.yaml",
+      "vram_required_mb": 8000,
+      "backend": "comfyui",
+      "port": 8188,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "Sound FX and text-to-audio"
+    },
+    "llm": {
+      "label": "LLM (Ollama + Phi3 Mini)",
+      "prod_image": "beschiak/openfork-llm-4gb:latest",
+      "docker_image_name": "openfork-llm",
+      "dev_compose_file": "docker-compose.llm.yaml",
+      "vram_required_mb": 4000,
+      "backend": "ollama",
+      "port": 11434,
+      "disk_required_gb": 20,
+      "category": "utils",
+      "description": "Phi3 Mini for llm prompts"
+    },
+    "turbodiffusion": {
+      "label": "TurboDiffusion T2V+I2V (12GB)",
+      "selector_label": "TurboDiffusion",
+      "selector_description": "100x faster generation",
+      "group_label": "TurboDiffusion",
+      "prod_image": "beschiak/openfork-turbodiffusion-12gb:latest",
+      "docker_image_name": "openfork-turbodiffusion-12gb",
+      "dev_compose_file": "docker-compose.turbodiffusion.yaml",
+      "vram_required_mb": 12000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 160,
+      "category": "video",
+      "description": "Real-time prototyping video model"
+    },
+    "turbodiffusion-8gb": {
+      "label": "TurboDiffusion T2V (8GB)",
+      "selector_label": "TurboDiffusion",
+      "selector_description": "100x faster generation",
+      "group_label": "TurboDiffusion",
+      "prod_image": "beschiak/openfork-turbodiffusion-8gb:latest",
+      "docker_image_name": "openfork-turbodiffusion-8gb",
+      "dev_compose_file": "docker-compose.turbodiffusion.yaml",
+      "vram_required_mb": 8000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 160,
+      "category": "video",
+      "description": "Real-time prototyping video model"
+    },
+    "heartmula-16gb": {
+      "label": "HeartMuLa (16GB)",
+      "selector_label": "HeartMuLa (16GB)",
+      "selector_description": "4-bit quantized, max 30s audio",
+      "prod_image": "beschiak/openfork-heartmula-16gb:latest",
+      "docker_image_name": "openfork-heartmula-16gb",
+      "dev_compose_file": "docker-compose.heartmula.yaml",
+      "vram_required_mb": 16000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "4-bit quantized music generation (~8GB VRAM)",
+      "group_label": "HeartMuLa"
+    },
+    "heartmula-24gb": {
+      "label": "HeartMuLa High (24GB)",
+      "selector_label": "HeartMuLa High (24GB)",
+      "selector_description": "Full precision, max 95s audio",
+      "prod_image": "beschiak/openfork-heartmula-24gb:latest",
+      "docker_image_name": "openfork-heartmula-24gb",
+      "dev_compose_file": "docker-compose.heartmula.yaml",
+      "vram_required_mb": 24000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "Long-form high-fidelity music generation (up to 5 mins)",
+      "group_label": "HeartMuLa"
+    },
+    "acestep-16gb": {
+      "label": "ACE-Step 1.5 XL (16GB)",
+      "selector_label": "ACE-Step 1.5 XL",
+      "selector_description": "4B XL turbo + 1.7B LM",
+      "prod_image": "beschiak/openfork-acestep-16gb:latest",
+      "docker_image_name": "openfork-acestep-16gb",
+      "dev_compose_file": "docker-compose.acestep.yaml",
+      "vram_required_mb": 16000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "ACE-Step 1.5 XL music generation for 16GB VRAM",
+      "group_label": "ACE-Step 1.5"
+    },
+    "acestep-8gb": {
+      "label": "ACE-Step 1.5 Turbo (8GB)",
+      "selector_label": "ACE-Step 1.5 Turbo",
+      "selector_description": "2B turbo DiT for 8GB GPUs",
+      "prod_image": "beschiak/openfork-acestep-8gb:latest",
+      "docker_image_name": "openfork-acestep-8gb",
+      "dev_compose_file": "docker-compose.acestep-8gb.yaml",
+      "vram_required_mb": 8000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "ACE-Step 1.5 turbo music generation optimized for 8GB VRAM",
+      "group_label": "ACE-Step 1.5"
+    },
+    "mmaudio-8gb": {
+      "label": "MMAudio (8GB)",
+      "prod_image": "beschiak/openfork-mmaudio-8gb:latest",
+      "docker_image_name": "openfork-mmaudio-8gb",
+      "dev_compose_file": "docker-compose.mmaudio.yaml",
+      "vram_required_mb": 8000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 80,
+      "category": "audio",
+      "description": "Video-to-audio synthesis (MMAudio small_44k)",
+      "group_label": "MMAudio V2A"
+    },
+    "mmaudio-16gb": {
+      "label": "MMAudio 44kHz (16GB)",
+      "prod_image": "beschiak/openfork-mmaudio-16gb:latest",
+      "docker_image_name": "openfork-mmaudio-16gb",
+      "dev_compose_file": "docker-compose.mmaudio.yaml",
+      "vram_required_mb": 16000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "audio",
+      "description": "High-quality 44kHz video-to-audio (MMAudio large_44k_v2)",
+      "group_label": "MMAudio V2A"
+    },
+    "lavasr": {
+      "label": "LavaSR (2GB)",
+      "prod_image": "beschiak/openfork-lavasr:latest",
+      "docker_image_name": "openfork-lavasr",
+      "dev_compose_file": "docker-compose.lavasr.yaml",
+      "vram_required_mb": 2000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 60,
+      "category": "audio",
+      "description": "High-efficiency speech restoration and enhancement",
+      "group_label": "Speech Enhancement"
+    },
+    "prismaudio-8gb": {
+      "label": "PRiSM Audio (8GB)",
+      "selector_label": "PRiSM Audio",
+      "selector_description": "Experimental video-to-audio synthesis",
+      "group_label": "PRiSM Audio",
+      "prod_image": "beschiak/openfork-prismaudio-8gb:latest",
+      "docker_image_name": "openfork-prismaudio-8gb",
+      "dev_compose_file": "docker-compose.prismaudio.yaml",
+      "vram_required_mb": 8000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 70,
+      "category": "audio",
+      "description": "High-fidelity video-to-audio generation (PRiSM)"
+    },
+    "prismaudio-16gb": {
+      "label": "PRiSM Audio HQ (16GB)",
+      "selector_label": "PRiSM Audio HQ",
+      "selector_description": "High-quality video-to-audio",
+      "group_label": "PRiSM Audio",
+      "prod_image": "beschiak/openfork-prismaudio-16gb:latest",
+      "docker_image_name": "openfork-prismaudio-16gb",
+      "dev_compose_file": "docker-compose.prismaudio.yaml",
+      "vram_required_mb": 16000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 70,
+      "category": "audio",
+      "description": "High-quality PRiSM video-to-audio generation"
+    },
+    "davinci-magihuman-32gb": {
+      "label": "daVinci MagiHuman (32GB)",
+      "selector_label": "daVinci MagiHuman",
+      "selector_description": "256p avatar video+audio with FP8 + CPU offloading (RTX 5090)",
+      "group_label": "daVinci MagiHuman",
+      "prod_image": "beschiak/openfork-davinci-magihuman-32gb:latest",
+      "docker_image_name": "openfork-davinci-magihuman-32gb",
+      "dev_compose_file": "docker-compose.davinci-magihuman-32gb.yaml",
+      "vram_required_mb": 30000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 450,
+      "category": "video",
+      "description": "daVinci-MagiHuman with FP8 weights + CPU offloading for 32GB VRAM (RTX 5090).",
+      "disabled": true
+    },
+    "sparkvsr-upscaler": {
+      "label": "SparkVSR High (24GB)",
+      "selector_label": "SparkVSR",
+      "selector_description": "State-of-the-art quality",
+      "group_label": "SparkVSR",
+      "prod_image": "beschiak/openfork-sparkvsr-24gb:latest",
+      "docker_image_name": "openfork-sparkvsr-24gb",
+      "vram_required_mb": 24000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 70,
+      "category": "utils",
+      "description": "State-of-the-art video super-resolution (24GB VRAM required)"
+    },
+    "inspatio-world-16gb": {
+      "label": "InSpatio-World (16GB)",
+      "selector_label": "InSpatio-World",
+      "selector_description": "Novel-view video synthesis",
+      "group_label": "InSpatio-World",
+      "prod_image": "beschiak/openfork-inspatio-world-16gb:latest",
+      "docker_image_name": "openfork-inspatio-world-16gb",
+      "dev_compose_file": "docker-compose.inspatio-world.yaml",
+      "vram_required_mb": 16000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 80,
+      "category": "video",
+      "description": "Novel-view video synthesis with camera trajectory control (16GB VRAM)",
+      "disabled": true
+    },
+    "inspatio-world-24gb": {
+      "label": "InSpatio-World (24GB)",
+      "selector_label": "InSpatio-World",
+      "selector_description": "Novel-view video synthesis",
+      "group_label": "InSpatio-World",
+      "prod_image": "beschiak/openfork-inspatio-world-24gb:latest",
+      "docker_image_name": "openfork-inspatio-world-24gb",
+      "dev_compose_file": "docker-compose.inspatio-world.yaml",
+      "vram_required_mb": 24000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 80,
+      "category": "video",
+      "description": "Novel-view video synthesis with camera trajectory control",
+      "disabled": true
+    },
+    "ernie-image-8gb": {
+      "label": "ERNIE-Image Turbo (8GB)",
+      "selector_label": "ERNIE-Image Turbo (8GB)",
+      "selector_description": "Fast text-to-image, distilled turbo",
+      "group_label": "ERNIE-Image",
+      "prod_image": "beschiak/openfork-ernie-image-8gb:latest",
+      "docker_image_name": "openfork-ernie-image-8gb",
+      "dev_compose_file": "docker-compose.ernie-image.yaml",
+      "vram_required_mb": 8000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 80,
+      "category": "image",
+      "description": "Baidu ERNIE-Image Turbo text-to-image (8 steps, distilled)",
+      "disabled": false
+    },
+    "ernie-image-16gb": {
+      "label": "ERNIE-Image (16GB)",
+      "selector_label": "ERNIE-Image (16GB)",
+      "selector_description": "High quality text-to-image",
+      "group_label": "ERNIE-Image",
+      "prod_image": "beschiak/openfork-ernie-image-16gb:latest",
+      "docker_image_name": "openfork-ernie-image-16gb",
+      "dev_compose_file": "docker-compose.ernie-image.yaml",
+      "vram_required_mb": 16000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 100,
+      "category": "image",
+      "description": "Baidu ERNIE-Image text-to-image (FP16)",
+      "disabled": false
+    },
+    "ernie-image-24gb": {
+      "label": "ERNIE-Image (24GB)",
+      "selector_label": "ERNIE-Image (24GB)",
+      "selector_description": "Best quality, BF16 weights",
+      "group_label": "ERNIE-Image",
+      "prod_image": "beschiak/openfork-ernie-image-24gb:latest",
+      "docker_image_name": "openfork-ernie-image-24gb",
+      "dev_compose_file": "docker-compose.ernie-image.yaml",
+      "vram_required_mb": 24000,
+      "backend": "rest",
+      "port": 8000,
+      "disk_required_gb": 120,
+      "category": "image",
+      "description": "Baidu ERNIE-Image text-to-image (BF16 full precision)",
+      "disabled": false
+    }
+  },
+  "workflows": {
+    "wan22-text-to-video-8gb": {
+      "service_name": "wan22",
+      "workflow_file": "wan22-text-to-video.api.json",
+      "processor": "WAN22TextToVideoJobProcessor",
+      "estimated_duration_minutes": 6,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 8000
+    },
+    "wan22-image-to-video-8gb": {
+      "service_name": "wan22",
+      "workflow_file": "wan22-image-to-video.api.json",
+      "processor": "WAN22ImageToVideoJobProcessor",
+      "estimated_duration_minutes": 5,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 8000
+    },
+    "wan22-image-to-video-from-last-frame-8gb": {
+      "service_name": "wan22",
+      "workflow_file": "wan22-image-to-video.api.json",
+      "processor": "ImageToVideoFromLastFrameJobProcessor",
+      "estimated_duration_minutes": 5,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 8000
+    },
+    "wan22-text-to-video-16gb": {
+      "service_name": "wan22-16gb",
+      "workflow_file": "wan22-text-to-video-16gb.api.json",
+      "processor": "WAN22TextToVideoJobProcessor",
+      "estimated_duration_minutes": 5,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 16000
+    },
+    "wan22-image-to-video-16gb": {
+      "service_name": "wan22-16gb",
+      "workflow_file": "wan22-image-to-video-16gb.api.json",
+      "processor": "WAN22ImageToVideoJobProcessor",
+      "estimated_duration_minutes": 4,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 16000
+    },
+    "wan22-text-to-video-24gb": {
+      "service_name": "wan22-24gb",
+      "workflow_file": "wan22-text-to-video-24gb.api.json",
+      "processor": "WAN22TextToVideoJobProcessor",
+      "estimated_duration_minutes": 4,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 24000
+    },
+    "wan22-image-to-video-24gb": {
+      "service_name": "wan22-24gb",
+      "workflow_file": "wan22-image-to-video-24gb.api.json",
+      "processor": "WAN22ImageToVideoJobProcessor",
+      "estimated_duration_minutes": 3,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 24000
+    },
+    "hunyuan-image-to-video-fp8": {
+      "service_name": "hunyuan-video-16gb",
+      "workflow_file": "hunyuan-image-to-video-fp8.api.json",
+      "processor": "HunyuanImageToVideoJobProcessor",
+      "estimated_duration_minutes": 25,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 16000
+    },
+    "hunyuan-text-to-video-fp8-fast": {
+      "service_name": "hunyuan-video-16gb",
+      "workflow_file": "hunyuan-text-to-video-fp8-fast.api.json",
+      "processor": "HunyuanTextToVideoJobProcessor",
+      "estimated_duration_minutes": 25,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 16000
+    },
+    "hunyuan-text-to-video-fast": {
+      "service_name": "hunyuan-video-24gb",
+      "workflow_file": "hunyuan-text-to-video-fast.api.json",
+      "processor": "HunyuanTextToVideoJobProcessor",
+      "estimated_duration_minutes": 20,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 24000
+    },
+    "hunyuan-image-to-video": {
+      "service_name": "hunyuan-video-24gb",
+      "workflow_file": "hunyuan-image-to-video.api.json",
+      "processor": "HunyuanImageToVideoJobProcessor",
+      "estimated_duration_minutes": 20,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 24000
+    },
+    "ltx23-text-to-video-8gb": {
+      "service_name": "ltx23-video-8gb",
+      "processor": "LTX23TextToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 5,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 8000
+    },
+    "ltx23-image-to-video-8gb": {
+      "service_name": "ltx23-video-8gb",
+      "processor": "LTX23ImageToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 5,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 8000
+    },
+    "ltx23-text-to-video-16gb": {
+      "service_name": "ltx23-video-16gb",
+      "processor": "LTX23TextToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 4,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 16000
+    },
+    "ltx23-image-to-video-16gb": {
+      "service_name": "ltx23-video-16gb",
+      "processor": "LTX23ImageToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 4,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 16000
+    },
+    "ltx23-text-to-video-24gb": {
+      "service_name": "ltx23-video-24gb",
+      "processor": "LTX23TextToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 2,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 24000
+    },
+    "ltx23-image-to-video-24gb": {
+      "service_name": "ltx23-video-24gb",
+      "processor": "LTX23ImageToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 2,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 24000
+    },
+    "ltx23-text-to-video-32gb": {
+      "service_name": "ltx23-video-32gb",
+      "processor": "LTX23TextToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 3,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 32000
+    },
+    "ltx23-image-to-video-32gb": {
+      "service_name": "ltx23-video-32gb",
+      "processor": "LTX23ImageToVideoWan2GPProcessor",
+      "estimated_duration_minutes": 4,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 32000
+    },
+    "zimage-turbo-8gb-text-to-image": {
+      "service_name": "zimage-turbo-8gb",
+      "workflow_file": "zimage-turbo-8gb-text-to-image.api.json",
+      "processor": "ZImageTextToImageProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "zimage-turbo-8gb-controlnet": {
+      "service_name": "zimage-turbo-8gb",
+      "workflow_file": "zimage-turbo-8gb-controlnet.api.json",
+      "processor": "ZImageControlNetProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "zimage-turbo-8gb-inpaint": {
+      "service_name": "zimage-turbo-8gb",
+      "workflow_file": "zimage-turbo-8gb-inpaint.api.json",
+      "processor": "ZImageInpaintProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "zimage-full-8gb-text-to-image": {
+      "service_name": "zimage-full-8gb",
+      "workflow_file": "zimage-full-8gb-text-to-image.api.json",
+      "processor": "ZImageTextToImageProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "anima-text-to-image-16gb": {
+      "service_name": "anima-16gb",
+      "workflow_file": "anima-text-to-image-16gb.api.json",
+      "processor": "AnimaTextToImageProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "anima-text-to-image-8gb": {
+      "service_name": "anima-8gb",
+      "workflow_file": "anima-text-to-image-8gb.api.json",
+      "processor": "AnimaTextToImageProcessor",
+      "estimated_duration_minutes": 2
+    },
+    "qwen-image-edit-8gb": {
+      "service_name": "qwen-8gb",
+      "workflow_file": "qwen-image-edit-8gb.api.json",
+      "processor": "QwenImageEditProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-inpaint-8gb": {
+      "service_name": "qwen-8gb",
+      "workflow_file": "qwen-image-inpaint-8gb.api.json",
+      "processor": "QwenImageInpaintProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-t2i-8gb": {
+      "service_name": "qwen-8gb",
+      "workflow_file": "qwen-image-t2i-8gb.api.json",
+      "processor": "QwenImageT2IProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-t2i-turbo-8gb": {
+      "service_name": "qwen-turbo-8gb",
+      "workflow_file": "qwen-image-t2i-8gb-turbo_api.json",
+      "processor": "QwenImageT2ITurboProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-edit-turbo-8gb": {
+      "service_name": "qwen-turbo-8gb",
+      "workflow_file": "qwen-image-edit-8gb-turbo_api.json",
+      "processor": "QwenImageEditTurboProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-inpaint-turbo-8gb": {
+      "service_name": "qwen-turbo-8gb",
+      "workflow_file": "qwen-image-inpaint-8gb-turbo_api.json",
+      "processor": "QwenImageInpaintTurboProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-edit": {
+      "service_name": "qwen",
+      "workflow_file": "qwen-image-edit.api.json",
+      "processor": "QwenImageEditProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-inpaint": {
+      "service_name": "qwen",
+      "workflow_file": "qwen-image-inpaint.api.json",
+      "processor": "QwenImageInpaintProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen-image-t2i": {
+      "service_name": "qwen",
+      "workflow_file": "qwen-image-t2i.api.json",
+      "processor": "QwenImageT2IProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "vibevoice-tts": {
+      "service_name": "vibevoice",
+      "workflow_file": "vibevoice.api.json",
+      "processor": "VibeVoiceJobProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "vibevoice-multi-speaker-clone": {
+      "service_name": "vibevoice",
+      "workflow_file": "vibevoice-multi-speaker-clone.api.json",
+      "processor": "VibeVoiceMultiCloneJobProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "chatterbox-tts": {
+      "service_name": "chatterbox",
+      "workflow_file": "chatterbox-tts.api.json",
+      "processor": "ChatterboxTTSJobProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "chatterbox-voice-clone": {
+      "service_name": "chatterbox",
+      "workflow_file": "chatterbox-voice-clone.api.json",
+      "processor": "ChatterboxVoiceCloneJobProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "qwen3-tts": {
+      "service_name": "qwen3-tts",
+      "workflow_file": "qwen3-tts.api.json",
+      "processor": "Qwen3TTSJobProcessor",
+      "description": "Multi-language TTS with 9 premium speakers (Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee)",
+      "estimated_duration_minutes": 1
+    },
+    "qwen3-voice-clone": {
+      "service_name": "qwen3-tts",
+      "workflow_file": "qwen3-tts.api.json",
+      "processor": "Qwen3VoiceCloneJobProcessor",
+      "description": "Clone voices from reference audio (3-second rapid clone)",
+      "estimated_duration_minutes": 1
+    },
+    "qwen3-voice-design": {
+      "service_name": "qwen3-tts-16gb",
+      "workflow_file": "qwen3-tts.api.json",
+      "processor": "Qwen3VoiceDesignJobProcessor",
+      "description": "Create custom voices from natural language descriptions (1.7B model only)",
+      "estimated_duration_minutes": 1
+    },
+    "diffrhythm-music-generation": {
+      "service_name": "diffrhythm",
+      "workflow_file": "diffrhythm.api.json",
+      "processor": "DiffRhythmCLIJobProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "heartmula-music-generation-16gb": {
+      "service_name": "heartmula-16gb",
+      "workflow_file": "heartmula.api.json",
+      "processor": "HeartMuLaCLIJobProcessor",
+      "estimated_duration_minutes": 8,
+      "vram_required_mb": 16000,
+      "max_audio_duration_seconds": 30,
+      "description": "16GB optimized: 4-bit quantization + codec CPU offload + max 30s audio"
+    },
+    "heartmula-music-generation-24gb": {
+      "service_name": "heartmula-24gb",
+      "workflow_file": "heartmula-24gb.api.json",
+      "processor": "HeartMuLaCLIJobProcessor",
+      "estimated_duration_minutes": 15,
+      "vram_required_mb": 24000,
+      "max_audio_duration_seconds": 95,
+      "description": "24GB full precision: max 95s audio"
+    },
+    "acestep-music-generation-8gb": {
+      "service_name": "acestep-8gb",
+      "workflow_file": "acestep.api.json",
+      "processor": "AceStepCLIJobProcessor",
+      "estimated_duration_minutes": 2,
+      "vram_required_mb": 8000,
+      "max_audio_duration_seconds": 60,
+      "description": "ACE-Step 1.5 turbo music generation optimized for 8GB VRAM"
+    },
+    "acestep-music-generation-16gb": {
+      "service_name": "acestep-16gb",
+      "workflow_file": "acestep.api.json",
+      "processor": "AceStepCLIJobProcessor",
+      "estimated_duration_minutes": 1,
+      "vram_required_mb": 16000,
+      "max_audio_duration_seconds": 120,
+      "description": "ACE-Step 1.5 XL music generation optimized for 16GB VRAM"
+    },
+    "mmaudio-video-to-audio-8gb": {
+      "service_name": "mmaudio-8gb",
+      "workflow_file": "mmaudio.api.json",
+      "processor": "MMAudioJobProcessor",
+      "estimated_duration_minutes": 3,
+      "vram_required_mb": 8000
+    },
+    "mmaudio-video-to-audio-16gb": {
+      "service_name": "mmaudio-16gb",
+      "workflow_file": "mmaudio.api.json",
+      "processor": "MMAudioJobProcessor",
+      "estimated_duration_minutes": 2,
+      "vram_required_mb": 16000
+    },
+    "prismaudio-video-to-audio-8gb": {
+      "service_name": "prismaudio-8gb",
+      "processor": "PrismAudioJobProcessor",
+      "estimated_duration_minutes": 3,
+      "vram_required_mb": 8000
+    },
+    "prismaudio-video-to-audio-16gb": {
+      "service_name": "prismaudio-16gb",
+      "processor": "PrismAudioJobProcessor",
+      "estimated_duration_minutes": 2,
+      "vram_required_mb": 16000
+    },
+    "stable-audio-sound-fx": {
+      "service_name": "stable-audio",
+      "workflow_file": "stable-audio-open.api.json",
+      "processor": "StableAudioJobProcessor",
+      "estimated_duration_minutes": 1
+    },
+    "stream-diffvsr-upscaler": {
+      "service_name": "stream-diffvsr-upscaler",
+      "workflow_file": "stream-diffvsr-video-upscale.api.json",
+      "processor": "VideoUpscalerJobProcessor",
+      "estimated_duration_minutes": 5,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 8000
+    },
+    "llm": {
+      "service_name": "llm",
+      "workflow_file": "llm.api.json",
+      "processor": "LLMJobProcessor",
+      "min_duration_seconds": 1,
+      "estimated_duration_minutes": 1
+    },
+    "turbodiffusion-text-to-video": {
+      "service_name": "turbodiffusion-8gb",
+      "workflow_file": "turbodiffusion-t2v.api.json",
+      "processor": "TurboDiffusionT2VJobProcessor",
+      "min_duration_seconds": 10,
+      "estimated_duration_minutes": 1
+    },
+    "turbodiffusion-image-to-video": {
+      "service_name": "turbodiffusion",
+      "workflow_file": "turbodiffusion-i2v.api.json",
+      "processor": "TurboDiffusionI2VJobProcessor",
+      "min_duration_seconds": 10,
+      "estimated_duration_minutes": 1
+    },
+    "lavasr-speech-restoration": {
+      "service_name": "lavasr",
+      "workflow_file": "lavasr-speech-restoration.api.json",
+      "processor": "LavaSRJobProcessor",
+      "estimated_duration_minutes": 2,
+      "min_duration_seconds": 2,
+      "vram_required_mb": 2000
+    },
+    "davinci-magihuman-text-to-video-32gb": {
+      "service_name": "davinci-magihuman-32gb",
+      "processor": "DaVinciMagiHumanT2VProcessor",
+      "estimated_duration_minutes": 10,
+      "min_duration_seconds": 3,
+      "vram_required_mb": 30000
+    },
+    "davinci-magihuman-image-to-video-32gb": {
+      "service_name": "davinci-magihuman-32gb",
+      "processor": "DaVinciMagiHumanI2VProcessor",
+      "estimated_duration_minutes": 10,
+      "min_duration_seconds": 3,
+      "vram_required_mb": 30000
+    },
+    "sparkvsr-upscaler-24gb": {
+      "service_name": "sparkvsr-upscaler",
+      "processor": "SparkVSRUpscalerJobProcessor",
+      "estimated_duration_minutes": 20,
+      "min_duration_seconds": 10,
+      "vram_required_mb": 24000
+    },
+    "inspatio-world-video-to-video-16gb": {
+      "service_name": "inspatio-world-16gb",
+      "processor": "InSpatioWorldJobProcessor",
+      "estimated_duration_minutes": 12,
+      "min_duration_seconds": 5,
+      "vram_required_mb": 16000
+    },
+    "inspatio-world-video-to-video-24gb": {
+      "service_name": "inspatio-world-24gb",
+      "processor": "InSpatioWorldJobProcessor",
+      "estimated_duration_minutes": 10,
+      "min_duration_seconds": 5,
+      "vram_required_mb": 24000
+    },
+    "ernie-image-text-to-image-8gb": {
+      "service_name": "ernie-image-8gb",
+      "processor": "ErnieImageProcessor",
+      "estimated_duration_minutes": 1,
+      "vram_required_mb": 8000
+    },
+    "ernie-image-text-to-image-16gb": {
+      "service_name": "ernie-image-16gb",
+      "processor": "ErnieImageProcessor",
+      "estimated_duration_minutes": 1,
+      "vram_required_mb": 16000
+    },
+    "ernie-image-text-to-image-24gb": {
+      "service_name": "ernie-image-24gb",
+      "processor": "ErnieImageProcessor",
+      "estimated_duration_minutes": 2,
+      "vram_required_mb": 24000
+    }
+  }
+}
