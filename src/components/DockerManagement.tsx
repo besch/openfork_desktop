@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
-import { StorageSettings } from "./StorageSettings";
 import type { DockerImage, DockerContainer, DockerStatus } from "@/types";
 
 interface ConfirmDialogState {
@@ -51,7 +50,6 @@ export const DockerManagement = memo(() => {
     free_gb: string;
     path: string;
   } | null>(null);
-  const [showStorageSettings, setShowStorageSettings] = useState(false);
   const [showCompactionBanner, setShowCompactionBanner] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [compactionResult, setCompactionResult] = useState<{
@@ -318,10 +316,7 @@ export const DockerManagement = memo(() => {
   const isDownloading =
     dockerPullProgress !== null &&
     (status === "starting" || status === "running");
-  const engineLabel =
-    platform === "linux"
-      ? "Linux Docker"
-      : "OpenFork Ubuntu";
+  const engineLabel = platform === "linux" ? "Linux Docker" : "OpenFork Ubuntu";
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -572,61 +567,6 @@ export const DockerManagement = memo(() => {
           </Button>
         </div>
       </header>
-
-      <Card className="group relative overflow-hidden transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md shadow-lg">
-        {loading && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300">
-            <Loader size="md" variant="primary" />
-          </div>
-        )}
-        <button
-          onClick={() => setShowStorageSettings(!showStorageSettings)}
-          className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
-              <HardDrive className="h-4 w-4" />
-            </div>
-            <div className="text-left">
-              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
-                Storage & Engine Settings
-              </span>
-              <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5">
-                Configure Location & Performance
-              </p>
-            </div>
-          </div>
-          <motion.div
-            animate={{ rotate: showStorageSettings ? 0 : -90 }}
-            transition={{ duration: 0.3, ease: "anticipate" }}
-            className="text-white/20 group-hover:text-white transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </motion.div>
-        </button>
-        <motion.div
-          initial={false}
-          animate={{ height: showStorageSettings ? "auto" : 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="overflow-hidden"
-        >
-          <div className="p-4 pt-0 relative z-10 border-t border-white/5">
-            <StorageSettings onSettingsChanged={fetchData} />
-          </div>
-        </motion.div>
-      </Card>
 
       {/* Download Progress Card */}
       {isDownloading && (
