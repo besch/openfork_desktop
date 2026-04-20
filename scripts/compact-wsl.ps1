@@ -3,6 +3,8 @@ param(
     [string]$DistroName
 )
 
+$ErrorActionPreference = "Stop"
+
 function Test-OpenForkManagedDistro {
     param([string]$Name)
 
@@ -23,6 +25,122 @@ fi
         return ($LASTEXITCODE -eq 0) -and ($probe -in @("managed", "legacy-managed"))
     } catch {
         return $false
+    }
+}
+
+function Test-FileExclusiveAccess {
+    param([string]$Path)
+
+    $stream = $null
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        return $true
+    } catch {
+        return $false
+    } finally {
+        if ($null -ne $stream) {
+            $stream.Dispose()
+        }
+    }
+}
+
+function Wait-ForVhdxReady {
+    param(
+        [string]$Name,
+        [string]$Path,
+        [int]$TimeoutSeconds = 45
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        wsl.exe --terminate $Name 2>$null | Out-Null
+        wsl.exe --shutdown 2>$null | Out-Null
+        Start-Sleep -Milliseconds 750
+
+        if ((Test-Path $Path) -and (Test-FileExclusiveAccess -Path $Path)) {
+            return
+        }
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Timed out waiting for exclusive access to '$Path'. Another WSL or OpenFork process is still using the distro disk."
+}
+
+function Get-DiskPartFailureSummary {
+    param([string]$Output)
+
+    $lines = @(
+        ($Output -split "`r?`n") |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ }
+    )
+
+    if (-not $lines) {
+        return $null
+    }
+
+    $patterns = @(
+        "DiskPart has encountered an error",
+        "Virtual Disk Service error",
+        "The process cannot access the file",
+        "The device is not ready",
+        "Access is denied",
+        "The system cannot find the file specified",
+        "The requested operation requires elevation"
+    )
+
+    foreach ($pattern in $patterns) {
+        $match = $lines | Where-Object { $_ -like "*$pattern*" } | Select-Object -Last 1
+        if ($match) {
+            return $match
+        }
+    }
+
+    return ($lines | Select-Object -Last 3) -join " "
+}
+
+function Invoke-ElevatedDiskPart {
+    param([string]$ScriptPath)
+
+    $guid = [Guid]::NewGuid().ToString("N")
+    $tempRoot = [System.IO.Path]::GetTempPath()
+    $runnerPath = Join-Path $tempRoot "openfork-compact-$guid.ps1"
+    $logPath = Join-Path $tempRoot "openfork-compact-$guid.log"
+
+    try {
+        $escapedScriptPath = $ScriptPath.Replace("'", "''")
+        $escapedLogPath = $logPath.Replace("'", "''")
+        $runnerScript = @"
+`$ErrorActionPreference = 'Stop'
+& diskpart.exe /s '$escapedScriptPath' *> '$escapedLogPath'
+exit `$LASTEXITCODE
+"@
+        $runnerScript | Out-File -FilePath $runnerPath -Encoding ascii
+
+        $process = Start-Process powershell.exe `
+            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$runnerPath`"") `
+            -Verb RunAs `
+            -WindowStyle Hidden `
+            -Wait `
+            -PassThru
+
+        $output = if (Test-Path $logPath) {
+            (Get-Content -Path $logPath -Raw).Trim()
+        } else {
+            ""
+        }
+
+        return @{
+            ExitCode = $process.ExitCode
+            Output = $output
+        }
+    } finally {
+        Remove-Item $runnerPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $logPath -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -64,7 +182,8 @@ try {
     Write-Host "Shutting down WSL..."
     wsl --terminate $DistroName
     wsl --shutdown
-    Start-Sleep -Seconds 2
+    Write-Host "Waiting for the VHDX to be released..."
+    Wait-ForVhdxReady -Name $DistroName -Path $vhdxPath
     
     # 3. Create diskpart script
     $tempFile = New-TemporaryFile
@@ -80,18 +199,21 @@ exit
     
         # 4. Run diskpart as admin
         Write-Host "Running diskpart compaction..."
-        $process = Start-Process diskpart -ArgumentList "/s `"$($tempFile.FullName)`"" -Verb RunAs -Wait -PassThru
+        $diskpartResult = Invoke-ElevatedDiskPart -ScriptPath $tempFile.FullName
     } finally {
         Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
     }
 
-    if ($process.ExitCode -eq 0) {
-        Write-Host "Successfully reclaimed disk space."
-        exit 0
-    } else {
-        Write-Host "Diskpart failed with exit code $($process.ExitCode)"
-        exit 1
+    if ($diskpartResult.ExitCode -ne 0) {
+        $detail = Get-DiskPartFailureSummary -Output $diskpartResult.Output
+        if ($detail) {
+            throw "DiskPart failed with exit code $($diskpartResult.ExitCode). $detail"
+        }
+        throw "DiskPart failed with exit code $($diskpartResult.ExitCode)."
     }
+
+    Write-Host "Successfully reclaimed disk space."
+    exit 0
 } catch {
     Write-Error "Error during compaction: $($_.Exception.Message)"
     exit 1

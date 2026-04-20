@@ -435,8 +435,14 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 }));
 
 function initializeIpcListeners() {
-  const { setStatus, addLog, setSession, setIsLoading, setDockerPullProgress, setJobState } =
-    useClientStore.getState();
+  const {
+    setStatus,
+    addLog,
+    setSession,
+    setIsLoading,
+    setDockerPullProgress,
+    setJobState,
+  } = useClientStore.getState();
 
   // Store cleanup functions from listener registrations
   const cleanupFns: (() => void)[] = [];

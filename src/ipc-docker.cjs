@@ -19,6 +19,41 @@ function init({ app, getPythonManager }) {
   _getPythonManager = getPythonManager;
 }
 
+function getPowerShellDiagnosticLines(output = "") {
+  return output
+    .replace(/\0/g, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(
+      (line) =>
+        !/^At line:/i.test(line) &&
+        !/^\+ CategoryInfo/i.test(line) &&
+        !/^\+ FullyQualifiedErrorId/i.test(line),
+    );
+}
+
+function buildCompactionFailureMessage(error, stdout = "", stderr = "") {
+  const stderrLines = getPowerShellDiagnosticLines(stderr);
+  const stdoutLines = getPowerShellDiagnosticLines(stdout);
+  const prioritized = [...stderrLines, ...stdoutLines].filter((line) =>
+    /(error|failed|denied|timed out|canceled|cancelled|in use|requires elevation|not found)/i.test(
+      line,
+    ),
+  );
+
+  if (prioritized.length > 0) {
+    return prioritized[prioritized.length - 1];
+  }
+  if (stderrLines.length > 0) {
+    return stderrLines[stderrLines.length - 1];
+  }
+  if (stdoutLines.length > 0) {
+    return stdoutLines[stdoutLines.length - 1];
+  }
+  return error?.message || "Compaction failed.";
+}
+
 async function tryTrimWslFilesystem() {
   if (!dockerEngine.isUsingWslDocker()) {
     return { attempted: false, success: false };
@@ -538,13 +573,26 @@ function register(ipcMain) {
       };
     }
 
+    const wasMonitoring = dockerMonitor.isDockerMonitoringActive();
+
     try {
+      dockerMonitor.stopDockerMonitoring();
+      dockerMonitor.resetDockerRoutingCache();
+
       const scriptPath = _app.isPackaged
         ? path.join(process.resourcesPath, "scripts", "compact-wsl.ps1")
         : path.join(__dirname, "..", "scripts", "compact-wsl.ps1");
 
       const wslDistro = await wslUtils.getWslDistroName();
-      return new Promise((resolve) => {
+      if (!wslDistro) {
+        return {
+          success: false,
+          error: "WSL_DISTRO_MISSING",
+          message: "The OpenFork Ubuntu distro could not be found.",
+        };
+      }
+
+      return await new Promise((resolve) => {
         const args = [
           "-NoProfile",
           "-ExecutionPolicy",
@@ -554,17 +602,40 @@ function register(ipcMain) {
           "-DistroName",
           wslDistro,
         ];
-        execFile("powershell.exe", args, (error) => {
-          if (error) {
-            console.error("Compaction failed:", error);
-            resolve({ success: false, error: error.message });
-          } else {
-            resolve({ success: true });
-          }
-        });
+        execFile(
+          "powershell.exe",
+          args,
+          { windowsHide: true },
+          (error, stdout, stderr) => {
+            if (error) {
+              const message = buildCompactionFailureMessage(
+                error,
+                stdout,
+                stderr,
+              );
+              console.error("Compaction failed:", {
+                message: error.message,
+                stdout,
+                stderr,
+              });
+              resolve({ success: false, error: message, message });
+            } else {
+              resolve({ success: true });
+            }
+          },
+        );
       });
     } catch (error) {
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+        message: error.message,
+      };
+    } finally {
+      dockerMonitor.resetDockerRoutingCache();
+      if (wasMonitoring) {
+        dockerMonitor.startDockerMonitoring();
+      }
     }
   });
 

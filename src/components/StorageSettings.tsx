@@ -14,16 +14,22 @@ import { Loader } from "@/components/ui/loader";
 import type { DockerStatus } from "@/types";
 import {
   HardDrive,
-  RefreshCw,
   AlertTriangle,
   ArrowRightLeft,
 } from "lucide-react";
 
 interface StorageSettingsProps {
   onSettingsChanged?: () => void | Promise<void>;
+  compact?: boolean;
+  embedded?: boolean;
 }
 
-export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
+export function StorageSettings({
+  onSettingsChanged,
+  compact = false,
+  embedded = false,
+}: StorageSettingsProps) {
+  const [loading, setLoading] = useState(true);
   const [platform, setPlatform] = useState<"win32" | "linux" | "darwin">(
     "win32",
   );
@@ -45,6 +51,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
   const [error, setError] = useState<string | null>(null);
 
   const refreshData = async () => {
+    setLoading(true);
     try {
       const status = await window.electronAPI.checkDocker();
       setDockerStatus(status);
@@ -60,6 +67,8 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
       }
     } catch (e) {
       console.error("Failed to refresh storage data:", e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,6 +82,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
   const isWindows = platform === "win32";
   const isWslMode = isWindows && dockerStatus?.isNative === false;
   const isDockerDesktop = isWindows && dockerStatus?.isNative === true;
+  const showManagedSections = isWslMode || (loading && isWindows);
   const storageTitle = isWindows
     ? "OpenFork Ubuntu Storage"
     : isWslMode
@@ -87,136 +97,172 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
       : isDockerDesktop
         ? "Managed by Docker Desktop"
         : "Native Linux Docker runtime";
-
-  const handleReclaim = async () => {
-    if (isReclaiming) return;
-    setIsReclaiming(true);
-    setError(null);
-    try {
-      const result = await window.electronAPI.reclaimDiskSpace();
-      if (!result.success) setError(result.error || "Reclaim failed");
-      await refreshData();
-      await Promise.resolve(onSettingsChanged?.());
-    } finally {
-      setIsReclaiming(false);
-    }
-  };
-
-  const handleRelocate = async () => {
-    if (!selectedDrive || isRelocating) return;
-
-    const confirm = window.confirm(
-      `WARNING: This will reinstall the OpenFork engine on ${selectedDrive}: drive and remove the current engine images so they can be downloaded again.\n\nAre you sure you want to proceed?`,
-    );
-    if (!confirm) return;
-
-    setIsRelocating(true);
-    setError(null);
-    try {
-      const drivePath = `${selectedDrive}:\\OpenFork\\wsl`;
-      const result = await window.electronAPI.relocateStorage(drivePath);
-      if (!result.success) {
-        setError(result.error || "Relocation failed");
-      } else {
-        alert("Relocation complete! The engine has been moved and restarted.");
-        await refreshData();
-        await Promise.resolve(onSettingsChanged?.());
-      }
-    } finally {
-      setIsRelocating(false);
-    }
-  };
-
-  return (
-    <Card className="card overflow-hidden border-white/5 bg-surface/20 backdrop-blur-md">
-      <CardContent className="p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
-          <div className="flex items-center gap-4">
-            <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
-              <HardDrive className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">
-                {storageTitle}
-              </h3>
-              <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5">
-                {storageSubtitle}
-              </p>
-            </div>
+  const readableMode = compact || embedded;
+  const sectionClassName = readableMode
+    ? "rounded-xl border border-white/12 bg-black/30 p-3.5 space-y-3 shadow-inner shadow-black/10"
+    : "rounded-lg border border-white/10 bg-white/5 p-4 space-y-3";
+  const headingClassName = readableMode
+    ? "text-xs font-semibold tracking-[0.06em] text-white"
+    : "text-[10px] font-black uppercase tracking-[0.2em] text-white/90";
+  const subheadingClassName = readableMode
+    ? "text-[11px] text-white/68 leading-relaxed mt-1"
+    : "text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5";
+  const statChipClassName = readableMode
+    ? "max-w-full truncate text-[10px] text-white/88 bg-white/8 font-semibold tracking-[0.05em] px-3 py-1.5 rounded-lg border border-white/10"
+    : "max-w-full truncate text-[9px] text-white/80 bg-white/5 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/5";
+  const accentChipClassName = readableMode
+    ? "text-[10px] text-amber-200 bg-amber-500/12 font-semibold tracking-[0.05em] px-3 py-1.5 rounded-lg border border-amber-500/25"
+    : "text-[9px] text-amber-300/90 bg-amber-500/10 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-amber-500/20";
+  const summaryClassName = readableMode
+    ? "text-[11px] font-semibold tracking-[0.04em] text-white/92"
+    : "text-[10px] font-black tracking-widest text-white/90 uppercase";
+  const labelClassName = readableMode
+    ? "text-[11px] font-semibold tracking-[0.04em] text-white/94"
+    : "text-[10px] font-black uppercase tracking-widest text-white/90";
+  const copyClassName = readableMode
+    ? "text-[11px] text-white/74 leading-relaxed"
+    : "text-[9px] text-white/40 font-black uppercase leading-relaxed";
+  const copyMutedClassName = readableMode
+    ? "text-[11px] text-white/70 leading-relaxed"
+    : "text-[9px] text-white/30 font-black uppercase leading-relaxed";
+  const helperTextClassName = readableMode
+    ? "text-[11px] text-white/70 leading-relaxed sm:flex-1"
+    : "text-[9px] text-white/55 font-black uppercase leading-relaxed sm:flex-1";
+  const emptyStateClassName = readableMode
+    ? "text-[11px] font-medium tracking-[0.03em] text-white/80 leading-relaxed"
+    : "text-[9px] font-black uppercase tracking-[0.15em] text-white/80 leading-relaxed";
+  const buttonTextClassName = readableMode
+    ? "px-4 h-8 text-[10px] font-semibold uppercase tracking-[0.08em]"
+    : "px-4 h-8 text-[10px] font-black uppercase tracking-widest";
+  const sectionRadiusClassName = readableMode ? "rounded-xl" : "rounded-lg";
+  const renderSectionLoadingOverlay = () => (
+    <div
+      className={`absolute inset-0 z-20 flex flex-col items-center justify-center ${sectionRadiusClassName} bg-black/38 backdrop-blur-[2px] animate-in fade-in duration-300`}
+    >
+      <Loader size="md" variant="primary" />
+    </div>
+  );
+  const body = (
+    <>
+      <div
+        className={`${compact ? "flex flex-col gap-3 border-b border-white/5 pb-4" : "flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6"}`}
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+            <HardDrive className="h-5 w-5" />
           </div>
-          {diskInfo && (
-            <div className="flex flex-col items-end gap-1.5">
-              <div className="text-[9px] text-white/80 bg-white/5 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/5">
-                Active: {diskInfo.path}
-              </div>
-              <div className="text-[10px] font-black tracking-widest text-white/90 uppercase">
-                {diskInfo.free_gb} GB FREE / {diskInfo.total_gb} GB TOTAL
-              </div>
-              {diskInfo.engine_file_gb && (
-                <div className="text-[9px] text-white/50 font-black uppercase tracking-[0.15em]">
-                  ext4.vhdx: {diskInfo.engine_file_gb} GB
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {isWindows && (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3">
-            <div className="space-y-0.5">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-white/90">
-                Windows Engine
-              </Label>
-              <p className="text-[9px] text-white/40 font-black uppercase leading-relaxed">
-                OpenFork uses its dedicated Ubuntu distro for Docker on Windows.
-              </p>
-            </div>
-
-            <p className="text-[9px] text-white/30 font-black uppercase leading-relaxed">
-              Docker Desktop is no longer used by the Windows client.
+          <div>
+            <h3 className={headingClassName}>
+              {storageTitle}
+            </h3>
+            <p className={subheadingClassName}>
+              {storageSubtitle}
             </p>
           </div>
-        )}
-
-        {isWslMode ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-            <div className="space-y-2">
-              <div className="space-y-0.5">
-                <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
-                  <RefreshCw className="h-3 w-3" />
-                  Space Reclamation
-                </Label>
-                <p className="text-[9px] text-white/30 font-black uppercase leading-relaxed">
-                  Reclaim unused space from the WSL disk file.
-                </p>
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                className="px-4 h-8 text-[10px] font-black uppercase tracking-widest"
-                onClick={handleReclaim}
-                disabled={isReclaiming || isRelocating}
-              >
-                {isReclaiming ? (
-                  <Loader size="xs" className="mr-2" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5 mr-2" />
+        </div>
+        {(diskInfo || loading) && (
+          <div className="relative">
+            <div className="flex flex-col gap-2 sm:items-end">
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <div className={statChipClassName}>
+                  {diskInfo ? `Active: ${diskInfo.path}` : "Active: Detecting storage..."}
+                </div>
+                {(diskInfo?.engine_file_gb || loading) && (
+                  <div className={accentChipClassName}>
+                    {diskInfo?.engine_file_gb
+                      ? `VHDX ${diskInfo.engine_file_gb} GB`
+                      : "VHDX --"}
+                  </div>
                 )}
-                {isReclaiming ? "Compacting..." : "Optimize Now"}
-              </Button>
+              </div>
+              <div className={summaryClassName}>
+                {diskInfo
+                  ? `${diskInfo.free_gb} GB FREE / ${diskInfo.total_gb} GB TOTAL`
+                  : "Checking available storage..."}
+              </div>
             </div>
+            {loading && renderSectionLoadingOverlay()}
+          </div>
+        )}
+      </div>
 
-            <div className="space-y-2 md:border-l md:pl-4 border-white/5">
+      {isWindows && (
+        <div className={sectionClassName}>
+          <div className="space-y-0.5">
+            <Label className={labelClassName}>
+              Windows Engine
+            </Label>
+            <p className={copyClassName}>
+              OpenFork uses its dedicated Ubuntu distro for Docker on Windows.
+            </p>
+          </div>
+
+          {!compact && (
+            <p className={copyMutedClassName}>
+              Docker Desktop is no longer used by the Windows client.
+            </p>
+          )}
+        </div>
+      )}
+
+      {showManagedSections ? (
+        <div
+          className={`grid grid-cols-1 ${compact ? "xl:grid-cols-2 gap-3" : "md:grid-cols-2 gap-4"} items-start`}
+        >
+          <div className="relative">
+            <div className={sectionClassName}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label className={`${labelClassName} flex items-center gap-1.5`}>
+                    <HardDrive className="h-3 w-3" />
+                    Disk Compaction
+                  </Label>
+                  <p className={copyMutedClassName}>
+                    Shrink the WSL disk file so Windows sees reclaimed space.
+                  </p>
+                </div>
+                {(diskInfo?.engine_file_gb || loading) && (
+                  <span
+                    className={`shrink-0 ${readableMode ? "rounded-lg border border-amber-500/25 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] text-amber-200" : "rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-amber-300"}`}
+                  >
+                    {diskInfo?.engine_file_gb ? `${diskInfo.engine_file_gb} GB` : "VHDX --"}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <p className={helperTextClassName}>
+                  Stop the engine first. Windows may ask for admin permission.
+                </p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className={`${buttonTextClassName} sm:ml-auto`}
+                  onClick={handleReclaim}
+                  disabled={loading || isReclaiming || isRelocating}
+                >
+                  {isReclaiming ? (
+                    <Loader size="xs" className="mr-2" />
+                  ) : (
+                    <HardDrive className="h-3.5 w-3.5 mr-2" />
+                  )}
+                  {isReclaiming ? "Compacting..." : "Compact VHDX"}
+                </Button>
+              </div>
+            </div>
+            {loading && renderSectionLoadingOverlay()}
+          </div>
+
+          <div className="relative">
+            <div className={sectionClassName}>
               <div className="space-y-0.5">
-                <Label className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-white/90">
+                <Label className={`${labelClassName} flex items-center gap-1.5`}>
                   <ArrowRightLeft className="h-3 w-3" />
                   Relocate Engine
                 </Label>
-                <p className="text-[9px] text-white/30 font-black uppercase leading-relaxed">
-                  Reinstall the engine on another drive.{" "}
-                  <span className="text-orange-400/80 italic">
-                    Requires re-downloading images.
-                  </span>
+                <p className={copyMutedClassName}>
+                  Reinstall on another drive. Large images must be downloaded
+                  again.
                 </p>
               </div>
 
@@ -225,7 +271,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
                   <Select
                     value={selectedDrive}
                     onValueChange={setSelectedDrive}
-                    disabled={isRelocating}
+                    disabled={loading || isRelocating}
                   >
                     <SelectTrigger className="w-full h-8 text-[11px] bg-background/50 border-white/10 hover:bg-background/80 transition-colors">
                       <SelectValue placeholder="Select Drive" />
@@ -262,9 +308,10 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
                 <Button
                   variant="primary"
                   size="sm"
-                  className="px-4 h-8 text-[11px] flex-shrink-0"
+                  className={`${buttonTextClassName} flex-shrink-0`}
                   onClick={handleRelocate}
                   disabled={
+                    loading ||
                     !selectedDrive ||
                     selectedDrive === dockerStatus?.installDrive ||
                     isRelocating ||
@@ -275,31 +322,85 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
                 </Button>
               </div>
             </div>
+            {loading && renderSectionLoadingOverlay()}
           </div>
-        ) : (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/80">
-              {isWindows
-                ? "Install the OpenFork Ubuntu engine to unlock relocation and compaction controls."
-                : isDockerDesktop
-                  ? "Docker Desktop manages its own virtual disk. OpenFork only exposes relocation and compaction controls for the dedicated WSL engine."
-                  : "This setup uses native Docker. OpenFork doesn't relocate or compact Docker storage from the app in this mode."}
-            </p>
-          </div>
-        )}
+        </div>
+      ) : (
+        <div className={sectionClassName}>
+          <p className={emptyStateClassName}>
+            {isWindows
+              ? "Install the OpenFork Ubuntu engine to unlock relocation and compaction controls."
+              : isDockerDesktop
+                ? "Docker Desktop manages its own virtual disk. OpenFork only exposes relocation and compaction controls for the dedicated WSL engine."
+                : "This setup uses native Docker. OpenFork doesn't relocate or compact Docker storage from the app in this mode."}
+          </p>
+        </div>
+      )}
 
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-2 rounded-md bg-destructive-foreground border border-destructive/20 flex items-center gap-2 text-destructive"
-          >
-            <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-            <span className="text-[9px] text-white font-black uppercase tracking-widest">
-              {error}
-            </span>
-          </motion.div>
-        )}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-md bg-destructive-foreground border border-destructive/20 flex items-center gap-2 text-destructive px-3 py-2.5"
+        >
+          <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+          <span className="text-[11px] text-white font-semibold leading-relaxed">
+            {error}
+          </span>
+        </motion.div>
+      )}
+    </>
+  );
+
+  async function handleReclaim() {
+    if (isReclaiming) return;
+    setIsReclaiming(true);
+    setError(null);
+    try {
+      const result = await window.electronAPI.reclaimDiskSpace();
+      if (!result.success) {
+        setError(result.message || result.error || "Reclaim failed");
+      }
+      await refreshData();
+      await Promise.resolve(onSettingsChanged?.());
+    } finally {
+      setIsReclaiming(false);
+    }
+  }
+
+  async function handleRelocate() {
+    if (!selectedDrive || isRelocating) return;
+
+    const confirm = window.confirm(
+      `WARNING: This will reinstall the OpenFork engine on ${selectedDrive}: drive and remove the current engine images so they can be downloaded again.\n\nAre you sure you want to proceed?`,
+    );
+    if (!confirm) return;
+
+    setIsRelocating(true);
+    setError(null);
+    try {
+      const drivePath = `${selectedDrive}:\\OpenFork\\wsl`;
+      const result = await window.electronAPI.relocateStorage(drivePath);
+      if (!result.success) {
+        setError(result.error || "Relocation failed");
+      } else {
+        alert("Relocation complete! The engine has been moved and restarted.");
+        await refreshData();
+        await Promise.resolve(onSettingsChanged?.());
+      }
+    } finally {
+      setIsRelocating(false);
+    }
+  }
+
+  if (embedded) {
+    return <div className={compact ? "space-y-4" : "space-y-6"}>{body}</div>;
+  }
+
+  return (
+    <Card className="card overflow-hidden border-white/5 bg-surface/20 backdrop-blur-md">
+      <CardContent className={compact ? "p-4 space-y-4" : "p-6 space-y-6"}>
+        {body}
       </CardContent>
     </Card>
   );

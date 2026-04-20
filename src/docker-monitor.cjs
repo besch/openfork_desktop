@@ -182,10 +182,21 @@ function stopDockerMonitoring() {
   }
 }
 
+function isDockerMonitoringActive() {
+  return dockerMonitorInterval !== null;
+}
+
+function resetDockerRoutingCache() {
+  _cachedRoutingResult = null;
+  _cachedRoutingTimestamp = 0;
+}
+
 module.exports = {
   init,
   ensureDockerRouting,
   checkDockerUpdates,
   startDockerMonitoring,
   stopDockerMonitoring,
+  isDockerMonitoringActive,
+  resetDockerRoutingCache,
 };
