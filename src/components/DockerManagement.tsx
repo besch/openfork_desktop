@@ -49,6 +49,8 @@ export const DockerManagement = memo(() => {
     used_gb: string;
     free_gb: string;
     path: string;
+    engine_file_gb: string | null;
+    engine_file_path: string | null;
   } | null>(null);
   const [showCompactionBanner, setShowCompactionBanner] = useState(false);
   const [compacting, setCompacting] = useState(false);
@@ -397,9 +399,11 @@ export const DockerManagement = memo(() => {
                   Reclaim physical disk space
                 </p>
                 <p className="text-xs text-amber-300/70">
-                  Docker images were removed but the WSL disk file (VHDX)
-                  doesn't shrink automatically. Compact it to recover space on
-                  Windows. This requires stopping the engine and UAC elevation.
+                  Deleting images frees space inside Linux first. Windows File
+                  Explorer only shows that space after the OpenFork Ubuntu disk
+                  file (`ext4.vhdx`) is trimmed or compacted. Compact it to
+                  recover host disk space. This requires stopping the engine
+                  and UAC elevation.
                 </p>
                 {compactionResult && (
                   <p
@@ -542,16 +546,23 @@ export const DockerManagement = memo(() => {
         <div className="flex items-center gap-3">
           {diskSpace && (
             <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 ${
+              className={`flex flex-col items-end gap-1 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 ${
                 diskSpaceError
                   ? "bg-destructive border border-destructive/50 text-white shadow-lg shadow-destructive/20"
                   : "bg-black/40 border border-amber-500/20 text-amber-500 shadow-lg shadow-amber-500/20"
               }`}
             >
-              <HardDrive className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-black tracking-widest uppercase">
-                {diskSpace.free_gb}GB / {diskSpace.total_gb}GB FREE
-              </span>
+              <div className="flex items-center gap-2">
+                <HardDrive className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-black tracking-widest uppercase">
+                  {diskSpace.free_gb}GB / {diskSpace.total_gb}GB FREE
+                </span>
+              </div>
+              {diskSpace.engine_file_gb && (
+                <span className="text-[9px] font-black tracking-widest uppercase opacity-70">
+                  VHDX {diskSpace.engine_file_gb}GB
+                </span>
+              )}
             </div>
           )}
           <Button

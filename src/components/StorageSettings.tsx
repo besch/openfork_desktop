@@ -32,6 +32,8 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
     used_gb: string;
     total_gb: string;
     path: string;
+    engine_file_gb: string | null;
+    engine_file_path: string | null;
   } | null>(null);
   const [availableDrives, setAvailableDrives] = useState<
     { name: string; freeGB: number }[]
@@ -150,6 +152,11 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
               <div className="text-[10px] font-black tracking-widest text-white/90 uppercase">
                 {diskInfo.free_gb} GB FREE / {diskInfo.total_gb} GB TOTAL
               </div>
+              {diskInfo.engine_file_gb && (
+                <div className="text-[9px] text-white/50 font-black uppercase tracking-[0.15em]">
+                  ext4.vhdx: {diskInfo.engine_file_gb} GB
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -161,8 +168,7 @@ export function StorageSettings({ onSettingsChanged }: StorageSettingsProps) {
                 Windows Engine
               </Label>
               <p className="text-[9px] text-white/40 font-black uppercase leading-relaxed">
-                OpenFork uses its dedicated Ubuntu distro for Docker on
-                Windows.
+                OpenFork uses its dedicated Ubuntu distro for Docker on Windows.
               </p>
             </div>
 

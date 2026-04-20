@@ -50,6 +50,15 @@ try {
     }
     
     Write-Host "Found VHDX at: $vhdxPath"
+
+    # Trim free blocks inside the Linux filesystem first so the subsequent VHDX
+    # compaction has more reclaimable space to work with.
+    Write-Host "Trimming free space inside WSL..."
+    try {
+        wsl.exe -d $DistroName --user root -- bash -lc "sync && (command -v fstrim >/dev/null 2>&1 && fstrim -av || true)" | Out-Null
+    } catch {
+        Write-Host "WSL trim skipped: $($_.Exception.Message)"
+    }
     
     # 2. Shutdown WSL to release the file
     Write-Host "Shutting down WSL..."

@@ -187,6 +187,8 @@ interface ElectronAPI {
       used_gb: string;
       free_gb: string;
       path: string;
+      engine_file_gb: string | null;
+      engine_file_path: string | null;
     };
   }>;
 

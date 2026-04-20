@@ -1,5 +1,7 @@
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
 const { exec, execFile } = require("child_process");
 
 const dockerEngine = require("./docker-engine.cjs");
@@ -15,6 +17,44 @@ let _getPythonManager;
 function init({ app, getPythonManager }) {
   _app = app;
   _getPythonManager = getPythonManager;
+}
+
+async function tryTrimWslFilesystem() {
+  if (!dockerEngine.isUsingWslDocker()) {
+    return { attempted: false, success: false };
+  }
+
+  const wslDistro = await wslUtils.getWslDistroName();
+  if (!wslDistro) {
+    return { attempted: false, success: false };
+  }
+
+  const trimResult = await dockerEngine.runDockerCheckCommand(
+    "sync && (command -v fstrim >/dev/null 2>&1 && fstrim -av || true)",
+    {
+      useWsl: true,
+      wslDistro,
+      wslUser: "root",
+      timeoutMs: 120000,
+    },
+  );
+
+  if (!trimResult.success) {
+    console.warn(
+      `WSL trim did not complete for distro '${wslDistro}': ${trimResult.error || trimResult.stderr || "unknown error"}`,
+    );
+    return {
+      attempted: true,
+      success: false,
+      error: trimResult.error || trimResult.stderr || "WSL trim failed",
+    };
+  }
+
+  return {
+    attempted: true,
+    success: true,
+    output: trimResult.output || "",
+  };
 }
 
 function register(ipcMain) {
@@ -142,6 +182,8 @@ function register(ipcMain) {
         // Ignore prune errors
       }
 
+      await tryTrimWslFilesystem();
+
       // On WSL Docker, rmi + prune free space inside the VHDX but the file itself
       // doesn't shrink until compacted. Suggest that to the user.
       dockerEngine.emitCompactionSuggested();
@@ -184,6 +226,8 @@ function register(ipcMain) {
       } catch (e) {
         // Non-fatal
       }
+
+      await tryTrimWslFilesystem();
 
       if (removedCount > 0) dockerEngine.emitCompactionSuggested();
       return { success: true, removedCount };
@@ -312,6 +356,8 @@ function register(ipcMain) {
         await dockerEngine.execDockerCommand("docker container prune -f");
       } catch (e) {}
 
+      await tryTrimWslFilesystem();
+
       if (removedCount > 0) dockerEngine.emitCompactionSuggested();
       return { success: true, stoppedCount, removedCount };
     } catch (error) {
@@ -325,6 +371,8 @@ function register(ipcMain) {
   ipcMain.handle("docker:get-disk-space", async () => {
     try {
       let totalBytes, freeBytes, usedBytes, diskPath;
+      let engineFileBytes = null;
+      let engineFilePath = null;
 
       if (process.platform === "win32") {
         let driveLetter = wslUtils.getWindowsSystemDriveLetter();
@@ -372,8 +420,31 @@ function register(ipcMain) {
           return {
             success: false,
             error: "Failed to query system disk space",
-            data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "C:\\" },
+            data: {
+              total_gb: "0",
+              used_gb: "0",
+              free_gb: "0",
+              path: "C:\\",
+              engine_file_gb: null,
+              engine_file_path: null,
+            },
           };
+        }
+
+        if (
+          typeof storagePath === "string" &&
+          storagePath.toLowerCase().endsWith(".vhdx") &&
+          fs.existsSync(storagePath)
+        ) {
+          try {
+            engineFileBytes = fs.statSync(storagePath).size;
+            engineFilePath = storagePath;
+          } catch (statError) {
+            console.warn(
+              `Failed to stat WSL disk file '${storagePath}':`,
+              statError.message,
+            );
+          }
         }
       } else {
         let targetPath = "/";
@@ -421,6 +492,11 @@ function register(ipcMain) {
           used_gb: (usedBytes / 1024 ** 3).toFixed(1),
           free_gb: (freeBytes / 1024 ** 3).toFixed(1),
           path: diskPath,
+          engine_file_gb:
+            typeof engineFileBytes === "number"
+              ? (engineFileBytes / 1024 ** 3).toFixed(1)
+              : null,
+          engine_file_path: engineFilePath,
         },
       };
     } catch (error) {
@@ -428,7 +504,14 @@ function register(ipcMain) {
       return {
         success: false,
         error: error.message,
-        data: { total_gb: "0", used_gb: "0", free_gb: "0", path: "" },
+        data: {
+          total_gb: "0",
+          used_gb: "0",
+          free_gb: "0",
+          path: "",
+          engine_file_gb: null,
+          engine_file_path: null,
+        },
       };
     }
   });
@@ -457,8 +540,8 @@ function register(ipcMain) {
 
     try {
       const scriptPath = _app.isPackaged
-        ? require("path").join(process.resourcesPath, "scripts", "compact-wsl.ps1")
-        : require("path").join(__dirname, "..", "scripts", "compact-wsl.ps1");
+        ? path.join(process.resourcesPath, "scripts", "compact-wsl.ps1")
+        : path.join(__dirname, "..", "scripts", "compact-wsl.ps1");
 
       const wslDistro = await wslUtils.getWslDistroName();
       return new Promise((resolve) => {
@@ -487,14 +570,13 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
     try {
-      const pathMod = require("path");
       const relocateScriptPath = _app.isPackaged
-        ? pathMod.join(process.resourcesPath, "scripts", "relocate-wsl.ps1")
-        : pathMod.join(__dirname, "..", "scripts", "relocate-wsl.ps1");
+        ? path.join(process.resourcesPath, "scripts", "relocate-wsl.ps1")
+        : path.join(__dirname, "..", "scripts", "relocate-wsl.ps1");
 
       const setupScriptPath = _app.isPackaged
-        ? pathMod.join(process.resourcesPath, "bin", "setup-wsl.ps1")
-        : pathMod.join(__dirname, "..", "..", "client", "setup-wsl.ps1");
+        ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
+        : path.join(__dirname, "..", "..", "client", "setup-wsl.ps1");
 
       console.log(`Cleaning up old distribution before relocation to: ${newDrivePath}`);
       const relocateArgs = [
