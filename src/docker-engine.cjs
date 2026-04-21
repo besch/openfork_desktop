@@ -351,7 +351,7 @@ async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
 
 // --- WSL DOCKER CHECK ---
 
-async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
+async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {}) {
   if (process.platform !== "win32") return { installed: false, running: false };
 
   const installStatus = getActiveWindowsInstallStatus();
@@ -417,7 +417,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
   const infoResult = await runDockerCheckCommand("docker info", {
     useWsl: true,
     wslDistro,
-    timeoutMs: WSL_DOCKER_CHECK_TIMEOUT_MS,
+    timeoutMs: infoTimeoutMs ?? WSL_DOCKER_CHECK_TIMEOUT_MS,
   });
   if (!infoResult.success) {
     // Unix-socket docker info failed — the daemon may be TCP-only.
@@ -551,7 +551,10 @@ async function resolveDockerStatus({
     };
   }
 
-  const wsl = await checkWslDockerStatus({ hostTimeoutMs: wslHostTimeoutMs });
+  const wsl = await checkWslDockerStatus({
+    hostTimeoutMs: wslHostTimeoutMs,
+    infoTimeoutMs: wslHostTimeoutMs,
+  });
   const native = { installed: false, running: false };
   const decorate = (status) =>
     withWindowsDockerMetadata(status, {
