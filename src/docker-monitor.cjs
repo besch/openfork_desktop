@@ -30,7 +30,10 @@ const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
  */
 async function ensureDockerRouting() {
   const now = Date.now();
-  if (_cachedRoutingResult && now - _cachedRoutingTimestamp < ROUTING_CACHE_TTL_MS) {
+  if (
+    _cachedRoutingResult &&
+    now - _cachedRoutingTimestamp < ROUTING_CACHE_TTL_MS
+  ) {
     return _cachedRoutingResult;
   }
   const status = await dockerEngine.resolveDockerStatus({
@@ -59,7 +62,11 @@ async function checkDockerUpdates() {
     // Detect active-engine changes and notify the renderer so DockerManagement
     // can refresh without waiting for the user to click the refresh button.
     const nextEngine = dockerStatus.activeEngine ?? null;
-    if (nextEngine && _lastKnownActiveEngine && nextEngine !== _lastKnownActiveEngine) {
+    if (
+      nextEngine &&
+      _lastKnownActiveEngine &&
+      nextEngine !== _lastKnownActiveEngine
+    ) {
       console.log(
         `Docker engine switched: ${_lastKnownActiveEngine} → ${nextEngine}`,
       );
@@ -105,9 +112,15 @@ async function checkDockerUpdates() {
     dockerMonitorConsecutiveFailures = 0;
 
     // Check containers
-    const containersOutput = await dockerEngine.execDockerCommand(
-      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
-    );
+    let containersOutput = "";
+    try {
+      containersOutput = await dockerEngine.execDockerCommand(
+        'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
+      );
+    } catch (e) {
+      console.warn(`Failed to get container list: ${e?.message || e}`);
+      containersOutput = "";
+    }
     if (containersOutput !== lastContainersJson) {
       lastContainersJson = containersOutput;
       const containers = containersOutput
@@ -133,9 +146,15 @@ async function checkDockerUpdates() {
     }
 
     // Check images
-    const imagesOutput = await dockerEngine.execDockerCommand(
-      'docker images --format "{{json .}}"',
-    );
+    let imagesOutput = "";
+    try {
+      imagesOutput = await dockerEngine.execDockerCommand(
+        'docker images --format "{{json .}}"',
+      );
+    } catch (e) {
+      console.warn(`Failed to get image list: ${e?.message || e}`);
+      imagesOutput = "";
+    }
     if (imagesOutput !== lastImagesJson) {
       lastImagesJson = imagesOutput;
       const images = imagesOutput
@@ -157,13 +176,31 @@ async function checkDockerUpdates() {
         })
         .filter((img) => {
           if (!img) return false;
-          return `${img.repository}:${img.tag}`.toLowerCase().includes("openfork");
+          return `${img.repository}:${img.tag}`
+            .toLowerCase()
+            .includes("openfork");
         });
       mainWindow.webContents.send("docker:images-update", images);
     }
   } catch (e) {
-    console.log(`Docker monitor update error: ${e?.message || e}`);
+    console.warn(`Docker monitor update error: ${e?.message || e}`);
     dockerMonitorConsecutiveFailures++;
+
+    // Log diagnostics on repeated failures
+    if (dockerMonitorConsecutiveFailures === 1) {
+      console.info(
+        `Docker monitor failure #${dockerMonitorConsecutiveFailures}/${DOCKER_MONITOR_MAX_FAILURES} - ` +
+          `This is typically a transient WSL/sudo issue. Retrying...`,
+      );
+    } else if (
+      dockerMonitorConsecutiveFailures >= DOCKER_MONITOR_MAX_FAILURES
+    ) {
+      console.error(
+        `Docker monitor has failed ${dockerMonitorConsecutiveFailures} times. ` +
+          `This may indicate a WSL sudo configuration issue or Docker socket access problem. ` +
+          `ERNIE-Image processor will continue working if containers are already running.`,
+      );
+    }
   }
 }
 

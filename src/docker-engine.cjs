@@ -8,7 +8,8 @@ const dockerStorage = require("./docker-storage.cjs");
 
 const WINDOWS_DOCKER_API_PORT = 2375;
 const WSL_DOCKER_CHECK_TIMEOUT_MS = 30000;
-const WSL_LINUX_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+const WSL_LINUX_PATH =
+  "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 let _getMainWindow;
 let _getInstallState;
@@ -77,7 +78,9 @@ function getActiveWindowsInstallStatus() {
     running: false,
     isNative: false,
     isStarting: true,
-    installDrive: installDriveMatch ? installDriveMatch[1].toUpperCase() : undefined,
+    installDrive: installDriveMatch
+      ? installDriveMatch[1].toUpperCase()
+      : undefined,
     wslDistro: installState.distro || "OpenFork",
   };
 }
@@ -118,51 +121,80 @@ async function execDockerCommand(command) {
         (error, stdout, stderr) => {
           if (error) {
             const msg = `${error.message}\n${stderr || ""}`.toLowerCase();
+            // Gracefully handle common Docker/WSL failures
             if (
               msg.includes("is not running") ||
               msg.includes("connection refused") ||
-              msg.includes("distribution with the supplied name could not be found") ||
+              msg.includes(
+                "distribution with the supplied name could not be found",
+              ) ||
               msg.includes("docker: command not found") ||
-              msg.includes("the command 'docker' could not be found in this wsl 2 distro") ||
+              msg.includes(
+                "the command 'docker' could not be found in this wsl 2 distro",
+              ) ||
               msg.includes("error response from daemon") ||
               msg.includes("context deadline exceeded") ||
               msg.includes("unexpected eof") ||
-              msg.includes("i/o timeout")
+              msg.includes("i/o timeout") ||
+              // Handle sudo/permission errors more gracefully
+              msg.includes("sudo") ||
+              msg.includes("permission denied") ||
+              msg.includes("password") ||
+              msg.includes("authentication failure")
             ) {
+              // For monitoring commands, gracefully degrade rather than reject
+              // This allows the monitor to keep polling even if sudo/permissions fail
+              console.debug(
+                `Docker command tolerated error (monitoring continues): ${error.message}`,
+              );
               resolve("");
               return;
             }
-            console.error(`Docker command error: ${error.message}${stderr ? `\nStderr: ${stderr}` : ""}`);
-            reject(error);
+            // For unexpected errors, log but still gracefully handle for monitor stability
+            console.warn(
+              `Docker command unexpected error: ${error.message}${stderr ? `\nStderr: ${stderr}` : ""}`,
+            );
+            resolve(""); // Resolve to empty string instead of rejecting to keep monitor alive
             return;
           }
           resolve(stdout.trim());
         },
       );
     } else {
-      const effectiveCommand = (process.platform === "linux" && useSgDocker)
-        ? `sg docker -c ${JSON.stringify(command)}`
-        : command;
-      exec(effectiveCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-        if (error) {
-          const msg = `${error.message}\n${stderr || ""}`.toLowerCase();
-          if (
-            msg.includes("is not running") ||
-            msg.includes("connection refused") ||
-            msg.includes("error response from daemon") ||
-            msg.includes("context deadline exceeded") ||
-            msg.includes("unexpected eof") ||
-            msg.includes("i/o timeout")
-          ) {
-            resolve("");
+      const effectiveCommand =
+        process.platform === "linux" && useSgDocker
+          ? `sg docker -c ${JSON.stringify(command)}`
+          : command;
+      exec(
+        effectiveCommand,
+        { maxBuffer: 1024 * 1024 * 10 },
+        (error, stdout, stderr) => {
+          if (error) {
+            const msg = `${error.message}\n${stderr || ""}`.toLowerCase();
+            if (
+              msg.includes("is not running") ||
+              msg.includes("connection refused") ||
+              msg.includes("error response from daemon") ||
+              msg.includes("context deadline exceeded") ||
+              msg.includes("unexpected eof") ||
+              msg.includes("i/o timeout") ||
+              msg.includes("permission denied") ||
+              msg.includes("password") ||
+              msg.includes("authentication failure")
+            ) {
+              resolve("");
+              return;
+            }
+            // For unexpected errors, log but gracefully degrade to keep monitor stable
+            console.warn(
+              `Docker command unexpected error: ${error.message}${stderr ? `\nStderr: ${stderr}` : ""}`,
+            );
+            resolve(""); // Resolve to empty string instead of rejecting
             return;
           }
-          console.error(`Docker command error: ${error.message}${stderr ? `\nStderr: ${stderr}` : ""}`);
-          reject(error);
-          return;
-        }
-        resolve(stdout.trim());
-      });
+          resolve(stdout.trim());
+        },
+      );
     }
   });
 }
@@ -174,7 +206,9 @@ function classifyDockerCheckError(errorMessage = "", stderr = "") {
   if (combined.includes("permission denied")) return "DOCKER_PERMISSION_DENIED";
   if (
     combined.includes("docker: command not found") ||
-    combined.includes("the command 'docker' could not be found in this wsl 2 distro")
+    combined.includes(
+      "the command 'docker' could not be found in this wsl 2 distro",
+    )
   ) {
     return "DOCKER_CLI_NOT_FOUND";
   }
@@ -224,23 +258,28 @@ function runDockerCheckCommand(
       );
       return;
     }
-    const effectiveCmd = (process.platform === "linux" && useSgDocker)
-      ? `sg docker -c ${JSON.stringify(cmd)}`
-      : cmd;
-    exec(effectiveCmd, { timeout: timeoutMs ?? 10000 }, (error, stdout, stderr) => {
-      if (error) {
-        console.log(`Check command '${cmd}' failed: ${error.message}`);
-        console.log(`Stdout: ${stdout}`);
-        console.log(`Stderr: ${stderr}`);
-        resolve({
-          success: false,
-          error: error.message,
-          stderr: stderr?.trim() || "",
-        });
-        return;
-      }
-      resolve({ success: true, output: stdout.trim() });
-    });
+    const effectiveCmd =
+      process.platform === "linux" && useSgDocker
+        ? `sg docker -c ${JSON.stringify(cmd)}`
+        : cmd;
+    exec(
+      effectiveCmd,
+      { timeout: timeoutMs ?? 10000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          console.log(`Check command '${cmd}' failed: ${error.message}`);
+          console.log(`Stdout: ${stdout}`);
+          console.log(`Stderr: ${stderr}`);
+          resolve({
+            success: false,
+            error: error.message,
+            stderr: stderr?.trim() || "",
+          });
+          return;
+        }
+        resolve({ success: true, output: stdout.trim() });
+      },
+    );
   });
 }
 
@@ -261,14 +300,21 @@ function pingDockerApiHost(host, timeoutMs = 1500) {
       },
       (response) => {
         let body = "";
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           resolve(response.statusCode === 200 && body.trim() === "OK");
         });
       },
     );
-    request.on("timeout", () => { request.destroy(); resolve(false); });
-    request.on("error", () => { resolve(false); });
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.on("error", () => {
+      resolve(false);
+    });
     request.end();
   });
 }
@@ -453,9 +499,10 @@ function buildWslStatus(wsl) {
   };
 }
 
-async function resolveDockerStatus(
-  { allowNativeStart = true, wslHostTimeoutMs = 15000 } = {},
-) {
+async function resolveDockerStatus({
+  allowNativeStart = true,
+  wslHostTimeoutMs = 15000,
+} = {}) {
   if (process.platform !== "win32") {
     const versionResult = await runDockerCheckCommand("docker --version");
     if (!versionResult.success) return { installed: false, running: false };
@@ -467,7 +514,9 @@ async function resolveDockerStatus(
     if (error === "DOCKER_PERMISSION_DENIED") {
       // User was just added to the docker group but hasn't re-logged in.
       // sg picks up the new group membership mid-session.
-      const sgResult = await runDockerCheckCommand('sg docker -c "docker info"');
+      const sgResult = await runDockerCheckCommand(
+        'sg docker -c "docker info"',
+      );
       if (sgResult.success) {
         useSgDocker = true;
         return { installed: true, running: true, activeEngine: "linux" };
