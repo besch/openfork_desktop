@@ -123,12 +123,16 @@ async function execDockerCommand(command) {
               msg.includes("connection refused") ||
               msg.includes("distribution with the supplied name could not be found") ||
               msg.includes("docker: command not found") ||
-              msg.includes("the command 'docker' could not be found in this wsl 2 distro")
+              msg.includes("the command 'docker' could not be found in this wsl 2 distro") ||
+              msg.includes("error response from daemon") ||
+              msg.includes("context deadline exceeded") ||
+              msg.includes("unexpected eof") ||
+              msg.includes("i/o timeout")
             ) {
               resolve("");
               return;
             }
-            console.error(`Docker command error: ${error.message}`);
+            console.error(`Docker command error: ${error.message}${stderr ? `\nStderr: ${stderr}` : ""}`);
             reject(error);
             return;
           }
@@ -139,16 +143,21 @@ async function execDockerCommand(command) {
       const effectiveCommand = (process.platform === "linux" && useSgDocker)
         ? `sg docker -c ${JSON.stringify(command)}`
         : command;
-      exec(effectiveCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
+      exec(effectiveCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
         if (error) {
+          const msg = `${error.message}\n${stderr || ""}`.toLowerCase();
           if (
-            error.message.includes("is not running") ||
-            error.message.includes("connection refused")
+            msg.includes("is not running") ||
+            msg.includes("connection refused") ||
+            msg.includes("error response from daemon") ||
+            msg.includes("context deadline exceeded") ||
+            msg.includes("unexpected eof") ||
+            msg.includes("i/o timeout")
           ) {
             resolve("");
             return;
           }
-          console.error(`Docker command error: ${error.message}`);
+          console.error(`Docker command error: ${error.message}${stderr ? `\nStderr: ${stderr}` : ""}`);
           reject(error);
           return;
         }

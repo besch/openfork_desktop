@@ -161,8 +161,8 @@ async function checkDockerUpdates() {
         });
       mainWindow.webContents.send("docker:images-update", images);
     }
-  } catch {
-    // Silent fail for background monitor — count as a failure
+  } catch (e) {
+    console.log(`Docker monitor update error: ${e?.message || e}`);
     dockerMonitorConsecutiveFailures++;
   }
 }
