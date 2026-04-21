@@ -376,38 +376,6 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  // --- AUTO UPDATER ---
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on("update-available", (info) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:available", info);
-    }
-  });
-
-  autoUpdater.on("download-progress", (progressObj) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:progress", progressObj);
-    }
-  });
-
-  autoUpdater.on("update-downloaded", (info) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:downloaded", info);
-    }
-  });
-
-  autoUpdater.on("error", (err) => {
-    console.error("AutoUpdater error:", err);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:error", {
-        message: err.message || "Update failed",
-        code: err.code || "UNKNOWN_ERROR",
-      });
-    }
-  });
-
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
@@ -478,6 +446,40 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:5173");
   }
 }
+
+// --- AUTO UPDATER ---
+// Registered once at startup so listeners don't accumulate if createWindow()
+// is called again (e.g. macOS activate with no open windows).
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on("update-available", (info) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:available", info);
+  }
+});
+
+autoUpdater.on("download-progress", (progressObj) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:progress", progressObj);
+  }
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:downloaded", info);
+  }
+});
+
+autoUpdater.on("error", (err) => {
+  console.error("AutoUpdater error:", err);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:error", {
+      message: err.message || "Update failed",
+      code: err.code || "UNKNOWN_ERROR",
+    });
+  }
+});
 
 app.whenReady().then(() => {
   registerAppImageProtocolHandler();
