@@ -420,6 +420,27 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000 } = {}) {
     timeoutMs: WSL_DOCKER_CHECK_TIMEOUT_MS,
   });
   if (!infoResult.success) {
+    // Unix-socket docker info failed — the daemon may be TCP-only.
+    // Do a fast TCP ping before declaring Docker not ready.
+    console.log(
+      `Docker is installed in WSL distro '${wslDistro}' but docker info via ` +
+        `Unix socket failed. Checking TCP endpoint before reporting not-ready.`,
+    );
+    const quickHost = await resolveWindowsDockerApiEndpoint(3000);
+    if (quickHost) {
+      // TCP API is reachable — daemon is running, just not on the Unix socket.
+      process.env.OPENFORK_DOCKER_HOST = quickHost;
+      return {
+        installed: true,
+        running: true,
+        isNative: false,
+        installDrive,
+        storagePath,
+        dockerHost: quickHost,
+        wslDistro,
+      };
+    }
+    // TCP also unreachable — Docker genuinely not ready.
     console.log(
       `Docker is installed in WSL distro '${wslDistro}' but not ready:`,
       infoResult.error,
