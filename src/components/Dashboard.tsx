@@ -189,10 +189,16 @@ export const Dashboard = memo(() => {
   const handleRoutingConfigChange = useCallback(
     async (newConfig: ProviderRoutingConfig) => {
       await setRoutingConfig(newConfig);
-      savePersistentSettings();
+      await savePersistentSettings();
       // If the client is running, push the config update live (no restart needed)
       if (isRunning && providerId) {
-        window.electronAPI.updateProviderConfig(providerId, newConfig);
+        const result = await window.electronAPI.updateProviderConfig(
+          providerId,
+          newConfig,
+        );
+        if (!result.success) {
+          console.error("Failed to update provider routing config:", result.error);
+        }
       }
     },
     [setRoutingConfig, savePersistentSettings, isRunning, providerId],

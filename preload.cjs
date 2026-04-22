@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // DGN Client listeners - now return cleanup functions
   onLog: (callback) => createListener("openfork_client:log", callback),
   onStatusChange: (callback) => createListener("openfork_client:status", callback),
+  onProviderId: (callback) => createListener("openfork_client:provider-id", callback),
   onDockerProgress: (callback) => createListener("openfork_client:docker-progress", callback),
   onJobStatus: (callback) => createListener("openfork_client:job-status", callback),
   onDiskSpaceError: (callback) => createListener("openfork_client:disk-space-error", callback),

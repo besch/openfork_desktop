@@ -171,6 +171,41 @@ class PythonProcessManager {
       console.error("Error writing to Python process stdin:", error);
     }
   }
+
+  _buildRoutingConfigPayload(routingConfig) {
+    const rc = routingConfig || {};
+    return {
+      process_own_jobs: rc.processOwnJobs ?? false,
+      community_mode: rc.communityMode ?? "none",
+      allowed_ids: Array.isArray(rc.trustedIds) ? rc.trustedIds : [],
+      monetize_mode: rc.monetizeMode ?? false,
+    };
+  }
+
+  updateRoutingConfig(routingConfig) {
+    this._lastRoutingConfig = routingConfig;
+
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.warn(
+        "Cannot update routing config: Python process not running or stdin not writable.",
+      );
+      return false;
+    }
+
+    const command = {
+      type: "UPDATE_ROUTING_CONFIG",
+      payload: this._buildRoutingConfigPayload(routingConfig),
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Sent routing config update command to Python process.");
+      return true;
+    } catch (error) {
+      console.error("Error writing routing config update to Python stdin:", error);
+      return false;
+    }
+  }
   
   cancelDownload(serviceType) {
     if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
@@ -261,6 +296,10 @@ class PythonProcessManager {
     if (this.pythonProcess) {
       console.log("Python process is already running.");
       return;
+    }
+
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("openfork_client:provider-id", null);
     }
 
     // Wait for any pending cleanup to complete before starting
@@ -430,6 +469,18 @@ class PythonProcessManager {
               }
             })();
             return; // Handled
+          }
+
+          if (message.type === "PROVIDER_REGISTERED") {
+            const providerId =
+              message.payload?.provider_id || message.payload?.providerId;
+            if (providerId && this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send(
+                "openfork_client:provider-id",
+                providerId,
+              );
+            }
+            return;
           }
 
           // Handle provider expiration (cleaned up by stale provider cron)
@@ -646,6 +697,7 @@ class PythonProcessManager {
       this.pythonProcess.on("close", (code) => {
         console.log(`Python process exited with code ${code}`);
         this.mainWindow.webContents.send("openfork_client:status", "stopped");
+        this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
         
         // Auto-cleanup zombies on exit
@@ -655,6 +707,7 @@ class PythonProcessManager {
       this.pythonProcess.on("error", (err) => {
         console.error(`Failed to start Python process: ${err}`);
         this.mainWindow.webContents.send("openfork_client:status", "error");
+        this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
       });
     } catch (err) {

@@ -119,6 +119,7 @@ interface ElectronAPI {
 
   onLog: (callback: (log: Omit<LogEntry, "timestamp">) => void) => CleanupFn;
   onStatusChange: (callback: (status: DGNClientStatus) => void) => CleanupFn;
+  onProviderId: (callback: (providerId: string | null) => void) => CleanupFn;
   onDockerProgress: (
     callback: (progress: DockerPullProgress | null) => void,
   ) => CleanupFn;

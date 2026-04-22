@@ -627,11 +627,31 @@ ipcMain.handle(
       request.on("response", (response) => {
         response.on("data", (chunk) => { body += chunk.toString(); });
         response.on("end", () => {
+          let result;
           try {
-            resolve(JSON.parse(body));
+            result = JSON.parse(body);
           } catch {
-            resolve({ success: response.statusCode < 400 });
+            result = { success: response.statusCode < 400 };
           }
+
+          if (typeof result !== "object" || result === null) {
+            result = { success: response.statusCode < 400 };
+          }
+          if (result.success === undefined) {
+            result.success = response.statusCode < 400;
+          }
+
+          if (result.success && pythonManager) {
+            pythonManager.updateRoutingConfig(routingConfig);
+            if (cleanupManager) {
+              const mode = routingConfig?.communityMode || "none";
+              const legacyPolicy =
+                mode === "none" ? "mine" : mode === "all" ? "all" : "users";
+              cleanupManager.updatePolicy(legacyPolicy);
+            }
+          }
+
+          resolve(result);
         });
       });
       request.on("error", (err) => {

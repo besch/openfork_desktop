@@ -442,6 +442,7 @@ function initializeIpcListeners() {
     setIsLoading,
     setDockerPullProgress,
     setJobState,
+    setProviderId,
   } = useClientStore.getState();
 
   // Store cleanup functions from listener registrations
@@ -453,6 +454,9 @@ function initializeIpcListeners() {
       if (status !== "running") {
         setJobState(createIdleJobState());
       }
+      if (status === "stopped" || status === "error") {
+        setProviderId(null);
+      }
       if (status === "stopping") {
         window.electronAPI.setWindowClosable(false);
       } else {
@@ -462,6 +466,8 @@ function initializeIpcListeners() {
   );
 
   cleanupFns.push(window.electronAPI.onLog(addLog));
+
+  cleanupFns.push(window.electronAPI.onProviderId(setProviderId));
 
   cleanupFns.push(window.electronAPI.onDockerProgress(setDockerPullProgress));
 
