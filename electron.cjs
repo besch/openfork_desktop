@@ -255,24 +255,26 @@ ipcDeps.init({
 });
 
 // Listen for auth events to keep the session fresh
-supabase.auth.onAuthStateChange((event, newSession) => {
-  console.log(`Supabase auth event: ${event}`);
-  session = newSession;
+const { data: authStateSubscription } = supabase.auth.onAuthStateChange(
+  (event, newSession) => {
+    console.log(`Supabase auth event: ${event}`);
+    session = newSession;
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("auth:session", session);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("auth:session", session);
 
-    if (
-      event === "SIGNED_OUT" ||
-      (event === "TOKEN_REFRESHED" && !newSession)
-    ) {
-      console.warn(
-        "Authentication state changed to unauthenticated, forcing UI refresh",
-      );
-      mainWindow.webContents.send("auth:force-refresh");
+      if (
+        event === "SIGNED_OUT" ||
+        (event === "TOKEN_REFRESHED" && !newSession)
+      ) {
+        console.warn(
+          "Authentication state changed to unauthenticated, forcing UI refresh",
+        );
+        mainWindow.webContents.send("auth:force-refresh");
+      }
     }
-  }
-});
+  },
+);
 
 // --- AUTHENTICATION ---
 
@@ -508,6 +510,14 @@ app.on("before-quit", async (event) => {
   isQuittingApp = true;
   if (pythonManager) {
     pythonManager.isQuitting = true;
+  }
+
+  // Release the Supabase auth subscription so its internal timers don't
+  // keep the event loop alive after we asked the app to quit.
+  try {
+    authStateSubscription?.subscription?.unsubscribe?.();
+  } catch (err) {
+    console.warn("Failed to unsubscribe Supabase auth listener:", err?.message || err);
   }
 
   if (!pythonManager || !pythonManager.isRunning()) {

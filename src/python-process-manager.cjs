@@ -44,31 +44,43 @@ class PythonProcessManager {
     this._cleanupPromise = new Promise((resolve) => {
       const platform = process.platform;
       const marker = "openfork_dgn_client_v1_marker";
-      
+
       console.log("Cleaning up potential rogue client processes...");
 
-      if (platform === "win32") {
-        // Use PowerShell to find processes by our unique command line marker
-        const psCommand = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
-        exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, (error) => {
-            // It's not really an error if no processes were found
-            setTimeout(() => {
-                this._cleanupPromise = null;
-                resolve();
-            }, 500);
-        });
-      } else {
-        // Unix (Linux/macOS) cleanup using pgrep and kill
-        // We look for the marker in the full command line
-        const cmd = `pgrep -af "${marker}" | awk '{print $1}' | xargs -r kill -9`;
-        exec(cmd, (error) => {
-            // Small delay to let OS release locks
-            setTimeout(() => {
-                this._cleanupPromise = null;
-                resolve();
-            }, 500);
-        });
-      }
+      // Hard cap so a hung shell can't block us forever; the next start() must
+      // proceed even if cleanup didn't fully confirm. 8s is generous for both
+      // PowerShell startup on Windows and pgrep+kill on Unix.
+      const HARD_TIMEOUT_MS = 8000;
+      // Brief grace after the kill returns so the OS can release pipes/locks
+      // before the next Python process spawns.
+      const POST_KILL_GRACE_MS = 200;
+
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        this._cleanupPromise = null;
+        resolve();
+      };
+
+      const hardTimer = setTimeout(() => {
+        if (!settled) {
+          console.warn(
+            `Rogue process cleanup did not return within ${HARD_TIMEOUT_MS}ms — proceeding anyway.`
+          );
+          finish();
+        }
+      }, HARD_TIMEOUT_MS);
+
+      const cmd = platform === "win32"
+        ? `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"`
+        : `pgrep -af "${marker}" | awk '{print $1}' | xargs -r kill -9`;
+
+      exec(cmd, (error) => {
+        // Non-zero exit just means no matching processes; not an error condition.
+        setTimeout(finish, POST_KILL_GRACE_MS);
+      });
     });
 
     return this._cleanupPromise;
@@ -425,9 +437,18 @@ class PythonProcessManager {
             );
             (async () => {
               try {
-                // Force a refresh since the client reported the current token is invalid
+                // Hard timeout so a stuck refresh (network stall, never-resolving
+                // promise) cannot leave _refreshInProgress=true forever, which would
+                // silently swallow every future AUTH_EXPIRED signal.
+                const refreshPromise = this.supabase.auth.refreshSession();
+                const timeoutPromise = new Promise((_, reject) =>
+                  setTimeout(
+                    () => reject(new Error("auth refresh timed out after 15s")),
+                    15000
+                  )
+                );
                 const { data: freshData, error: refreshError } =
-                  await this.supabase.auth.refreshSession();
+                  await Promise.race([refreshPromise, timeoutPromise]);
 
                 if (refreshError || !freshData.session) {
                   console.error(
@@ -463,6 +484,17 @@ class PythonProcessManager {
                       freshData.session
                     );
                   }
+                }
+              } catch (err) {
+                // Timeout or any other unexpected refresh exception. Don't kill
+                // the session here — the next AUTH_EXPIRED signal can retry once
+                // the cooldown elapses.
+                console.error("Auth refresh attempt failed:", err?.message || err);
+                if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                  this.mainWindow.webContents.send("openfork_client:log", {
+                    type: "stderr",
+                    message: `Auth refresh failed (${err?.message || "unknown"}). Will retry on next signal.`,
+                  });
                 }
               } finally {
                 this._refreshInProgress = false;
