@@ -67,7 +67,9 @@ async function openExternal(url) {
         stdio: "ignore",
         env: process.env,
       });
-      console.log(`Opened URL in Windows host browser via explorer.exe: ${url}`);
+      console.log(
+        `Opened URL in Windows host browser via explorer.exe: ${url}`,
+      );
       return;
     } catch (err) {
       console.warn(
@@ -82,7 +84,9 @@ async function openExternal(url) {
       await tryLinuxFallbackOpen(url);
       return;
     } catch (err) {
-      console.warn(`Linux fallback opener failed; trying shell.openExternal: ${err.message}`);
+      console.warn(
+        `Linux fallback opener failed; trying shell.openExternal: ${err.message}`,
+      );
     }
   }
 
@@ -517,7 +521,10 @@ app.on("before-quit", async (event) => {
   try {
     authStateSubscription?.subscription?.unsubscribe?.();
   } catch (err) {
-    console.warn("Failed to unsubscribe Supabase auth listener:", err?.message || err);
+    console.warn(
+      "Failed to unsubscribe Supabase auth listener:",
+      err?.message || err,
+    );
   }
 
   if (!pythonManager || !pythonManager.isRunning()) {
@@ -635,7 +642,9 @@ ipcMain.handle(
       request.setHeader("Content-Type", "application/json");
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           let result;
           try {
@@ -738,7 +747,9 @@ function makeAuthenticatedPostRequest(url) {
     request.setHeader("Content-Type", "application/json");
     let body = "";
     request.on("response", (response) => {
-      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
       response.on("end", () => {
         try {
           resolve(JSON.parse(body));
@@ -789,7 +800,9 @@ ipcMain.handle("monetize:get-provider-rate", async () => {
     request.setHeader("Authorization", `Bearer ${session.access_token}`);
     let body = "";
     request.on("response", (response) => {
-      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
       response.on("end", () => {
         try {
           resolve(JSON.parse(body));
@@ -816,7 +829,9 @@ ipcMain.handle(
       request.setHeader("Content-Type", "application/json");
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           try {
             resolve(JSON.parse(body));
@@ -940,16 +955,23 @@ ipcMain.handle("search:users", async (event, term) => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Search users failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Search users failed with status ${response.statusCode}: ${body}`,
+            );
           }
           try {
             resolve(JSON.parse(body));
           } catch (e) {
             console.error("Failed to parse search users response:", e);
-            resolve({ success: false, error: "Failed to parse server response." });
+            resolve({
+              success: false,
+              error: "Failed to parse server response.",
+            });
           }
         });
       });
@@ -961,7 +983,10 @@ ipcMain.handle("search:users", async (event, term) => {
     });
   } catch (error) {
     console.error("Error searching users:", error);
-    return { success: false, error: "An unexpected error occurred during search." };
+    return {
+      success: false,
+      error: "An unexpected error occurred during search.",
+    };
   }
 });
 
@@ -975,16 +1000,23 @@ ipcMain.handle("search:projects", async (event, term) => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Search projects failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Search projects failed with status ${response.statusCode}: ${body}`,
+            );
           }
           try {
             resolve(JSON.parse(body));
           } catch (e) {
             console.error("Failed to parse search projects response:", e);
-            resolve({ success: false, error: "Failed to parse server response." });
+            resolve({
+              success: false,
+              error: "Failed to parse server response.",
+            });
           }
         });
       });
@@ -996,7 +1028,10 @@ ipcMain.handle("search:projects", async (event, term) => {
     });
   } catch (error) {
     console.error("Error searching projects:", error);
-    return { success: false, error: "An unexpected error occurred during search." };
+    return {
+      success: false,
+      error: "An unexpected error occurred during search.",
+    };
   }
 });
 
@@ -1007,10 +1042,14 @@ ipcMain.handle("fetch:config", async () => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Fetch config failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Fetch config failed with status ${response.statusCode}: ${body}`,
+            );
             resolve({});
             return;
           }
@@ -1042,10 +1081,14 @@ ipcMain.handle("search:general", async (event, query) => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Search general failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Search general failed with status ${response.statusCode}: ${body}`,
+            );
             resolve([]);
             return;
           }
