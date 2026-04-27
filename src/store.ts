@@ -43,6 +43,7 @@ interface DGNClientState {
     type: string | null;
   };
   setDockerPullProgress: (progress: DockerPullProgress | null) => void;
+  setDockerContainers: (containers: DockerContainer[]) => void;
   setDependencyStatus: (status: DependencyStatus | null) => void;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
@@ -129,7 +130,8 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   jobState: createIdleJobState(),
   monetizeWallet: null,
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
-  setDockerContainers: (containers) => set({ dockerContainers: containers }),
+  setDockerContainers: (containers: DockerContainer[]) =>
+    set({ dockerContainers: containers }),
   setDependencyStatus: (status) => set({ dependencyStatus: status }),
   setJobState: (state) => set({ jobState: state }),
   fetchMonetizeWallet: async () => {
@@ -222,7 +224,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         ([value, label]) => ({
           value,
           label,
-        })
+        }),
       );
 
       const services = [{ value: "auto", label: "Auto-Select" }, ...uiServices];
@@ -289,12 +291,14 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       return;
     }
 
-    const { communityMode, monetizeMode, processOwnJobs, trustedIds } = routingConfig;
+    const { communityMode, monetizeMode, processOwnJobs, trustedIds } =
+      routingConfig;
     const allowedIds = trustedIds.join(",");
 
     // For trusted modes, don't subscribe if there are no IDs yet.
     if (
-      (communityMode === "trusted_users" || communityMode === "trusted_projects") &&
+      (communityMode === "trusted_users" ||
+        communityMode === "trusted_projects") &&
       trustedIds.length === 0
     ) {
       set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
@@ -360,22 +364,26 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
           fetchStats();
           console.log(`store.ts: Successfully subscribed to ${channelName}`);
         }
-        
+
         // Handle channel errors (connection lost, timeout, etc.)
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn(`store.ts: Channel ${status} on ${channelName}, attempting reconnection...`);
-          
+          console.warn(
+            `store.ts: Channel ${status} on ${channelName}, attempting reconnection...`,
+          );
+
           // Unsubscribe and resubscribe after a delay
           setTimeout(async () => {
             const { session: currentSession } = get();
             if (currentSession) {
-              console.log("store.ts: Resubscribing to job changes after channel error...");
+              console.log(
+                "store.ts: Resubscribing to job changes after channel error...",
+              );
               await get().unsubscribeFromJobChanges();
               get().subscribeToJobChanges();
             }
           }, 3000); // Wait 3 seconds before reconnecting
         }
-        
+
         if (err) {
           console.error(`store.ts: Subscription error on ${channelName}:`, err);
           // If subscription fails due to auth issues, attempt to recover
@@ -385,7 +393,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
             err.message.includes("token")
           ) {
             console.warn(
-              "Subscription failed due to authentication issues, attempting recovery..."
+              "Subscription failed due to authentication issues, attempting recovery...",
             );
             // Force a session refresh
             window.electronAPI
@@ -396,7 +404,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
                   await get().setSession(currentSession);
                 } else {
                   console.error(
-                    "No valid session available, unsubscribing from job changes"
+                    "No valid session available, unsubscribing from job changes",
                   );
                   get().unsubscribeFromJobChanges();
                 }
@@ -422,7 +430,12 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     try {
       const settings = await window.electronAPI.loadSettings();
       if (settings?.routingConfig) {
-        set({ routingConfig: { ...DEFAULT_ROUTING_CONFIG, ...settings.routingConfig } });
+        set({
+          routingConfig: {
+            ...DEFAULT_ROUTING_CONFIG,
+            ...settings.routingConfig,
+          },
+        });
       }
     } catch (error) {
       console.error("Error loading persistent settings:", error);
@@ -445,6 +458,7 @@ function initializeIpcListeners() {
     setSession,
     setIsLoading,
     setDockerPullProgress,
+    setDockerContainers,
     setJobState,
     setProviderId,
   } = useClientStore.getState();
@@ -466,7 +480,7 @@ function initializeIpcListeners() {
       } else {
         window.electronAPI.setWindowClosable(true);
       }
-    })
+    }),
   );
 
   cleanupFns.push(window.electronAPI.onLog(addLog));
@@ -478,7 +492,7 @@ function initializeIpcListeners() {
   cleanupFns.push(
     window.electronAPI.onDockerContainersUpdate((containers) => {
       setDockerContainers(containers);
-    })
+    }),
   );
 
   cleanupFns.push(
@@ -505,7 +519,65 @@ function initializeIpcListeners() {
         // Refresh wallet balance after a monetize job completes
         useClientStore.getState().fetchMonetizeWallet();
       }
-    })
+    }),
+  );
+
+  cleanupFns.push(
+    window.electronAPI.onSession(async (session) => {
+      await setSession(session);
+      setIsLoading(false);
+    }),
+  );
+
+  cleanupFns.push(
+    window.electronAPI.onAuthCallback(async (url) => {
+      const hashPart = url.split("#")[1];
+      if (!hashPart) return;
+
+      const params = new URLSearchParams(hashPart);
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        const { session: newSession, error } =
+          await window.electronAPI.setSessionFromTokens(
+            accessToken,
+            refreshToken,
+          );
+
+        if (error) {
+          console.error(
+            "Error persisting session in main process:",
+            error.message,
+          );
+          return;
+        }
+        if (newSession) {
+          await setSession(newSession);
+        }
+      }
+    }),
+  );
+
+  // Handle force refresh from main process (token was refreshed)
+  cleanupFns.push(
+    window.electronAPI.onForceRefresh(async () => {
+      console.log("store.ts: Force refresh requested by main process");
+      const currentSession = await window.electronAPI.getSession();
+      if (currentSession) {
+        // Update tokens and resubscribe to ensure realtime is fresh
+        await setSession(currentSession);
+        console.log("store.ts: Session refreshed, realtime reconnected");
+      }
+    }),
+  );
+
+  // Handle force logout from main process (auth permanently failed)
+  cleanupFns.push(
+    window.electronAPI.onForceLogout(async () => {
+      console.warn("store.ts: Force logout requested by main process");
+      await setSession(null);
+    }),
   );
 
   // Return cleanup function for all listeners
