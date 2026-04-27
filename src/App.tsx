@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useClientStore } from "./store";
 import type { Session } from "@supabase/supabase-js";
+import { supabase } from "@/supabase";
 import type { DependencyStatus } from "./types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
@@ -110,6 +111,10 @@ function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [, setForceRefreshKey] = useState(0);
   const [checkingDeps, setCheckingDeps] = useState(true);
+  const [profile, setProfile] = useState<{
+    avatar_url?: string;
+    username?: string;
+  } | null>(null);
 
   const handleLogout = () => {
     window.electronAPI.logout();
@@ -217,6 +222,32 @@ function App() {
     };
   }, [checkingDeps, dependencyStatus?.allReady]);
 
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!session?.user?.id) {
+        setProfile(null);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("avatar_url, username")
+          .eq("id", session.user.id)
+          .single();
+        if (error) {
+          console.error("Failed to fetch profile:", error);
+          setProfile(null);
+        } else {
+          setProfile(data);
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        setProfile(null);
+      }
+    };
+    fetchProfile();
+  }, [session]);
+
   // Show loading while checking dependencies
   if (checkingDeps) {
     return (
@@ -287,9 +318,21 @@ function App() {
             {/* Status dot + avatar profile menu */}
             <div className="relative z-10 flex items-center gap-4">
               <Popover>
-                <PopoverTrigger asChild>
-                  <Button>{avatarInitial}</Button>
-                </PopoverTrigger>
+              <PopoverTrigger asChild>
+                {profile?.avatar_url ? (
+                  <button className="h-8 w-8 rounded-full border border-white/20 overflow-hidden hover:border-white/40 transition-colors">
+                    <img
+                      src={profile.avatar_url}
+                      alt="User avatar"
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ) : (
+                  <Button className="h-8 w-8 rounded-full p-0 text-sm font-bold">
+                    {avatarInitial}
+                  </Button>
+                )}
+              </PopoverTrigger>
                 <PopoverContent
                   align="end"
                   className="w-56 p-2 bg-surface-secondary/95 backdrop-blur-xl border-white/10 shadow-3xl"
@@ -298,9 +341,20 @@ function App() {
                     <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-1">
                       Signed in as
                     </p>
-                    <p className="text-xs font-semibold text-white truncate">
-                      {session.user.email}
-                    </p>
+                    {profile?.username ? (
+                      <>
+                        <p className="text-xs font-semibold text-white truncate">
+                          {profile.username}
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate mt-0.5">
+                          {session.user.email}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs font-semibold text-white truncate">
+                        {session.user.email}
+                      </p>
+                    )}
                   </div>
                   <div className="h-px bg-white/5 my-2" />
                   <button
