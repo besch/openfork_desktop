@@ -7,6 +7,7 @@ import type {
   Project,
   ProviderRoutingConfig,
   DockerPullProgress,
+  DockerContainer,
   DependencyStatus,
   MonetizeWallet,
 } from "./types";
@@ -35,6 +36,7 @@ interface DGNClientState {
   routingConfig: ProviderRoutingConfig;
   dockerPullProgress: DockerPullProgress | null;
   dependencyStatus: DependencyStatus | null;
+  dockerContainers: DockerContainer[];
   jobState: {
     status: "idle" | "processing";
     jobId: string | null;
@@ -123,9 +125,11 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   routingConfig: DEFAULT_ROUTING_CONFIG,
   dockerPullProgress: null,
   dependencyStatus: null,
+  dockerContainers: [],
   jobState: createIdleJobState(),
   monetizeWallet: null,
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
+  setDockerContainers: (containers) => set({ dockerContainers: containers }),
   setDependencyStatus: (status) => set({ dependencyStatus: status }),
   setJobState: (state) => set({ jobState: state }),
   fetchMonetizeWallet: async () => {
@@ -472,64 +476,11 @@ function initializeIpcListeners() {
   cleanupFns.push(window.electronAPI.onDockerProgress(setDockerPullProgress));
 
   cleanupFns.push(
-    window.electronAPI.onSession(async (session) => {
-      await setSession(session);
-      setIsLoading(false);
+    window.electronAPI.onDockerContainersUpdate((containers) => {
+      setDockerContainers(containers);
     })
   );
 
-  cleanupFns.push(
-    window.electronAPI.onAuthCallback(async (url) => {
-      const hashPart = url.split("#")[1];
-      if (!hashPart) return;
-
-      const params = new URLSearchParams(hashPart);
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-
-      if (accessToken && refreshToken) {
-        const { session: newSession, error } =
-          await window.electronAPI.setSessionFromTokens(
-            accessToken,
-            refreshToken
-          );
-
-        if (error) {
-          console.error(
-            "Error persisting session in main process:",
-            error.message
-          );
-          return;
-        }
-        if (newSession) {
-          await setSession(newSession);
-        }
-      }
-    })
-  );
-
-  // Handle force refresh from main process (token was refreshed)
-  cleanupFns.push(
-    window.electronAPI.onForceRefresh(async () => {
-      console.log("store.ts: Force refresh requested by main process");
-      const currentSession = await window.electronAPI.getSession();
-      if (currentSession) {
-        // Update tokens and resubscribe to ensure realtime is fresh
-        await setSession(currentSession);
-        console.log("store.ts: Session refreshed, realtime reconnected");
-      }
-    })
-  );
-
-  // Handle force logout from main process (auth permanently failed)
-  cleanupFns.push(
-    window.electronAPI.onForceLogout(async () => {
-      console.warn("store.ts: Force logout requested by main process");
-      await setSession(null);
-    })
-  );
-
-  // Listen for job status updates from backend
   cleanupFns.push(
     window.electronAPI.onJobStatus((payload: unknown) => {
       if (!isJobStatusPayload(payload)) {

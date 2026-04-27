@@ -66,6 +66,23 @@ export const DockerManagement = memo(() => {
   );
   const status = useClientStore((state) => state.status);
 
+  const formatCreatedDate = (dateStr: string): string => {
+    const normalized = dateStr.replace(/ (\+?\d{4}) [A-Z]+$/, ' $1').replace(' ', 'T');
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return dateStr;
+
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 1) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+    return `${Math.floor(diffDays / 365)} years ago`;
+  };
+
   const describeDockerState = useCallback((nextStatus: DockerStatus) => {
     if (nextStatus.error === "DOCKER_WINDOWS_CONTAINERS") {
       return "Docker Desktop is no longer supported for Windows workflows. Install or repair the OpenFork Ubuntu engine instead.";
@@ -683,8 +700,8 @@ export const DockerManagement = memo(() => {
                         <HardDrive className="h-2.5 w-2.5" />
                         {image.size}
                       </span>
-                      <span className="opacity-30">•</span>
-                      {image.created}
+                       <span className="opacity-30">•</span>
+                       {formatCreatedDate(image.created)}
                     </p>
                   </div>
                   <Button

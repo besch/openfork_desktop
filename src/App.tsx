@@ -53,11 +53,13 @@ const TabTrigger = memo(
     label?: string;
     children?: ReactNode;
   }) => {
-    const dockerPullProgress = useClientStore(
-      (state) => state.dockerPullProgress,
-    );
-    const status = useClientStore((state) => state.status);
-    const stats = useClientStore((state) => state.stats);
+  const dockerPullProgress = useClientStore(
+    (state) => state.dockerPullProgress,
+  );
+  const dockerContainers = useClientStore(
+    (state) => state.dockerContainers,
+  );
+  const status = useClientStore((state) => state.status);
 
     const isDocker = value === "docker";
     const isDownloading =
@@ -65,7 +67,7 @@ const TabTrigger = memo(
       dockerPullProgress !== null &&
       (status === "starting" || status === "running");
     const isProcessing =
-      isDocker && status === "running" && stats.processing > 0;
+      isDocker && status === "running" && dockerContainers.length > 0;
     const hasActivity = isDownloading || isProcessing;
 
     return (
