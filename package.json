@@ -133,6 +133,10 @@
       {
         "from": "scripts/relocate-wsl.ps1",
         "to": "scripts/relocate-wsl.ps1"
+      },
+      {
+        "from": "scripts/uninstall-engine.ps1",
+        "to": "bin/uninstall-engine.ps1"
       }
     ],
     "win": {
