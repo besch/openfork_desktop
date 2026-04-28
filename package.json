@@ -117,7 +117,8 @@
         "to": "bin",
         "filter": [
           "client",
-          "client.exe"
+          "client.exe",
+          "workflows/**/*"
         ]
       },
       {
