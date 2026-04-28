@@ -115,19 +115,20 @@
         "from": "bin",
         "to": "bin",
         "filter": [
-          "**/*"
+          "client",
+          "client.exe"
         ]
       },
       {
-        "from": "../client/setup-wsl.ps1",
+        "from": "scripts/setup-wsl.ps1",
         "to": "bin/setup-wsl.ps1"
       },
       {
-        "from": "../client/setup-linux.sh",
+        "from": "scripts/setup-linux.sh",
         "to": "bin/setup-linux.sh"
       },
       {
-        "from": "../client/uninstall-engine.sh",
+        "from": "scripts/uninstall-engine.sh",
         "to": "bin/uninstall-engine.sh"
       },
       {
