@@ -114,9 +114,9 @@ function App() {
   const [, setForceRefreshKey] = useState(0);
   const [checkingDeps, setCheckingDeps] = useState(true);
   const [profile, setProfile] = useState<{
-    avatar_url?: string;
     username?: string;
   } | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const handleLogout = () => {
     window.electronAPI.logout();
@@ -228,12 +228,13 @@ function App() {
     const fetchProfile = async () => {
       if (!session?.user?.id) {
         setProfile(null);
+        setAvatarUrl(null);
         return;
       }
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select("avatar_url, username")
+          .select("username")
           .eq("id", session.user.id)
           .single();
         if (error) {
@@ -242,9 +243,26 @@ function App() {
         } else {
           setProfile(data);
         }
+
+        const { data: avatarAsset, error: avatarError } = await supabase
+          .from("assets")
+          .select("storage_path, bucket")
+          .eq("owner_id", session.user.id)
+          .eq("asset_type", "user_avatar")
+          .single();
+
+        if (!avatarError && avatarAsset) {
+          const { data: signedData } = await supabase.storage
+            .from(avatarAsset.bucket)
+            .createSignedUrl(avatarAsset.storage_path, 3600);
+          setAvatarUrl(signedData?.signedUrl ?? null);
+        } else {
+          setAvatarUrl(null);
+        }
       } catch (err) {
         console.error("Error fetching profile:", err);
         setProfile(null);
+        setAvatarUrl(null);
       }
     };
     fetchProfile();
@@ -287,8 +305,7 @@ function App() {
     return <Auth />;
   }
 
-  // Derive avatar initials from email
-  const avatarInitial = session.user.email?.[0]?.toUpperCase() ?? "?";
+  const avatarInitial = (profile?.username ?? session.user.email)?.[0]?.toUpperCase() ?? "?";
 
   return (
     <>
@@ -321,10 +338,10 @@ function App() {
             <div className="relative z-10 flex items-center gap-4">
               <Popover>
               <PopoverTrigger asChild>
-                {profile?.avatar_url ? (
+                {avatarUrl ? (
                   <button className="h-8 w-8 rounded-full border border-white/20 overflow-hidden hover:border-white/40 transition-colors">
                     <img
-                      src={profile.avatar_url}
+                      src={avatarUrl}
                       alt="User avatar"
                       className="h-full w-full object-cover"
                     />
