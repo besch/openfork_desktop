@@ -242,6 +242,31 @@ class PythonProcessManager {
       return false;
     }
   }
+
+  setCompactionPending(pending) {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.warn(
+        "Cannot update compaction state: Python process not running or stdin not writable.",
+      );
+      return false;
+    }
+
+    const command = {
+      type: "SET_COMPACTION_PENDING",
+      payload: {
+        pending: !!pending,
+      },
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log(`Sent compaction_pending=${!!pending} to Python process.`);
+      return true;
+    } catch (error) {
+      console.error("Error writing compaction state to Python stdin:", error);
+      return false;
+    }
+  }
   
   cancelDownload(serviceType) {
     if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {

@@ -79,6 +79,15 @@ async function setProviderPausedForCompaction(providerId, paused) {
   });
 }
 
+function mapCleanupPolicy(routingConfig) {
+  if (routingConfig?.monetizeMode) return "monetize";
+  const mode = routingConfig?.communityMode || "none";
+  if (mode === "none") return "mine";
+  if (mode === "all") return "all";
+  if (mode === "trusted_projects") return "project";
+  return "users";
+}
+
 async function tryLinuxFallbackOpen(url) {
   const fallbackCommands = [
     ["xdg-open", [url]],
@@ -684,10 +693,7 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
     await pythonManager.start(service, routingConfig);
 
     if (cleanupManager) {
-      const mode = routingConfig?.communityMode || "none";
-      const legacyPolicy =
-        mode === "none" ? "mine" : mode === "all" ? "all" : "users";
-      cleanupManager.updatePolicy(legacyPolicy);
+      cleanupManager.updatePolicy(mapCleanupPolicy(routingConfig));
     }
   })().finally(() => {
     pendingClientStart = null;
@@ -728,10 +734,7 @@ ipcMain.handle(
           if (result.success && pythonManager) {
             pythonManager.updateRoutingConfig(routingConfig);
             if (cleanupManager) {
-              const mode = routingConfig?.communityMode || "none";
-              const legacyPolicy =
-                mode === "none" ? "mine" : mode === "all" ? "all" : "users";
-              cleanupManager.updatePolicy(legacyPolicy);
+              cleanupManager.updatePolicy(mapCleanupPolicy(routingConfig));
             }
           }
 

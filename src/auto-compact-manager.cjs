@@ -190,12 +190,20 @@ class AutoCompactManager {
     try {
       // 1. Tell the orchestrator we are pausing job acceptance.
       try {
-        await this.setProviderPausedForCompaction(providerId, true);
+        this.pythonManager.setCompactionPending?.(true);
+        const pauseResult = await this.setProviderPausedForCompaction(
+          providerId,
+          true,
+        );
+        if (!pauseResult?.success) {
+          throw new Error(
+            pauseResult?.error || "Could not pause provider for compaction.",
+          );
+        }
         pausedSet = true;
       } catch (err) {
-        console.warn(
-          "AutoCompactManager: could not flag provider as paused; proceeding anyway:",
-          err?.message || err,
+        throw new Error(
+          `Could not pause provider for compaction: ${err?.message || err}`,
         );
       }
 
@@ -230,7 +238,8 @@ class AutoCompactManager {
         phase: "failed",
         error: err?.message || String(err),
       });
-    } finally {
+      } finally {
+      this.pythonManager.setCompactionPending?.(false);
       // 5. Restart Python with the previous service/routing config.
       try {
         if (lastService && !this.pythonManager.isRunning()) {
