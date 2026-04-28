@@ -79,7 +79,9 @@ export const DockerManagement = memo(() => {
   const status = useClientStore((state) => state.status);
 
   const formatCreatedDate = (dateStr: string): string => {
-    const normalized = dateStr.replace(/ (\+?\d{4}) [A-Z]+$/, ' $1').replace(' ', 'T');
+    const normalized = dateStr
+      .replace(/ (\+?\d{4}) [A-Z]+$/, " $1")
+      .replace(" ", "T");
     const date = new Date(normalized);
     if (isNaN(date.getTime())) return dateStr;
 
@@ -87,8 +89,8 @@ export const DockerManagement = memo(() => {
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 1) return 'today';
-    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 1) return "today";
+    if (diffDays === 1) return "yesterday";
     if (diffDays < 7) return `${diffDays} days ago`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
@@ -192,7 +194,7 @@ export const DockerManagement = memo(() => {
   // Listen for auto-compact status updates (Windows only).
   useEffect(() => {
     const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
-      setAutoCompactStatus((prev) => {
+      setAutoCompactStatus(() => {
         if (status.phase === "completed" || status.phase === "failed") {
           setTimeout(() => setAutoCompactStatus(null), 8000);
         }
@@ -424,51 +426,54 @@ export const DockerManagement = memo(() => {
         </motion.div>
       )}
 
-      {autoCompactStatus?.phase === "completed" && !autoCompactStatus.compactInProgress && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-emerald-500/10 border border-emerald-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-        >
-          <div className="flex items-center gap-3">
-            <HardDrive className="h-4 w-4 text-emerald-400 shrink-0" />
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
-              Auto-Compact complete — disk space reclaimed
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAutoCompactStatus(null)}
-            className="text-emerald-300 hover:bg-emerald-500/20 h-8 w-8 p-0"
+      {autoCompactStatus?.phase === "completed" &&
+        !autoCompactStatus.compactInProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-emerald-500/10 border border-emerald-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
           >
-            <X className="h-4 w-4" />
-          </Button>
-        </motion.div>
-      )}
+            <div className="flex items-center gap-3">
+              <HardDrive className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
+                Auto-Compact complete — disk space reclaimed
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAutoCompactStatus(null)}
+              className="text-emerald-300 hover:bg-emerald-500/20 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        )}
 
-      {autoCompactStatus?.phase === "failed" && !autoCompactStatus.compactInProgress && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-destructive/10 border border-destructive/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-        >
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-            <span className="text-xs font-bold uppercase tracking-widest text-destructive">
-              Auto-Compact failed: {autoCompactStatus.error || "Unknown error"}
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAutoCompactStatus(null)}
-            className="text-destructive hover:bg-destructive/20 h-8 w-8 p-0"
+      {autoCompactStatus?.phase === "failed" &&
+        !autoCompactStatus.compactInProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-destructive/10 border border-destructive/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
           >
-            <X className="h-4 w-4" />
-          </Button>
-        </motion.div>
-      )}
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-widest text-destructive">
+                Auto-Compact failed:{" "}
+                {autoCompactStatus.error || "Unknown error"}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAutoCompactStatus(null)}
+              className="text-destructive hover:bg-destructive/20 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        )}
 
       {error && (
         <motion.div
@@ -798,8 +803,8 @@ export const DockerManagement = memo(() => {
                         <HardDrive className="h-2.5 w-2.5" />
                         {image.size}
                       </span>
-                       <span className="opacity-30">•</span>
-                       {formatCreatedDate(image.created)}
+                      <span className="opacity-30">•</span>
+                      {formatCreatedDate(image.created)}
                     </p>
                   </div>
                   <Button
