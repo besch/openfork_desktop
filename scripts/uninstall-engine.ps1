@@ -19,8 +19,35 @@ function Test-IsAdmin {
 
 if (-not (Test-IsAdmin)) {
     Write-Log "Requesting administrator privileges..."
-    Start-Process powershell -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $PSCommandPath) -Verb RunAs -Wait
-    exit
+    try {
+        $proc = Start-Process powershell -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $PSCommandPath) -Verb RunAs -Wait -PassThru
+        exit ($proc.ExitCode | ForEach-Object { if ($_ -ne $null) { $_ } else { 0 } })
+    } catch {
+        Write-Log "Elevation was cancelled or failed."
+        exit 1
+    }
+}
+
+function Get-ConfigSearchPaths {
+    return @(
+        (Join-Path $env:LOCALAPPDATA "Openfork Client\config.json"),
+        (Join-Path $env:LOCALAPPDATA "openfork_client\config.json"),
+        (Join-Path $env:APPDATA "Openfork Client\config.json"),
+        (Join-Path $env:APPDATA "openfork_client\config.json")
+    )
+}
+
+function Get-WslDistros {
+    try {
+        return @(
+            ((wsl.exe --list --quiet 2>$null | Out-String) -replace "\0", "") `
+                -split "\r?\n" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ }
+        )
+    } catch {
+        return @()
+    }
 }
 
 function Test-OpenForkManagedDistro {
@@ -48,8 +75,8 @@ fi
 
 function Remove-WslDistro {
     param([string]$Name)
-    $dists = (wsl.exe -l -v 2>$null | Out-String) -replace "\0", ""
-    if ($dists -match [regex]::Escape($Name)) {
+    $dists = Get-WslDistros
+    if ($dists -contains $Name) {
         Write-Log "Shutting down WSL distro: $Name ..."
         wsl.exe --terminate $Name 2>$null
         Start-Sleep -Seconds 2
@@ -58,10 +85,11 @@ function Remove-WslDistro {
         wsl.exe --unregister $Name
         if ($LASTEXITCODE -eq 0) {
             Write-Log "Removed: $Name"
+            return $true
         } else {
             Write-Log "WARNING: wsl --unregister $Name exited with code $LASTEXITCODE"
+            return $false
         }
-        return $true
     }
     Write-Log "Distro '$Name' not found, skipping."
     return $false
@@ -70,12 +98,8 @@ function Remove-WslDistro {
 function Get-OpenForkManagedDistroNames {
     $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $null = $names.Add("OpenFork")
-    $null = $names.Add("Ubuntu")
 
-    $candidateConfigs = @(
-        (Join-Path $env:APPDATA "Openfork Client\config.json"),
-        (Join-Path $env:APPDATA "openfork_client\config.json")
-    )
+    $candidateConfigs = Get-ConfigSearchPaths
 
     foreach ($cfgPath in $candidateConfigs) {
         if (-not (Test-Path $cfgPath)) {
@@ -84,13 +108,24 @@ function Get-OpenForkManagedDistroNames {
 
         try {
             $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
-            if ($cfg.wslDistro) {
+            if ($cfg.wslDistro -and [string]$cfg.wslDistro -ieq "OpenFork") {
                 $null = $names.Add([string]$cfg.wslDistro)
             }
         } catch {}
     }
 
     return @($names)
+}
+
+function Get-LxssEntries {
+    $entries = @()
+    try {
+        $lxssPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
+        if (Test-Path $lxssPath) {
+            $entries = @(Get-ChildItem -Path $lxssPath -ErrorAction SilentlyContinue)
+        }
+    } catch {}
+    return $entries
 }
 
 function Test-RegistryEntryOwnedByOpenFork {
@@ -113,61 +148,54 @@ function Test-RegistryEntryOwnedByOpenFork {
 
 Write-Log "Starting OpenFork engine cleanup..."
 
-# 1. Remove the dedicated OpenFork distro.
-Remove-WslDistro -Name "OpenFork"
+# 1. Remove only the dedicated OpenFork distro.
+$managedDistroNames = Get-OpenForkManagedDistroNames
+$attempted = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$currentDistros = Get-WslDistros
+$lxssEntries = Get-LxssEntries
 
-# 2. Remove a legacy Ubuntu-based install only if it has OpenFork markers.
-$ubuntuExists = ((wsl.exe -l -v 2>$null | Out-String) -replace "\0", "") -match '(^|\s)Ubuntu(\s|$)'
-if ($ubuntuExists) {
-    if (Test-OpenForkManagedDistro -Name "Ubuntu") {
-        Write-Log "Legacy OpenFork-managed Ubuntu distro detected."
-        Remove-WslDistro -Name "Ubuntu"
-    } else {
-        Write-Log "Ubuntu exists but is not recognized as OpenFork-managed. Leaving it untouched."
+foreach ($entry in $lxssEntries) {
+    $distroName = $entry.GetValue("DistributionName", $null)
+    if ($distroName) {
+        $null = $managedDistroNames += @($distroName)
+    }
+}
+$managedDistroNames = @($managedDistroNames | Where-Object { $_ } | Select-Object -Unique)
+
+foreach ($distroName in $managedDistroNames) {
+    if (-not $distroName) {
+        continue
+    }
+    if ($attempted.Contains($distroName)) {
+        continue
+    }
+    $null = $attempted.Add($distroName)
+
+    if ($currentDistros -notcontains $distroName) {
+        continue
+    }
+
+    if ($distroName -ieq "OpenFork") {
+        $removed = Remove-WslDistro -Name $distroName
+        if ($removed) {
+            $currentDistros = Get-WslDistros
+        }
     }
 }
 
-# 3. Check electron-store config for any other managed distro name
-$candidateConfigs = @(
-    (Join-Path $env:APPDATA "Openfork Client\config.json"),
-    (Join-Path $env:APPDATA "openfork_client\config.json")
-)
-
-$storedDistro = $null
-foreach ($cfgPath in $candidateConfigs) {
-    if (Test-Path $cfgPath) {
-        try {
-            $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
-            if ($cfg.wslDistro -and $cfg.wslDistro -ne "OpenFork" -and $cfg.wslDistro -ne "Ubuntu") {
-                $storedDistro = $cfg.wslDistro
-            }
-        } catch {}
-        break
-    }
-}
-
-if ($storedDistro) {
-    if (Test-OpenForkManagedDistro -Name $storedDistro) {
-        Write-Log "Found OpenFork-managed distro in config: $storedDistro"
-        Remove-WslDistro -Name $storedDistro
-    } else {
-        Write-Log "Stored distro '$storedDistro' is not recognized as OpenFork-managed. Leaving it untouched."
-    }
-}
-
-# 4. Clean up orphaned registry entries from Lxss
+# 2. Clean up orphaned registry entries from Lxss
 Write-Log "Cleaning up WSL registry entries..."
 try {
     $lxssPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
     $managedDistroNames = Get-OpenForkManagedDistroNames
-    $existingDists = (wsl.exe -l -v 2>$null | Out-String) -replace "\0", ""
+    $existingDistros = Get-WslDistros
     if (Test-Path $lxssPath) {
         Get-ChildItem -Path $lxssPath -ErrorAction SilentlyContinue | ForEach-Object {
             $distroName = $_.GetValue("DistributionName", $null)
             $basePath = $_.GetValue("BasePath", $null)
             if ($distroName) {
                 $ownedByOpenFork = Test-RegistryEntryOwnedByOpenFork -DistroName $distroName -ManagedDistroNames $managedDistroNames -BasePath $basePath
-                if ($ownedByOpenFork -and $existingDists -notmatch [regex]::Escape($distroName)) {
+                if ($ownedByOpenFork -and $existingDistros -notcontains $distroName) {
                     Write-Log "Removing orphaned registry entry for: $distroName"
                     Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
                 }
@@ -179,7 +207,7 @@ try {
     Write-Log "Registry cleanup skipped (may require additional permissions)"
 }
 
-# 5. Remove OpenFork installation directory if it exists and is empty
+# 3. Remove OpenFork installation directory if it exists and is empty
 $openForkPath = "C:\OpenFork"
 if (Test-Path $openForkPath) {
     try {
