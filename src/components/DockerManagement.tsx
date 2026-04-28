@@ -126,6 +126,7 @@ export const DockerManagement = memo(() => {
       if (!nextDockerStatus.running) {
         setImages([]);
         setContainers([]);
+        useClientStore.getState().setDockerContainers([]);
         setError(describeDockerState(nextDockerStatus));
         const diskResult = await window.electronAPI.getDiskSpace();
         if (diskResult.success) setDiskSpace(diskResult.data);
@@ -146,6 +147,7 @@ export const DockerManagement = memo(() => {
 
       if (containersResult.success && containersResult.data) {
         setContainers(containersResult.data);
+        useClientStore.getState().setDockerContainers(containersResult.data);
       }
 
       if (diskResult.success) {
