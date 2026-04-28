@@ -60,6 +60,18 @@ export const DockerManagement = memo(() => {
     to: string;
   } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [autoCompactStatus, setAutoCompactStatus] = useState<{
+    phase:
+      | "starting"
+      | "stopping_client"
+      | "compacting"
+      | "restarting_client"
+      | "completed"
+      | "failed";
+    compactInProgress: boolean;
+    platformSupported: boolean;
+    error?: string;
+  } | null>(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
@@ -173,6 +185,22 @@ export const DockerManagement = memo(() => {
     const cleanup = window.electronAPI.onEngineSwitch((data) => {
       setEngineSwitchNotice(data);
       fetchData();
+    });
+    return cleanup;
+  }, [fetchData]);
+
+  // Listen for auto-compact status updates (Windows only).
+  useEffect(() => {
+    const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
+      setAutoCompactStatus((prev) => {
+        if (status.phase === "completed" || status.phase === "failed") {
+          setTimeout(() => setAutoCompactStatus(null), 8000);
+        }
+        return status;
+      });
+      if (status.phase === "completed") {
+        fetchData();
+      }
     });
     return cleanup;
   }, [fetchData]);
@@ -366,6 +394,76 @@ export const DockerManagement = memo(() => {
             size="sm"
             onClick={() => setEngineSwitchNotice(null)}
             className="text-blue-300 hover:bg-blue-500/20 h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
+      )}
+
+      {autoCompactStatus?.compactInProgress && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-500/10 border border-amber-500/30 text-white rounded-lg p-4 flex items-center gap-3 shadow-lg"
+        >
+          <Loader size="sm" variant="primary" className="shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
+              Auto-Compact:{" "}
+              <span className="text-white">
+                {autoCompactStatus.phase === "stopping_client"
+                  ? "Pausing client..."
+                  : autoCompactStatus.phase === "compacting"
+                    ? "Shrinking VHDX..."
+                    : autoCompactStatus.phase === "restarting_client"
+                      ? "Restarting client..."
+                      : "Preparing..."}
+              </span>
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {autoCompactStatus?.phase === "completed" && !autoCompactStatus.compactInProgress && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-emerald-500/10 border border-emerald-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+        >
+          <div className="flex items-center gap-3">
+            <HardDrive className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
+              Auto-Compact complete — disk space reclaimed
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAutoCompactStatus(null)}
+            className="text-emerald-300 hover:bg-emerald-500/20 h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
+      )}
+
+      {autoCompactStatus?.phase === "failed" && !autoCompactStatus.compactInProgress && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-destructive/10 border border-destructive/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+        >
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-widest text-destructive">
+              Auto-Compact failed: {autoCompactStatus.error || "Unknown error"}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAutoCompactStatus(null)}
+            className="text-destructive hover:bg-destructive/20 h-8 w-8 p-0"
           >
             <X className="h-4 w-4" />
           </Button>

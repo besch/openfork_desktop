@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Select,
   SelectContent,
@@ -16,6 +16,7 @@ import {
   HardDrive,
   AlertTriangle,
   ArrowRightLeft,
+  Sparkles,
 } from "lucide-react";
 
 interface StorageSettingsProps {
@@ -49,6 +50,23 @@ export function StorageSettings({
   const [isRelocating, setIsRelocating] = useState(false);
   const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [autoCompact, setAutoCompact] = useState<{
+    enabled: boolean;
+    freedBytes: number;
+    thresholdBytes: number;
+    lastCompactTs: number;
+    compactInProgress: boolean;
+    platformSupported: boolean;
+  } | null>(null);
+
+  const refreshAutoCompactStatus = useCallback(async () => {
+    try {
+      const status = await window.electronAPI.getAutoCompactStatus();
+      setAutoCompact(status);
+    } catch (e) {
+      console.error("Failed to get auto-compact status:", e);
+    }
+  }, []);
 
   const refreshData = async () => {
     setLoading(true);
@@ -77,7 +95,12 @@ export function StorageSettings({
       setPlatform(info.platform as "win32" | "linux" | "darwin");
     });
     refreshData();
-  }, []);
+    refreshAutoCompactStatus();
+    const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
+      setAutoCompact(status);
+    });
+    return cleanup;
+  }, [refreshAutoCompactStatus]);
 
   const isWindows = platform === "win32";
   const isWslMode = isWindows && dockerStatus?.isNative === false;
@@ -204,6 +227,45 @@ export function StorageSettings({
           )}
         </div>
       )}
+
+      <div className={sectionClassName}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-0.5">
+            <Label className={`${labelClassName} flex items-center gap-1.5`}>
+              <Sparkles className="h-3 w-3" />
+              Smart Cleanup
+            </Label>
+            <p className={copyMutedClassName}>
+              The DGN client evicts least-recently-used Docker images
+              automatically when free space drops below the disk-pressure
+              thresholds. Limits adapt to your active job policy.
+            </p>
+          </div>
+          {autoCompact && autoCompact.compactInProgress && (
+            <span className="shrink-0 rounded-lg border border-amber-500/25 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] text-amber-200">
+              Compacting...
+            </span>
+          )}
+        </div>
+        {isWindows && autoCompact?.platformSupported && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <p className={helperTextClassName}>
+              Auto-compact runs the VHDX shrink in idle windows after{" "}
+              {Math.round((autoCompact.thresholdBytes || 0) / 1024 ** 3)} GB of
+              images have been evicted. Currently {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since last compaction.
+            </p>
+            <Button
+              variant={autoCompact.enabled ? "primary" : "ghost"}
+              size="sm"
+              className={`${buttonTextClassName} sm:ml-auto`}
+              onClick={() => handleAutoCompactToggle(!autoCompact.enabled)}
+              disabled={loading || autoCompact.compactInProgress}
+            >
+              {autoCompact.enabled ? "Auto-compact: ON" : "Auto-compact: OFF"}
+            </Button>
+          </div>
+        )}
+      </div>
 
       {showManagedSections ? (
         <div
@@ -360,11 +422,29 @@ export function StorageSettings({
       const result = await window.electronAPI.reclaimDiskSpace();
       if (!result.success) {
         setError(result.message || result.error || "Reclaim failed");
+      } else {
+        // Tell the auto-compact manager the user just compacted manually so
+        // the cumulative-freed counter resets and we don't trigger again soon.
+        try {
+          window.electronAPI.notifyManualCompactCompleted();
+        } catch (e) {
+          // Non-critical — older builds may not expose this API yet.
+        }
       }
       await refreshData();
+      await refreshAutoCompactStatus();
       await Promise.resolve(onSettingsChanged?.());
     } finally {
       setIsReclaiming(false);
+    }
+  }
+
+  async function handleAutoCompactToggle(next: boolean) {
+    try {
+      await window.electronAPI.setAutoCompactEnabled(next);
+      await refreshAutoCompactStatus();
+    } catch (e) {
+      console.error("Failed to set auto-compact enabled:", e);
     }
   }
 

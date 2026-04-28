@@ -1,79 +1,66 @@
-
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
 
-// Policy-specific idle timeouts for automatic image cleanup.
-// null = disabled — no auto-cleanup for this policy.
+// Policy-specific idle timeouts the UI surfaces in the Monetize tab.
+// Source of truth for actual eviction is now the Python download manager
+// (services/docker_download_manager.py), which performs LRU and disk-pressure
+// driven cleanup. These values are kept here only for monetize-tab UX defaults.
 const POLICY_IDLE_TIMEOUTS = {
-  all: 120, // 2 hours  — user processes random network jobs; stale images pile up fast
-  project: 240, // 4 hours — curated project images; longer gaps expected between work sessions
-  users: 240, // 4 hours — trusted-user images; same rationale as project
-  monetize: 90, // 90 minutes — reclaims space without churning on large (100-220 GB) image re-downloads
-  mine: null, // disabled — user's own workflow images; never auto-evict
+  all: 120,
+  project: 240,
+  users: 240,
+  monetize: 90,
+  mine: null,
 };
 
 /**
- * DockerCleanupManager auto-evicts idle Docker images.
+ * DockerCleanupManager — UI/notification shim only.
  *
- * Two independent cleanup modes run in parallel:
+ * The actual `docker rmi` decisions are made by the Python DockerDownloadManager,
+ * which has the full picture (active downloads, queued jobs, last-job timestamps,
+ * disk-pressure tier). This class:
  *
- * 1. **Monetize mode** (manual): Enabled/disabled by the user via the Monetize tab.
- *    Idle timeout is configurable and persisted in the store.
+ *   1. Keeps job-activity tracking so the Monetize tab can show recent jobs.
+ *   2. Exposes the existing monetize idle-timeout configuration for backward
+ *      compatibility with the UI.
+ *   3. Persists the user's enabled/idleTimeoutMinutes choice in the store.
+ *   4. Forwards eviction events emitted by Python (IMAGE_EVICTED) to the
+ *      renderer as `monetize:cleanup-event` notifications.
  *
- * 2. **Policy mode** (automatic): Activated when the DGN client starts with a policy
- *    that has a non-null entry in POLICY_IDLE_TIMEOUTS (currently "all", "project",
- *    "users"). Stopped when the client stops or switches to a non-qualifying policy.
- *
- * Both modes share the same job-activity tracking (imageLastJobTime, activeServices)
- * so a single job_complete event resets the idle clock for both.
- *
- * Eviction logic per image:
- *   1. Skip if a container for that service is currently running
- *   2. Skip if the last job for that service finished within the idle timeout
- *   3. Skip if no job has ever been processed for that service (avoids evicting
- *      images that were pre-downloaded but not yet used)
- *   4. Otherwise: remove image + notify renderer
+ * The previous 5-minute polling + `docker rmi` loop has been removed to avoid
+ * racing with Python-side eviction.
  */
 class DockerCleanupManager {
-  constructor({ store, mainWindow, execDockerCommand }) {
+  constructor({ store, mainWindow }) {
     this.store = store;
     this.mainWindow = mainWindow;
-    this.execDockerCommand = execDockerCommand;
 
-    // Shared job-activity state
+    // Shared job-activity state (used by the Monetize tab UI)
     this.imageLastJobTime = new Map(); // service_type -> Date of last job completion
     this.activeServices = new Set(); // service_types with a container currently running
 
-    // Monetize cleanup (manual, user-configured)
-    this.checkIntervalId = null;
     const saved = this.store.get("monetizeConfig") || {};
     this.idleTimeoutMinutes =
       saved.idleTimeoutMinutes ?? DEFAULT_IDLE_TIMEOUT_MINUTES;
     this.enabled = saved.enabled ?? false;
 
-    // Policy-based cleanup (automatic, driven by accept_policy)
-    this.policyCheckIntervalId = null;
-    this.policyIdleTimeoutMinutes = null; // null = disabled
     this.currentPolicy = null;
   }
 
   // ── Job activity tracking ──────────────────────────────────────────────────
 
-  /** Called when a JOB_START message arrives from the Python client */
   notifyJobStart(serviceType) {
     if (!serviceType) return;
     this.imageLastJobTime.set(serviceType, new Date());
     this.activeServices.add(serviceType);
   }
 
-  /** Called when a JOB_COMPLETE, JOB_FAILED, or JOB_CLEARED message arrives */
   notifyJobEnd(serviceType) {
     if (!serviceType) return;
     this.imageLastJobTime.set(serviceType, new Date());
     this.activeServices.delete(serviceType);
   }
 
-  // ── Monetize cleanup (manual) ──────────────────────────────────────────────
+  // ── Monetize idle-timeout config (UI only) ─────────────────────────────────
 
   setIdleTimeoutMinutes(minutes) {
     this.idleTimeoutMinutes = minutes;
@@ -91,199 +78,48 @@ class DockerCleanupManager {
     return this.enabled;
   }
 
-  startMonitoring() {
-    if (this.checkIntervalId) return;
-    console.log(
-      "DockerCleanupManager: Starting monetize idle image monitoring.",
-    );
-    this.checkIntervalId = setInterval(
-      () => this._runMonetizeCleanup(),
-      CHECK_INTERVAL_MS,
-    );
-  }
+  // No-op start/stop methods kept for backward compatibility with existing
+  // electron.cjs IPC handlers that called startMonitoring/stopMonitoring.
+  startMonitoring() {}
+  stopMonitoring() {}
 
-  stopMonitoring() {
-    if (this.checkIntervalId) {
-      clearInterval(this.checkIntervalId);
-      this.checkIntervalId = null;
-      console.log(
-        "DockerCleanupManager: Stopped monetize idle image monitoring.",
-      );
-    }
-  }
+  // ── Policy tracking (kept for backward compat) ─────────────────────────────
 
-  // ── Policy-based cleanup (automatic) ──────────────────────────────────────
-
-  /**
-   * Called when the DGN client starts or changes its accept_policy.
-   * Starts or stops policy-based monitoring accordingly.
-   */
   updatePolicy(policy) {
     this.currentPolicy = policy;
-    const timeout = POLICY_IDLE_TIMEOUTS[policy] ?? null;
-
-    if (!timeout) {
-      // mine, monetize, or unknown policy: no auto-cleanup
-      this.stopPolicyMonitoring();
-      return;
-    }
-
-    this.policyIdleTimeoutMinutes = timeout;
-    // Restart (clears any existing interval with a different timeout)
-    this.startPolicyMonitoring();
-    console.log(
-      `DockerCleanupManager: Policy '${policy}' → auto-cleanup idle timeout = ${timeout} min.`,
-    );
   }
 
-  /**
-   * Called when the DGN client stops.
-   * Keeps job-activity tracking intact (useful if cleanup should finish up)
-   * but stops scheduling new cleanup passes since the client is no longer running.
-   */
   resetPolicy() {
-    const prev = this.currentPolicy;
     this.currentPolicy = null;
-    this.stopPolicyMonitoring();
-    if (prev) {
-      console.log(
-        `DockerCleanupManager: Policy '${prev}' cleared — policy-based cleanup stopped.`,
-      );
-    }
   }
 
-  startPolicyMonitoring() {
-    if (this.policyCheckIntervalId) {
-      clearInterval(this.policyCheckIntervalId);
-    }
-    console.log(
-      `DockerCleanupManager: Starting policy-based cleanup (policy=${this.currentPolicy}, idle=${this.policyIdleTimeoutMinutes} min).`,
-    );
-    this.policyCheckIntervalId = setInterval(
-      () => this._runPolicyCleanup(),
-      CHECK_INTERVAL_MS,
-    );
-  }
-
-  stopPolicyMonitoring() {
-    if (this.policyCheckIntervalId) {
-      clearInterval(this.policyCheckIntervalId);
-      this.policyCheckIntervalId = null;
-      console.log("DockerCleanupManager: Stopped policy-based cleanup.");
-    }
-    this.policyIdleTimeoutMinutes = null;
-  }
-
-  // ── Cleanup runners ────────────────────────────────────────────────────────
-
-  async _runMonetizeCleanup() {
-    await this._doCleanup(this.idleTimeoutMinutes);
-  }
-
-  async _runPolicyCleanup() {
-    if (!this.policyIdleTimeoutMinutes) return;
-    await this._doCleanup(this.policyIdleTimeoutMinutes);
-  }
+  // ── Eviction notifications from Python ────────────────────────────────────
 
   /**
-   * Core eviction loop.
-   * @param {number} idleTimeoutMinutes - Evict images idle longer than this.
+   * Called by PythonProcessManager when an IMAGE_EVICTED message arrives on stdout.
+   * Forwards to the renderer so the Monetize tab can show a "removed image" toast.
    */
-  async _doCleanup(idleTimeoutMinutes) {
-    try {
-      // Get all openfork images
-      const imagesOut = await this.execDockerCommand(
-        'docker images --format "{{.Repository}}:{{.Tag}}|{{.ID}}" --filter "reference=beschiak/openfork-*"',
-      ).catch(() => "");
-
-      const imageLines = imagesOut.split("\n").filter(Boolean);
-      if (!imageLines.length) return;
-
-      // Get running containers to avoid evicting images in active use
-      const runningOut = await this.execDockerCommand(
-        'docker ps --format "{{.Image}}" --filter "status=running"',
-      ).catch(() => "");
-      const runningImages = new Set(runningOut.split("\n").filter(Boolean));
-
-      const now = Date.now();
-      const timeoutMs = idleTimeoutMinutes * 60 * 1000;
-
-      for (const line of imageLines) {
-        const [imageName, imageId] = line.split("|");
-        if (!imageName || !imageId) continue;
-
-        // Derive service type from image name
-        // e.g. "beschiak/openfork-wan22:latest" → "wan22"
-        const serviceMatch = imageName.match(/openfork-([^:]+)/);
-        const serviceType = serviceMatch ? serviceMatch[1] : null;
-
-        // Skip if a container is currently running for this image
-        if (
-          runningImages.has(imageName) ||
-          (serviceType && this.activeServices.has(serviceType))
-        ) {
-          continue;
-        }
-
-        const lastJobTime = serviceType
-          ? this.imageLastJobTime.get(serviceType)
-          : null;
-
-        // Skip if last job was recent
-        if (lastJobTime && now - lastJobTime.getTime() < timeoutMs) {
-          continue;
-        }
-
-        // Skip if we have never processed a job for this service in this session.
-        // This prevents evicting images that were pre-downloaded but not yet used
-        // (e.g. images downloaded by prefetch or a previous session).
-        if (!lastJobTime) {
-          continue;
-        }
-
-        // Evict
-        console.log(
-          `DockerCleanupManager: Removing idle image ${imageName} (${imageId}) — idle >${idleTimeoutMinutes} min`,
-        );
-        try {
-          // Remove stopped containers that reference this image before rmi
-          const stoppedOut = await this.execDockerCommand(
-            `docker ps -a -q --filter ancestor=${imageId} --filter "status=exited"`,
-          ).catch(() => "");
-          const stoppedIds = stoppedOut.split("\n").filter(Boolean);
-          for (const cid of stoppedIds) {
-            await this.execDockerCommand(`docker rm -f ${cid}`).catch(() => {});
-          }
-
-          await this.execDockerCommand(`docker rmi -f ${imageId}`);
-
-          this._emitCleanupEvent({
-            service_type: serviceType || imageName,
-            image: imageName,
-            action: "removed",
-            reason: `Idle for >${idleTimeoutMinutes} minutes`,
-          });
-        } catch (err) {
-          console.error(
-            `DockerCleanupManager: Failed to remove ${imageName}:`,
-            err,
-          );
-        }
-      }
-    } catch (err) {
-      console.error("DockerCleanupManager: Cleanup run failed:", err);
-    }
-  }
-
-  _emitCleanupEvent(payload) {
+  notifyImageEvicted({ service_type, image, freed_bytes, reason }) {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const freedGB = freed_bytes ? (freed_bytes / 1024 ** 3).toFixed(1) : null;
       this.mainWindow.webContents.send("monetize:cleanup-event", {
-        ...payload,
+        service_type: service_type || null,
+        image: image || null,
+        action: "removed",
+        reason: reason || "image_cap",
+        freed_bytes: freed_bytes || 0,
         timestamp: new Date().toISOString(),
       });
+      const reasonLabel =
+        reason === "disk_critical"
+          ? "Critical disk pressure"
+          : reason === "disk_pressure"
+            ? "Disk pressure"
+            : "Image cap";
+      const sizeLabel = freedGB ? ` — ${freedGB} GB freed` : "";
       this.mainWindow.webContents.send("openfork_client:log", {
         type: "stdout",
-        message: `[Auto-Cleanup] Removed idle image: ${payload.image} (${payload.reason})`,
+        message: `[Auto-Cleanup] Removed ${image || service_type || "image"} (${reasonLabel}${sizeLabel})`,
       });
     }
   }

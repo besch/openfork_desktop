@@ -5,7 +5,7 @@ const { app } = require("electron");
 const http = require("http");
 
 class PythonProcessManager {
-  constructor({ supabase, mainWindow, userDataPath, onJobEvent }) {
+  constructor({ supabase, mainWindow, userDataPath, onJobEvent, onImageEvicted, onProviderRegistered }) {
     this.pythonProcess = null;
     this.shutdownServerPort = 8000;
     this.supabase = supabase;
@@ -15,6 +15,8 @@ class PythonProcessManager {
     this.authSubscription = null;
     this.currentDownloadImage = null; // Track current download to prevent race conditions
     this.onJobEvent = onJobEvent || null; // Optional callback for job events (used by DockerCleanupManager)
+    this.onImageEvicted = onImageEvicted || null; // Optional callback for IMAGE_EVICTED events (auto-compact + cleanup UI)
+    this.onProviderRegistered = onProviderRegistered || null; // Optional callback when Python reports its provider_id
 
     // Auth refresh debouncing
     this._lastRefreshAttempt = 0;
@@ -24,15 +26,37 @@ class PythonProcessManager {
     // Restart settings (stored when start() is called)
     this._lastService = null;
     this._lastRoutingConfig = null;
-    
+
     // Cleanup synchronization
     this._cleanupPromise = null;
+
+    // Idle predicates: number of jobs currently in flight as reported by Python.
+    // Used by AutoCompactManager to gate compaction on a fully idle window.
+    this._activeJobIds = new Set();
 
     this._listenForTokenRefresh();
   }
 
   isRunning() {
     return this.pythonProcess !== null;
+  }
+
+  /** True if Python has reported a JOB_START with no matching JOB_COMPLETE/FAILED/CLEARED yet. */
+  hasActiveJob() {
+    return this._activeJobIds.size > 0;
+  }
+
+  /** True if a Docker image download is currently in flight. */
+  hasQueuedDownloads() {
+    return this.currentDownloadImage !== null;
+  }
+
+  getLastRoutingConfig() {
+    return this._lastRoutingConfig;
+  }
+
+  getLastService() {
+    return this._lastService;
   }
 
   async cleanupRogueProcesses() {
@@ -512,6 +536,13 @@ class PythonProcessManager {
                 providerId,
               );
             }
+            if (this.onProviderRegistered) {
+              try {
+                this.onProviderRegistered(providerId || null);
+              } catch (err) {
+                console.error("onProviderRegistered handler threw:", err);
+              }
+            }
             return;
           }
 
@@ -633,6 +664,15 @@ class PythonProcessManager {
               "openfork_client:job-status",
               { type: message.type, ...message.payload }
             );
+            // Track active jobs so AutoCompactManager can gate on idle.
+            const jobId = message.payload?.id;
+            if (jobId) {
+              if (message.type === "JOB_START") {
+                this._activeJobIds.add(jobId);
+              } else {
+                this._activeJobIds.delete(jobId);
+              }
+            }
             // Notify cleanup manager (if registered) about job lifecycle
             if (this.onJobEvent) {
               this.onJobEvent(message.type, message.payload || {});
@@ -676,6 +716,19 @@ class PythonProcessManager {
                type: "stderr",
                message: message.payload.message
              });
+             return;
+           }
+
+           // Forward Python-side image evictions to the auto-compact manager and
+           // monetize cleanup UI. Payload: { service_type, image, freed_bytes, reason }
+           if (message.type === "IMAGE_EVICTED") {
+             if (this.onImageEvicted) {
+               try {
+                 this.onImageEvicted(message.payload || {});
+               } catch (err) {
+                 console.error("onImageEvicted handler threw:", err);
+               }
+             }
              return;
            }
          } catch (e) {
@@ -731,7 +784,16 @@ class PythonProcessManager {
         this.mainWindow.webContents.send("openfork_client:status", "stopped");
         this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
-        
+        this._activeJobIds.clear();
+        this.currentDownloadImage = null;
+        if (this.onProviderRegistered) {
+          try {
+            this.onProviderRegistered(null);
+          } catch (err) {
+            console.error("onProviderRegistered handler threw on close:", err);
+          }
+        }
+
         // Auto-cleanup zombies on exit
         this.cleanupRogueProcesses();
       });

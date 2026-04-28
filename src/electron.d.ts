@@ -229,6 +229,37 @@ interface ElectronAPI {
     newDrivePath: string,
   ) => Promise<{ success: boolean; error?: string }>;
 
+  // Auto-compact (Windows only)
+  getAutoCompactStatus: () => Promise<{
+    enabled: boolean;
+    freedBytes: number;
+    thresholdBytes: number;
+    lastCompactTs: number;
+    compactInProgress: boolean;
+    platformSupported: boolean;
+  }>;
+  setAutoCompactEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+  setAutoCompactThresholdGB: (gb: number) => Promise<{ success: boolean }>;
+  notifyManualCompactCompleted: () => void;
+  onAutoCompactStatus: (
+    callback: (status: {
+      phase:
+        | "starting"
+        | "stopping_client"
+        | "compacting"
+        | "restarting_client"
+        | "completed"
+        | "failed";
+      enabled: boolean;
+      freedBytes: number;
+      thresholdBytes: number;
+      lastCompactTs: number;
+      compactInProgress: boolean;
+      platformSupported: boolean;
+      error?: string;
+    }) => void,
+  ) => CleanupFn;
+
   // Auto Updater - return cleanup functions
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => CleanupFn;

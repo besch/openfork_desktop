@@ -22,6 +22,7 @@ const dockerMonitor = require("./src/docker-monitor.cjs");
 const engineInstall = require("./src/engine-install.cjs");
 const ipcDocker = require("./src/ipc-docker.cjs");
 const ipcDeps = require("./src/ipc-deps.cjs");
+const { AutoCompactManager } = require("./src/auto-compact-manager.cjs");
 
 function execFilePromise(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -29,6 +30,52 @@ function execFilePromise(command, args, options = {}) {
       if (err) return reject(err);
       resolve();
     });
+  });
+}
+
+/**
+ * PATCH /api/dgn/provider/config to flip the transient `paused_for_compaction`
+ * flag. Called by AutoCompactManager around its compaction window so the
+ * orchestrator skips this provider while Python is briefly offline.
+ */
+async function setProviderPausedForCompaction(providerId, paused) {
+  if (!providerId) return { success: false, error: "Missing providerId" };
+  if (!session) return { success: false, error: "Not authenticated" };
+
+  return new Promise((resolve) => {
+    const url = `${ORCHESTRATOR_API_URL}/api/dgn/provider/config?providerId=${encodeURIComponent(
+      providerId,
+    )}`;
+    const request = net.request({ method: "PATCH", url });
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+    request.setHeader("Content-Type", "application/json");
+    let body = "";
+    request.on("response", (response) => {
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
+      response.on("end", () => {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          parsed = { success: response.statusCode < 400 };
+        }
+        if (response.statusCode >= 400) {
+          resolve({
+            success: false,
+            error: parsed?.error || `HTTP ${response.statusCode}`,
+          });
+        } else {
+          resolve({ success: true, data: parsed });
+        }
+      });
+    });
+    request.on("error", (err) => {
+      resolve({ success: false, error: err.message });
+    });
+    request.write(JSON.stringify({ paused_for_compaction: !!paused }));
+    request.end();
   });
 }
 
@@ -234,6 +281,7 @@ let session = null;
 let pythonManager;
 let scheduleManager;
 let cleanupManager;
+let autoCompactManager;
 let isQuittingApp = false;
 let pendingClientStart = null;
 
@@ -418,6 +466,13 @@ function createWindow() {
         cleanupManager.notifyJobEnd(payload.service_type);
       }
     },
+    onImageEvicted: (payload) => {
+      if (cleanupManager) cleanupManager.notifyImageEvicted(payload);
+      if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);
+    },
+    onProviderRegistered: (providerId) => {
+      if (autoCompactManager) autoCompactManager.setCurrentProviderId(providerId);
+    },
   });
 
   scheduleManager = new ScheduleManager({ pythonManager, store, mainWindow });
@@ -426,11 +481,21 @@ function createWindow() {
   cleanupManager = new DockerCleanupManager({
     store,
     mainWindow,
-    execDockerCommand: dockerEngine.execDockerCommand,
   });
   if (cleanupManager.isEnabled()) {
     cleanupManager.startMonitoring();
   }
+
+  autoCompactManager = new AutoCompactManager({
+    app,
+    store,
+    mainWindow,
+    pythonManager,
+    dockerEngine,
+    dockerMonitor,
+    wslUtils,
+    setProviderPausedForCompaction: setProviderPausedForCompaction,
+  });
 
   mainWindow.on("close", (event) => {
     if (pythonManager && !pythonManager.isQuitting) {
@@ -941,6 +1006,36 @@ ipcMain.handle("schedule:get-presets", () => SCHEDULE_PRESETS);
 ipcMain.handle("schedule:get-idle-time", () => {
   const { powerMonitor } = require("electron");
   return powerMonitor.getSystemIdleTime();
+});
+
+// --- AUTO-COMPACT MANAGER IPC HANDLERS ---
+
+ipcMain.handle("auto-compact:get-status", () => {
+  if (!autoCompactManager) {
+    return { enabled: false, platformSupported: process.platform === "win32" };
+  }
+  return autoCompactManager.getStatus();
+});
+
+ipcMain.handle("auto-compact:set-enabled", (event, enabled) => {
+  if (autoCompactManager) {
+    autoCompactManager.setEnabled(!!enabled);
+  }
+  return { success: true };
+});
+
+ipcMain.handle("auto-compact:set-threshold-gb", (event, gb) => {
+  if (autoCompactManager) {
+    const bytes = Math.max(1, Number(gb) || 0) * 1024 ** 3;
+    autoCompactManager.setThresholdBytes(bytes);
+  }
+  return { success: true };
+});
+
+ipcMain.on("auto-compact:notify-manual-compact", () => {
+  if (autoCompactManager) {
+    autoCompactManager.notifyManualCompactCompleted();
+  }
 });
 
 // --- SEARCH & CONFIG IPC HANDLERS ---
