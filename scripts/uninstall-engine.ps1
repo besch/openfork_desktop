@@ -67,6 +67,50 @@ function Remove-WslDistro {
     return $false
 }
 
+function Get-OpenForkManagedDistroNames {
+    $names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $null = $names.Add("OpenFork")
+    $null = $names.Add("Ubuntu")
+
+    $candidateConfigs = @(
+        (Join-Path $env:APPDATA "Openfork Client\config.json"),
+        (Join-Path $env:APPDATA "openfork_client\config.json")
+    )
+
+    foreach ($cfgPath in $candidateConfigs) {
+        if (-not (Test-Path $cfgPath)) {
+            continue
+        }
+
+        try {
+            $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+            if ($cfg.wslDistro) {
+                $null = $names.Add([string]$cfg.wslDistro)
+            }
+        } catch {}
+    }
+
+    return @($names)
+}
+
+function Test-RegistryEntryOwnedByOpenFork {
+    param(
+        [string]$DistroName,
+        [string[]]$ManagedDistroNames,
+        [string]$BasePath
+    )
+
+    if ($ManagedDistroNames -contains $DistroName) {
+        return $true
+    }
+
+    if ($BasePath -and $BasePath -match '(?i)\\OpenFork(\\|$)') {
+        return $true
+    }
+
+    return $false
+}
+
 Write-Log "Starting OpenFork engine cleanup..."
 
 # 1. Remove the dedicated OpenFork distro.
@@ -108,6 +152,47 @@ if ($storedDistro) {
         Remove-WslDistro -Name $storedDistro
     } else {
         Write-Log "Stored distro '$storedDistro' is not recognized as OpenFork-managed. Leaving it untouched."
+    }
+}
+
+# 4. Clean up orphaned registry entries from Lxss
+Write-Log "Cleaning up WSL registry entries..."
+try {
+    $lxssPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
+    $managedDistroNames = Get-OpenForkManagedDistroNames
+    $existingDists = (wsl.exe -l -v 2>$null | Out-String) -replace "\0", ""
+    if (Test-Path $lxssPath) {
+        Get-ChildItem -Path $lxssPath -ErrorAction SilentlyContinue | ForEach-Object {
+            $distroName = $_.GetValue("DistributionName", $null)
+            $basePath = $_.GetValue("BasePath", $null)
+            if ($distroName) {
+                $ownedByOpenFork = Test-RegistryEntryOwnedByOpenFork -DistroName $distroName -ManagedDistroNames $managedDistroNames -BasePath $basePath
+                if ($ownedByOpenFork -and $existingDists -notmatch [regex]::Escape($distroName)) {
+                    Write-Log "Removing orphaned registry entry for: $distroName"
+                    Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        Write-Log "Registry cleanup complete."
+    }
+} catch {
+    Write-Log "Registry cleanup skipped (may require additional permissions)"
+}
+
+# 5. Remove OpenFork installation directory if it exists and is empty
+$openForkPath = "C:\OpenFork"
+if (Test-Path $openForkPath) {
+    try {
+        $items = Get-ChildItem -Path $openForkPath -Recurse -ErrorAction SilentlyContinue | Measure-Object
+        if ($items.Count -eq 0 -or $null -eq $items.Count) {
+            Write-Log "Removing empty OpenFork directory: $openForkPath"
+            Remove-Item -Path $openForkPath -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Log "OpenFork directory removed."
+        } else {
+            Write-Log "OpenFork directory not empty. Leaving it for manual cleanup if desired."
+        }
+    } catch {
+        Write-Log "Could not remove OpenFork directory (may be in use)"
     }
 }
 

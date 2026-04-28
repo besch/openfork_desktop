@@ -127,6 +127,10 @@
         "to": "bin/setup-linux.sh"
       },
       {
+        "from": "../client/uninstall-engine.sh",
+        "to": "bin/uninstall-engine.sh"
+      },
+      {
         "from": "scripts/compact-wsl.ps1",
         "to": "scripts/compact-wsl.ps1"
       },
@@ -150,6 +154,9 @@
       ],
       "icon": "public/logo.png",
       "maintainer": "Openfork <openforkvideo@gmail.com>"
+    },
+    "deb": {
+      "postuninstall": "build/postuninstall.sh"
     },
     "appImage": {
       "executableArgs": [

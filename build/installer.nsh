@@ -28,7 +28,7 @@ BrandingText "OpenFork • Community AI Video"
 
 !macro customUnInstall
   MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 \
-    "Remove the OpenFork AI Engine?$\r$\n$\r$\nThis will free ~10GB of disk space by deleting downloaded models and Docker data." \
+    "Remove the OpenFork AI Engine?$\r$\n$\r$\nThis will delete:$\r$\n• WSL distro (OpenFork)$\r$\n• Docker data and models (~10GB)$\r$\n• Registry entries$\r$\n$\r$\nKeep your custom Docker/NVIDIA setup intact." \
     IDNO openfork_skip_engine_cleanup
   
   DetailPrint "Cleaning up AI Engine environment..."
