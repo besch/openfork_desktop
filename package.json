@@ -98,6 +98,7 @@
       "preload.cjs",
       "src/python-process-manager.cjs",
       "src/schedule-manager.cjs",
+      "src/auto-compact-manager.cjs",
       "src/docker-cleanup-manager.cjs",
       "src/settings.cjs",
       "src/wsl-utils.cjs",
