@@ -156,7 +156,7 @@
       "maintainer": "Openfork <openforkvideo@gmail.com>"
     },
     "deb": {
-      "postuninstall": "build/postuninstall.sh"
+      "afterRemove": "build/postuninstall.sh"
     },
     "appImage": {
       "executableArgs": [
