@@ -459,7 +459,7 @@ export function StorageSettings({
     setIsRelocating(true);
     setError(null);
     try {
-      const drivePath = `${selectedDrive}:\\OpenFork\\wsl`;
+      const drivePath = `${selectedDrive}:\\OpenForkEngine\\wsl`;
       const result = await window.electronAPI.relocateStorage(drivePath);
       if (!result.success) {
         setError(result.error || "Relocation failed");

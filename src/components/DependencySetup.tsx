@@ -142,7 +142,7 @@ export function DependencySetup({
     try {
       const drivePath =
         platform === "win32" && canChooseInstallDrive
-          ? `${selectedDrive}:\\OpenFork\\wsl`
+          ? `${selectedDrive}:\\OpenForkEngine\\wsl`
           : undefined;
       const result = await window.electronAPI.installEngine(drivePath);
       if (result?.error !== "cancelled") {
