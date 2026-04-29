@@ -65,6 +65,13 @@ export function JobPolicySettings({
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Profile[]>([]);
   const lastHydratedIds = useRef<string>("");
+  const [lastTrustedMode, setLastTrustedMode] = useState<
+    "trusted_users" | "trusted_projects"
+  >(() =>
+    config.communityMode === "trusted_projects"
+      ? "trusted_projects"
+      : "trusted_users"
+  );
 
   const primaryMode = getPrimaryMode(config);
   const trustedTarget = getTrustedTarget(config);
@@ -105,31 +112,44 @@ export function JobPolicySettings({
 
   function handlePrimaryModeChange(mode: PrimaryMode) {
     if (disabled) return;
+    if (
+      primaryMode === "private" &&
+      (config.communityMode === "trusted_users" ||
+        config.communityMode === "trusted_projects")
+    ) {
+      setLastTrustedMode(config.communityMode);
+    }
     if (mode === "private") {
-      update({ communityMode: "none", processOwnJobs: true, monetizeMode: false, trustedIds: [] });
+      update({ communityMode: "none", processOwnJobs: true, monetizeMode: false });
     } else if (mode === "public") {
-      update({ communityMode: "all", processOwnJobs: true, monetizeMode: false, trustedIds: [] });
+      update({ communityMode: "all", processOwnJobs: true, monetizeMode: false });
     } else {
-      update({ communityMode: "none", processOwnJobs: true, monetizeMode: true, trustedIds: [] });
+      update({ communityMode: "none", processOwnJobs: true, monetizeMode: true });
     }
   }
 
   function handleTrustedGroupToggle(enabled: boolean) {
     if (disabled) return;
     if (enabled) {
-      // Default to trusted_users when first enabling; keep existing target on re-enable
-      const target =
-        trustedTarget === "projects" ? "trusted_projects" : "trusted_users";
-      update({ communityMode: target, trustedIds: [] });
+      update({ communityMode: lastTrustedMode });
     } else {
-      update({ communityMode: "none", trustedIds: [] });
+      if (
+        config.communityMode === "trusted_users" ||
+        config.communityMode === "trusted_projects"
+      ) {
+        setLastTrustedMode(config.communityMode);
+      }
+      update({ communityMode: "none" });
     }
   }
 
   function handleTrustedTargetChange(target: TrustedTarget) {
     if (disabled) return;
+    const newMode =
+      target === "projects" ? "trusted_projects" : "trusted_users";
+    setLastTrustedMode(newMode);
     update({
-      communityMode: target === "projects" ? "trusted_projects" : "trusted_users",
+      communityMode: newMode,
       trustedIds: [],
     });
   }
@@ -203,17 +223,27 @@ export function JobPolicySettings({
               {config.communityMode === "trusted_projects" ? (
                 <ProjectSelection
                   selectedProjects={selectedProjects}
-                  onSelectedProjectsChange={(projects) =>
-                    update({ trustedIds: projects.map((p) => p.id) })
-                  }
+                  onSelectedProjectsChange={(projects) => {
+                    if (projects.length === 0) {
+                      setLastTrustedMode("trusted_projects");
+                      update({ communityMode: "none", trustedIds: [] });
+                    } else {
+                      update({ trustedIds: projects.map((p) => p.id) });
+                    }
+                  }}
                   disabled={disabled}
                 />
               ) : (
                 <UserSelection
                   selectedUsers={selectedUsers}
-                  onSelectedUsersChange={(users) =>
-                    update({ trustedIds: users.map((u) => u.id) })
-                  }
+                  onSelectedUsersChange={(users) => {
+                    if (users.length === 0) {
+                      setLastTrustedMode("trusted_users");
+                      update({ communityMode: "none", trustedIds: [] });
+                    } else {
+                      update({ trustedIds: users.map((u) => u.id) });
+                    }
+                  }}
                   disabled={disabled}
                 />
               )}

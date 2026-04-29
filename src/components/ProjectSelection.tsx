@@ -37,6 +37,17 @@ export const ProjectSelection: React.FC<ProjectSelectionProps> = ({
     };
   }, [searchTerm]);
 
+  function extractSearchTerm(input: string): string {
+    try {
+      const url = new URL(input);
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts.length >= 2) return parts[1];
+    } catch {
+      // Not a URL — use as-is
+    }
+    return input;
+  }
+
   React.useEffect(() => {
     if (debouncedSearchTerm.length < 2) {
       setSearchResults([]);
@@ -46,7 +57,7 @@ export const ProjectSelection: React.FC<ProjectSelectionProps> = ({
     const search = async () => {
       setIsLoading(true);
       const result = await window.electronAPI.searchProjects(
-        debouncedSearchTerm
+        extractSearchTerm(debouncedSearchTerm)
       );
       if (result && result.success && result.data) {
         setSearchResults(result.data as Project[]);
