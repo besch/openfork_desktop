@@ -123,28 +123,30 @@ export const DockerManagement = memo(() => {
     try {
       const nextDockerStatus = await window.electronAPI.checkDocker();
 
-      if (!nextDockerStatus.running) {
-        setImages([]);
-        setContainers([]);
-        useClientStore.getState().setDockerContainers([]);
-        setError(describeDockerState(nextDockerStatus));
-        const diskResult = await window.electronAPI.getDiskSpace();
-        if (diskResult.success) setDiskSpace(diskResult.data);
-        return;
-      }
-
-      const [imagesResult, containersResult, diskResult] = await Promise.all([
-        window.electronAPI.listDockerImages(),
+      // Always attempt to list containers — the listing command runs inside WSL
+      // where Docker is reachable even when the Windows→WSL TCP API (port 2375)
+      // is flaky.  Only skip image listing when the status check says Docker is
+      // down because image listing depends on the same routing.
+      const [containersResult, diskResult] = await Promise.all([
         window.electronAPI.listDockerContainers(),
         window.electronAPI.getDiskSpace(),
       ]);
 
-      if (imagesResult.success && imagesResult.data) {
-        setImages(imagesResult.data);
-      } else {
-        setError(imagesResult.error || "Failed to fetch images");
+      const hasRunningContainers =
+        containersResult.success &&
+        containersResult.data &&
+        containersResult.data.length > 0;
+
+      if (!nextDockerStatus.running && !hasRunningContainers) {
+        setImages([]);
+        setContainers([]);
+        useClientStore.getState().setDockerContainers([]);
+        setError(describeDockerState(nextDockerStatus));
+        if (diskResult.success) setDiskSpace(diskResult.data);
+        return;
       }
 
+      // Docker is running (or containers were found despite status check flakiness).
       if (containersResult.success && containersResult.data) {
         setContainers(containersResult.data);
         useClientStore.getState().setDockerContainers(containersResult.data);
@@ -152,6 +154,17 @@ export const DockerManagement = memo(() => {
 
       if (diskResult.success) {
         setDiskSpace(diskResult.data);
+      }
+
+      if (nextDockerStatus.running) {
+        const imagesResult = await window.electronAPI.listDockerImages();
+        if (imagesResult.success && imagesResult.data) {
+          setImages(imagesResult.data);
+        } else {
+          setError(imagesResult.error || "Failed to fetch images");
+        }
+      } else {
+        setImages([]);
       }
     } catch (err) {
       setError(

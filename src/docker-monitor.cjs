@@ -77,8 +77,28 @@ async function checkDockerUpdates() {
     }
     if (nextEngine) _lastKnownActiveEngine = nextEngine;
 
+    // Always try to list containers via WSL — the command runs inside the
+    // distro where Docker is reachable even when the Windows→WSL TCP API
+    // (port 2375) is flaky.  Only clear containers when the listing itself
+    // confirms zero containers AND the status check agrees Docker is down.
+    let containersOutput = "";
+    try {
+      containersOutput = await dockerEngine.execDockerCommand(
+        'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
+      );
+    } catch (e) {
+      console.warn(`Failed to get container list: ${e?.message || e}`);
+      containersOutput = "";
+    }
+
     if (!dockerStatus.running) {
-      dockerMonitorConsecutiveFailures++;
+      // If containers were found inside WSL, trust the listing over the
+      // TCP-based status check and reset the failure counter.
+      if (containersOutput && containersOutput.trim().length > 0) {
+        dockerMonitorConsecutiveFailures = 0;
+      } else {
+        dockerMonitorConsecutiveFailures++;
+      }
 
       if (
         process.platform === "win32" &&
@@ -89,8 +109,8 @@ async function checkDockerUpdates() {
         });
       }
 
-      // Only clear the display after consecutive failures to avoid
-      // transient WSL Docker API timeouts from flickering the UI.
+      // Only clear the display after consecutive failures with empty listings
+      // to avoid transient WSL Docker API timeouts from flickering the UI.
       if (dockerMonitorConsecutiveFailures >= DOCKER_MONITOR_MAX_FAILURES) {
         if (lastContainersJson !== "") {
           lastContainersJson = "";
@@ -105,22 +125,41 @@ async function checkDockerUpdates() {
           `Docker monitor: not running (${dockerMonitorConsecutiveFailures}/${DOCKER_MONITOR_MAX_FAILURES} failures, error: ${dockerStatus.error || "none"}). Keeping current display.`,
         );
       }
+
+      // Still send the container update if containers were found despite the
+      // status check failing — the containers ARE running inside WSL.
+      if (containersOutput && containersOutput !== lastContainersJson) {
+        lastContainersJson = containersOutput;
+        const containers = containersOutput
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => {
+            try {
+              const container = JSON.parse(line);
+              return {
+                id: container.ID,
+                name: container.Names,
+                image: container.Image,
+                status: container.Status,
+                state: container.State,
+                created: container.CreatedAt,
+              };
+            } catch (e) {
+              return null;
+            }
+          })
+          .filter(Boolean);
+        if (containers.length > 0) {
+          mainWindow.webContents.send("docker:containers-update", containers);
+        }
+      }
       return;
     }
 
     // Docker is running — reset the failure counter
     dockerMonitorConsecutiveFailures = 0;
 
-    // Check containers
-    let containersOutput = "";
-    try {
-      containersOutput = await dockerEngine.execDockerCommand(
-        'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
-      );
-    } catch (e) {
-      console.warn(`Failed to get container list: ${e?.message || e}`);
-      containersOutput = "";
-    }
+    // Send container updates
     if (containersOutput !== lastContainersJson) {
       lastContainersJson = containersOutput;
       const containers = containersOutput
