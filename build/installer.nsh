@@ -26,15 +26,48 @@ BrandingText "OpenFork • Community AI Video"
 !macro customInstall
 !macroend
 
-!macro customUnInstall
+!macro openforkCleanupEngine
+  Var /GLOBAL OpenForkCleanupExitCode
   MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 \
-    "Remove the OpenFork AI Engine?$\r$\n$\r$\nThis will free ~10GB of disk space by deleting downloaded models and Docker data." \
+    "Remove the OpenFork AI Engine?$\r$\n$\r$\nThis will delete:$\r$\n• WSL distro (OpenFork)$\r$\n• Docker data and models (~10GB)$\r$\n• Registry entries$\r$\n$\r$\nKeep your custom Docker/NVIDIA setup intact." \
     IDNO openfork_skip_engine_cleanup
   
   DetailPrint "Cleaning up AI Engine environment..."
-  ExecWait 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\bin\uninstall-engine.ps1"'
+  ExecWait 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\bin\uninstall-engine.ps1"' $OpenForkCleanupExitCode
+  ${If} $OpenForkCleanupExitCode <> 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION \
+      "AI Engine cleanup did not finish successfully.$\r$\n$\r$\nThe OpenFork WSL distro may still be present after uninstall."
+  ${EndIf}
   
   openfork_skip_engine_cleanup:
+!macroend
+
+!macro customRemoveFiles
+  ; Run while $INSTDIR still exists. electron-builder's customUnInstall hook runs
+  ; after RMDir /r $INSTDIR, which would delete resources\bin\uninstall-engine.ps1.
+  ${ifNot} ${isUpdated}
+    !insertmacro openforkCleanupEngine
+  ${endif}
+
+  ${if} ${isUpdated}
+    CreateDirectory "$PLUGINSDIR\old-install"
+
+    Push ""
+    Call un.atomicRMDir
+    Pop $R0
+
+    ${if} $R0 != 0
+      DetailPrint "File is busy, aborting: $R0"
+
+      Push ""
+      Call un.restoreFiles
+      Pop $R0
+
+      Abort `Can't rename "$INSTDIR" to "$PLUGINSDIR\old-install".`
+    ${endif}
+  ${endif}
+
+  RMDir /r $INSTDIR
 !macroend
 
 

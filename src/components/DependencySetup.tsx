@@ -142,7 +142,7 @@ export function DependencySetup({
     try {
       const drivePath =
         platform === "win32" && canChooseInstallDrive
-          ? `${selectedDrive}:\\OpenFork\\wsl`
+          ? `${selectedDrive}:\\OpenForkEngine\\wsl`
           : undefined;
       const result = await window.electronAPI.installEngine(drivePath);
       if (result?.error !== "cancelled") {
@@ -225,8 +225,8 @@ export function DependencySetup({
             System Setup
           </h1>
           <p className="text-muted-foreground">
-            OpenFork requires its local AI engine and an NVIDIA GPU to run
-            workflows on your machine.
+            OpenFork requires Docker and an NVIDIA GPU to run workflows on your
+            machine.
           </p>
         </div>
 
@@ -240,11 +240,11 @@ export function DependencySetup({
                   ? "border-amber-500/50 bg-amber-500/10 backdrop-blur-xl shadow-2xl shadow-amber-500/10"
                   : isInstallStateFromMain
                     ? "border-amber-500/50 bg-amber-500/10"
-                  : status?.docker.installed
-                    ? "border-yellow-500/50 bg-yellow-500/5"
-                    : status?.docker.error === "WSL_DISTRO_MISSING"
+                    : status?.docker.installed
                       ? "border-yellow-500/50 bg-yellow-500/5"
-                      : "border-amber-500/50 bg-amber-500/5"
+                      : status?.docker.error === "WSL_DISTRO_MISSING"
+                        ? "border-yellow-500/50 bg-yellow-500/5"
+                        : "border-amber-500/50 bg-amber-500/5"
             }`}
           >
             <CardHeader className="pb-2">
@@ -316,34 +316,36 @@ export function DependencySetup({
                         WSL. Keep this window open while setup finishes.
                       </p>
                     </div>
-                  ) : !isInstalling && (
-                    <div className="space-y-1">
-                      {!status?.docker.isNative &&
-                        (isWindows ? (
-                          <>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
-                              {wslDistroExists
-                                ? "Docker setup incomplete"
-                                : "OpenFork Ubuntu not installed"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {wslDistroExists
-                                ? "The OpenFork Ubuntu distro was created but Docker did not finish installing. Click Repair to retry."
-                                : "OpenFork will install its own Ubuntu distro and Docker runtime automatically."}
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
-                              Docker not found
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Docker is required to run OpenFork.
-                              {" It will be installed automatically."}
-                            </p>
-                          </>
-                        ))}
-                    </div>
+                  ) : (
+                    !isInstalling && (
+                      <div className="space-y-1">
+                        {!status?.docker.isNative &&
+                          (isWindows ? (
+                            <>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
+                                {wslDistroExists
+                                  ? "Docker setup incomplete"
+                                  : "OpenFork Ubuntu not installed"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {wslDistroExists
+                                  ? "The OpenFork Ubuntu distro was created but Docker did not finish installing. Click Repair to retry."
+                                  : "OpenFork will install its own Ubuntu distro and Docker runtime automatically."}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-white/90">
+                                Docker not found
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Docker is required to run OpenFork.
+                                {" It will be installed automatically."}
+                              </p>
+                            </>
+                          ))}
+                      </div>
+                    )
                   )}
 
                   {/* Drive selector — Windows only, hidden on Linux */}
@@ -400,29 +402,29 @@ export function DependencySetup({
                   {!isInstalling &&
                     !isInstallStateFromMain &&
                     !status?.docker.isNative && (
-                    <Button
-                      onClick={handleInstallEngine}
-                      className="w-full mt-2 relative overflow-hidden group"
-                      disabled={status?.docker.isStarting}
-                    >
-                      {!status?.docker.installed && !wslDistroExists ? (
-                        <>
-                          <Download className="h-3.5 w-3.5 mr-2" />
-                          {isWindows
-                            ? "Install OpenFork Ubuntu"
-                            : "Install Local AI Engine"}
-                        </>
-                      ) : (
-                        <>
-                          <Download className="h-3.5 w-3.5 mr-2" />
-                          {isWindows
-                            ? "Repair OpenFork Ubuntu"
-                            : "Install Local AI Engine"}
-                        </>
-                      )}
-                      <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                    </Button>
-                  )}
+                      <Button
+                        onClick={handleInstallEngine}
+                        className="w-full mt-2 relative overflow-hidden group"
+                        disabled={status?.docker.isStarting}
+                      >
+                        {!status?.docker.installed && !wslDistroExists ? (
+                          <>
+                            <Download className="h-3.5 w-3.5 mr-2" />
+                            {isWindows
+                              ? "Install OpenFork Ubuntu"
+                              : "Install Local AI Engine"}
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-3.5 w-3.5 mr-2" />
+                            {isWindows
+                              ? "Repair OpenFork Ubuntu"
+                              : "Install Local AI Engine"}
+                          </>
+                        )}
+                        <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                      </Button>
+                    )}
 
                   {/* Progress UI — shown while installing */}
                   {isInstalling && (

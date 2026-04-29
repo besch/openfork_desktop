@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useClientStore } from "./store";
 import type { Session } from "@supabase/supabase-js";
+import { supabase } from "@/supabase";
 import type { DependencyStatus } from "./types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dashboard } from "@/components/Dashboard";
@@ -52,11 +53,13 @@ const TabTrigger = memo(
     label?: string;
     children?: ReactNode;
   }) => {
-    const dockerPullProgress = useClientStore(
-      (state) => state.dockerPullProgress,
-    );
-    const status = useClientStore((state) => state.status);
-    const stats = useClientStore((state) => state.stats);
+  const dockerPullProgress = useClientStore(
+    (state) => state.dockerPullProgress,
+  );
+  const dockerContainers = useClientStore(
+    (state) => state.dockerContainers,
+  );
+  const status = useClientStore((state) => state.status);
 
     const isDocker = value === "docker";
     const isDownloading =
@@ -64,7 +67,7 @@ const TabTrigger = memo(
       dockerPullProgress !== null &&
       (status === "starting" || status === "running");
     const isProcessing =
-      isDocker && status === "running" && stats.processing > 0;
+      isDocker && status === "running" && dockerContainers.length > 0;
     const hasActivity = isDownloading || isProcessing;
 
     return (
@@ -110,6 +113,10 @@ function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [, setForceRefreshKey] = useState(0);
   const [checkingDeps, setCheckingDeps] = useState(true);
+  const [profile, setProfile] = useState<{
+    username?: string;
+  } | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const handleLogout = () => {
     window.electronAPI.logout();
@@ -217,6 +224,50 @@ function App() {
     };
   }, [checkingDeps, dependencyStatus?.allReady]);
 
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!session?.user?.id) {
+        setProfile(null);
+        setAvatarUrl(null);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", session.user.id)
+          .single();
+        if (error) {
+          console.error("Failed to fetch profile:", error);
+          setProfile(null);
+        } else {
+          setProfile(data);
+        }
+
+        const { data: avatarAsset, error: avatarError } = await supabase
+          .from("assets")
+          .select("storage_path, bucket")
+          .eq("owner_id", session.user.id)
+          .eq("asset_type", "user_avatar")
+          .single();
+
+        if (!avatarError && avatarAsset) {
+          const { data: signedData } = await supabase.storage
+            .from(avatarAsset.bucket)
+            .createSignedUrl(avatarAsset.storage_path, 3600);
+          setAvatarUrl(signedData?.signedUrl ?? null);
+        } else {
+          setAvatarUrl(null);
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        setProfile(null);
+        setAvatarUrl(null);
+      }
+    };
+    fetchProfile();
+  }, [session]);
+
   // Show loading while checking dependencies
   if (checkingDeps) {
     return (
@@ -254,8 +305,7 @@ function App() {
     return <Auth />;
   }
 
-  // Derive avatar initials from email
-  const avatarInitial = session.user.email?.[0]?.toUpperCase() ?? "?";
+  const avatarInitial = (profile?.username ?? session.user.email)?.[0]?.toUpperCase() ?? "?";
 
   return (
     <>
@@ -287,9 +337,21 @@ function App() {
             {/* Status dot + avatar profile menu */}
             <div className="relative z-10 flex items-center gap-4">
               <Popover>
-                <PopoverTrigger asChild>
-                  <Button>{avatarInitial}</Button>
-                </PopoverTrigger>
+              <PopoverTrigger asChild>
+                {avatarUrl ? (
+                  <button className="h-8 w-8 rounded-full border border-white/20 overflow-hidden hover:border-white/40 transition-colors">
+                    <img
+                      src={avatarUrl}
+                      alt="User avatar"
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ) : (
+                  <Button className="h-8 w-8 rounded-full p-0 text-sm font-bold">
+                    {avatarInitial}
+                  </Button>
+                )}
+              </PopoverTrigger>
                 <PopoverContent
                   align="end"
                   className="w-56 p-2 bg-surface-secondary/95 backdrop-blur-xl border-white/10 shadow-3xl"
@@ -298,9 +360,20 @@ function App() {
                     <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-1">
                       Signed in as
                     </p>
-                    <p className="text-xs font-semibold text-white truncate">
-                      {session.user.email}
-                    </p>
+                    {profile?.username ? (
+                      <>
+                        <p className="text-xs font-semibold text-white truncate">
+                          {profile.username}
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate mt-0.5">
+                          {session.user.email}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs font-semibold text-white truncate">
+                        {session.user.email}
+                      </p>
+                    )}
                   </div>
                   <div className="h-px bg-white/5 my-2" />
                   <button

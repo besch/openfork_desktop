@@ -30,7 +30,10 @@ const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
  */
 async function ensureDockerRouting() {
   const now = Date.now();
-  if (_cachedRoutingResult && now - _cachedRoutingTimestamp < ROUTING_CACHE_TTL_MS) {
+  if (
+    _cachedRoutingResult &&
+    now - _cachedRoutingTimestamp < ROUTING_CACHE_TTL_MS
+  ) {
     return _cachedRoutingResult;
   }
   const status = await dockerEngine.resolveDockerStatus({
@@ -59,7 +62,11 @@ async function checkDockerUpdates() {
     // Detect active-engine changes and notify the renderer so DockerManagement
     // can refresh without waiting for the user to click the refresh button.
     const nextEngine = dockerStatus.activeEngine ?? null;
-    if (nextEngine && _lastKnownActiveEngine && nextEngine !== _lastKnownActiveEngine) {
+    if (
+      nextEngine &&
+      _lastKnownActiveEngine &&
+      nextEngine !== _lastKnownActiveEngine
+    ) {
       console.log(
         `Docker engine switched: ${_lastKnownActiveEngine} → ${nextEngine}`,
       );
@@ -70,8 +77,28 @@ async function checkDockerUpdates() {
     }
     if (nextEngine) _lastKnownActiveEngine = nextEngine;
 
+    // Always try to list containers via WSL — the command runs inside the
+    // distro where Docker is reachable even when the Windows→WSL TCP API
+    // (port 2375) is flaky.  Only clear containers when the listing itself
+    // confirms zero containers AND the status check agrees Docker is down.
+    let containersOutput = "";
+    try {
+      containersOutput = await dockerEngine.execDockerCommand(
+        'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
+      );
+    } catch (e) {
+      console.warn(`Failed to get container list: ${e?.message || e}`);
+      containersOutput = "";
+    }
+
     if (!dockerStatus.running) {
-      dockerMonitorConsecutiveFailures++;
+      // If containers were found inside WSL, trust the listing over the
+      // TCP-based status check and reset the failure counter.
+      if (containersOutput && containersOutput.trim().length > 0) {
+        dockerMonitorConsecutiveFailures = 0;
+      } else {
+        dockerMonitorConsecutiveFailures++;
+      }
 
       if (
         process.platform === "win32" &&
@@ -82,8 +109,8 @@ async function checkDockerUpdates() {
         });
       }
 
-      // Only clear the display after consecutive failures to avoid
-      // transient WSL Docker API timeouts from flickering the UI.
+      // Only clear the display after consecutive failures with empty listings
+      // to avoid transient WSL Docker API timeouts from flickering the UI.
       if (dockerMonitorConsecutiveFailures >= DOCKER_MONITOR_MAX_FAILURES) {
         if (lastContainersJson !== "") {
           lastContainersJson = "";
@@ -98,16 +125,41 @@ async function checkDockerUpdates() {
           `Docker monitor: not running (${dockerMonitorConsecutiveFailures}/${DOCKER_MONITOR_MAX_FAILURES} failures, error: ${dockerStatus.error || "none"}). Keeping current display.`,
         );
       }
+
+      // Still send the container update if containers were found despite the
+      // status check failing — the containers ARE running inside WSL.
+      if (containersOutput && containersOutput !== lastContainersJson) {
+        lastContainersJson = containersOutput;
+        const containers = containersOutput
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => {
+            try {
+              const container = JSON.parse(line);
+              return {
+                id: container.ID,
+                name: container.Names,
+                image: container.Image,
+                status: container.Status,
+                state: container.State,
+                created: container.CreatedAt,
+              };
+            } catch (e) {
+              return null;
+            }
+          })
+          .filter(Boolean);
+        if (containers.length > 0) {
+          mainWindow.webContents.send("docker:containers-update", containers);
+        }
+      }
       return;
     }
 
     // Docker is running — reset the failure counter
     dockerMonitorConsecutiveFailures = 0;
 
-    // Check containers
-    const containersOutput = await dockerEngine.execDockerCommand(
-      'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
-    );
+    // Send container updates
     if (containersOutput !== lastContainersJson) {
       lastContainersJson = containersOutput;
       const containers = containersOutput
@@ -133,9 +185,15 @@ async function checkDockerUpdates() {
     }
 
     // Check images
-    const imagesOutput = await dockerEngine.execDockerCommand(
-      'docker images --format "{{json .}}"',
-    );
+    let imagesOutput = "";
+    try {
+      imagesOutput = await dockerEngine.execDockerCommand(
+        'docker images --format "{{json .}}"',
+      );
+    } catch (e) {
+      console.warn(`Failed to get image list: ${e?.message || e}`);
+      imagesOutput = "";
+    }
     if (imagesOutput !== lastImagesJson) {
       lastImagesJson = imagesOutput;
       const images = imagesOutput
@@ -157,13 +215,31 @@ async function checkDockerUpdates() {
         })
         .filter((img) => {
           if (!img) return false;
-          return `${img.repository}:${img.tag}`.toLowerCase().includes("openfork");
+          return `${img.repository}:${img.tag}`
+            .toLowerCase()
+            .includes("openfork");
         });
       mainWindow.webContents.send("docker:images-update", images);
     }
-  } catch {
-    // Silent fail for background monitor — count as a failure
+  } catch (e) {
+    console.warn(`Docker monitor update error: ${e?.message || e}`);
     dockerMonitorConsecutiveFailures++;
+
+    // Log diagnostics on repeated failures
+    if (dockerMonitorConsecutiveFailures === 1) {
+      console.info(
+        `Docker monitor failure #${dockerMonitorConsecutiveFailures}/${DOCKER_MONITOR_MAX_FAILURES} - ` +
+          `This is typically a transient WSL/sudo issue. Retrying...`,
+      );
+    } else if (
+      dockerMonitorConsecutiveFailures >= DOCKER_MONITOR_MAX_FAILURES
+    ) {
+      console.error(
+        `Docker monitor has failed ${dockerMonitorConsecutiveFailures} times. ` +
+          `This may indicate a WSL sudo configuration issue or Docker socket access problem. ` +
+          `ERNIE-Image processor will continue working if containers are already running.`,
+      );
+    }
   }
 }
 
@@ -182,10 +258,21 @@ function stopDockerMonitoring() {
   }
 }
 
+function isDockerMonitoringActive() {
+  return dockerMonitorInterval !== null;
+}
+
+function resetDockerRoutingCache() {
+  _cachedRoutingResult = null;
+  _cachedRoutingTimestamp = 0;
+}
+
 module.exports = {
   init,
   ensureDockerRouting,
   checkDockerUpdates,
   startDockerMonitoring,
   stopDockerMonitoring,
+  isDockerMonitoringActive,
+  resetDockerRoutingCache,
 };

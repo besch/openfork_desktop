@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loader } from "@/components/ui/loader";
+import { Modal } from "@/components/ui/modal";
+import { StorageSettings } from "@/components/StorageSettings";
 import {
   Trash2,
   X,
@@ -11,10 +13,10 @@ import {
   Container,
   Download,
   AlertTriangle,
+  Settings,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
-import { StorageSettings } from "./StorageSettings";
 import type { DockerImage, DockerContainer, DockerStatus } from "@/types";
 
 interface ConfirmDialogState {
@@ -50,23 +52,50 @@ export const DockerManagement = memo(() => {
     used_gb: string;
     free_gb: string;
     path: string;
-  } | null>(null);
-  const [showStorageSettings, setShowStorageSettings] = useState(false);
-  const [showCompactionBanner, setShowCompactionBanner] = useState(false);
-  const [compacting, setCompacting] = useState(false);
-  const [compactionResult, setCompactionResult] = useState<{
-    ok: boolean;
-    message: string;
+    engine_file_gb: string | null;
+    engine_file_path: string | null;
   } | null>(null);
   const [engineSwitchNotice, setEngineSwitchNotice] = useState<{
     from: string;
     to: string;
+  } | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [autoCompactStatus, setAutoCompactStatus] = useState<{
+    phase:
+      | "starting"
+      | "stopping_client"
+      | "compacting"
+      | "restarting_client"
+      | "completed"
+      | "failed";
+    compactInProgress: boolean;
+    platformSupported: boolean;
+    error?: string;
   } | null>(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
   );
   const status = useClientStore((state) => state.status);
+
+  const formatCreatedDate = (dateStr: string): string => {
+    const normalized = dateStr
+      .replace(/ (\+?\d{4}) [A-Z]+$/, " $1")
+      .replace(" ", "T");
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return dateStr;
+
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 1) return "today";
+    if (diffDays === 1) return "yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+    return `${Math.floor(diffDays / 365)} years ago`;
+  };
 
   const describeDockerState = useCallback((nextStatus: DockerStatus) => {
     if (nextStatus.error === "DOCKER_WINDOWS_CONTAINERS") {
@@ -94,33 +123,48 @@ export const DockerManagement = memo(() => {
     try {
       const nextDockerStatus = await window.electronAPI.checkDocker();
 
-      if (!nextDockerStatus.running) {
-        setImages([]);
-        setContainers([]);
-        setError(describeDockerState(nextDockerStatus));
-        const diskResult = await window.electronAPI.getDiskSpace();
-        if (diskResult.success) setDiskSpace(diskResult.data);
-        return;
-      }
-
-      const [imagesResult, containersResult, diskResult] = await Promise.all([
-        window.electronAPI.listDockerImages(),
+      // Always attempt to list containers — the listing command runs inside WSL
+      // where Docker is reachable even when the Windows→WSL TCP API (port 2375)
+      // is flaky.  Only skip image listing when the status check says Docker is
+      // down because image listing depends on the same routing.
+      const [containersResult, diskResult] = await Promise.all([
         window.electronAPI.listDockerContainers(),
         window.electronAPI.getDiskSpace(),
       ]);
 
-      if (imagesResult.success && imagesResult.data) {
-        setImages(imagesResult.data);
-      } else {
-        setError(imagesResult.error || "Failed to fetch images");
+      const hasRunningContainers =
+        containersResult.success &&
+        containersResult.data &&
+        containersResult.data.length > 0;
+
+      if (!nextDockerStatus.running && !hasRunningContainers) {
+        setImages([]);
+        setContainers([]);
+        useClientStore.getState().setDockerContainers([]);
+        setError(describeDockerState(nextDockerStatus));
+        if (diskResult.success) setDiskSpace(diskResult.data);
+        return;
       }
 
+      // Docker is running (or containers were found despite status check flakiness).
       if (containersResult.success && containersResult.data) {
         setContainers(containersResult.data);
+        useClientStore.getState().setDockerContainers(containersResult.data);
       }
 
       if (diskResult.success) {
         setDiskSpace(diskResult.data);
+      }
+
+      if (nextDockerStatus.running) {
+        const imagesResult = await window.electronAPI.listDockerImages();
+        if (imagesResult.success && imagesResult.data) {
+          setImages(imagesResult.data);
+        } else {
+          setError(imagesResult.error || "Failed to fetch images");
+        }
+      } else {
+        setImages([]);
       }
     } catch (err) {
       setError(
@@ -153,20 +197,27 @@ export const DockerManagement = memo(() => {
     return cleanup;
   }, []);
 
-  // Listen for WSL VHDX compaction suggestions emitted after image deletion
-  useEffect(() => {
-    const cleanup = window.electronAPI.onCompactionSuggested(() => {
-      setShowCompactionBanner(true);
-      setCompactionResult(null);
-    });
-    return cleanup;
-  }, []);
-
   // Auto-refresh when the active Docker engine changes.
   useEffect(() => {
     const cleanup = window.electronAPI.onEngineSwitch((data) => {
       setEngineSwitchNotice(data);
       fetchData();
+    });
+    return cleanup;
+  }, [fetchData]);
+
+  // Listen for auto-compact status updates (Windows only).
+  useEffect(() => {
+    const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
+      setAutoCompactStatus(() => {
+        if (status.phase === "completed" || status.phase === "failed") {
+          setTimeout(() => setAutoCompactStatus(null), 8000);
+        }
+        return status;
+      });
+      if (status.phase === "completed") {
+        fetchData();
+      }
     });
     return cleanup;
   }, [fetchData]);
@@ -318,10 +369,7 @@ export const DockerManagement = memo(() => {
   const isDownloading =
     dockerPullProgress !== null &&
     (status === "starting" || status === "running");
-  const engineLabel =
-    platform === "linux"
-      ? "Linux Docker"
-      : "OpenFork Ubuntu";
+  const engineLabel = platform === "linux" ? "Linux Docker" : "OpenFork Ubuntu";
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -369,6 +417,79 @@ export const DockerManagement = memo(() => {
         </motion.div>
       )}
 
+      {autoCompactStatus?.compactInProgress && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-500/10 border border-amber-500/30 text-white rounded-lg p-4 flex items-center gap-3 shadow-lg"
+        >
+          <Loader size="sm" variant="primary" className="shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
+              Auto-Compact:{" "}
+              <span className="text-white">
+                {autoCompactStatus.phase === "stopping_client"
+                  ? "Pausing client..."
+                  : autoCompactStatus.phase === "compacting"
+                    ? "Shrinking VHDX..."
+                    : autoCompactStatus.phase === "restarting_client"
+                      ? "Restarting client..."
+                      : "Preparing..."}
+              </span>
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {autoCompactStatus?.phase === "completed" &&
+        !autoCompactStatus.compactInProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-emerald-500/10 border border-emerald-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <HardDrive className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
+                Auto-Compact complete — disk space reclaimed
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAutoCompactStatus(null)}
+              className="text-emerald-300 hover:bg-emerald-500/20 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        )}
+
+      {autoCompactStatus?.phase === "failed" &&
+        !autoCompactStatus.compactInProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-destructive/10 border border-destructive/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-widest text-destructive">
+                Auto-Compact failed:{" "}
+                {autoCompactStatus.error || "Unknown error"}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAutoCompactStatus(null)}
+              className="text-destructive hover:bg-destructive/20 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        )}
+
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -389,95 +510,6 @@ export const DockerManagement = memo(() => {
             <X className="h-4 w-4" />
           </Button>
         </motion.div>
-      )}
-
-      {/* WSL VHDX compaction banner — shown after image deletion in WSL Docker mode */}
-      {showCompactionBanner && (
-        <Card className="bg-amber-500/10 border-amber-500/30">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-4">
-              <HardDrive className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-1">
-                <p className="text-sm font-semibold text-amber-300">
-                  Reclaim physical disk space
-                </p>
-                <p className="text-xs text-amber-300/70">
-                  Docker images were removed but the WSL disk file (VHDX)
-                  doesn't shrink automatically. Compact it to recover space on
-                  Windows. This requires stopping the engine and UAC elevation.
-                </p>
-                {compactionResult && (
-                  <p
-                    className={`text-[10px] font-black uppercase tracking-widest ${compactionResult.ok ? "text-emerald-400" : "text-red-400"}`}
-                  >
-                    {compactionResult.message}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-amber-500/40 text-amber-300 hover:bg-amber-500/20 text-xs h-8"
-                  disabled={compacting}
-                  onClick={async () => {
-                    setCompacting(true);
-                    setCompactionResult(null);
-                    const result = await window.electronAPI.reclaimDiskSpace();
-                    setCompacting(false);
-                    if (result.success) {
-                      setCompactionResult({
-                        ok: true,
-                        message: "Compaction complete — space reclaimed.",
-                      });
-                      // Refresh disk space display
-                      const diskResult =
-                        await window.electronAPI.getDiskSpace();
-                      if (diskResult.success) setDiskSpace(diskResult.data);
-                    } else if (result.error === "CLIENT_RUNNING") {
-                      setCompactionResult({
-                        ok: false,
-                        message: result.message || "Stop the engine first.",
-                      });
-                    } else if (result.error === "NOT_WSL_MODE") {
-                      setCompactionResult({
-                        ok: false,
-                        message:
-                          "Not applicable — OpenFork Ubuntu is not active.",
-                      });
-                    } else {
-                      setCompactionResult({
-                        ok: false,
-                        message:
-                          result.message ||
-                          result.error ||
-                          "Compaction failed.",
-                      });
-                    }
-                  }}
-                >
-                  {compacting ? (
-                    <Loader size="xs" className="mr-1" />
-                  ) : (
-                    <HardDrive className="h-3 w-3 mr-1" />
-                  )}
-                  Compact Now
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 w-8 p-0 text-amber-300/60 hover:text-amber-300"
-                  onClick={() => {
-                    setShowCompactionBanner(false);
-                    setCompactionResult(null);
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Disk Space Error Alert */}
@@ -547,18 +579,35 @@ export const DockerManagement = memo(() => {
         <div className="flex items-center gap-3">
           {diskSpace && (
             <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 ${
+              className={`flex flex-col items-end gap-1 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 ${
                 diskSpaceError
                   ? "bg-destructive border border-destructive/50 text-white shadow-lg shadow-destructive/20"
                   : "bg-black/40 border border-amber-500/20 text-amber-500 shadow-lg shadow-amber-500/20"
               }`}
             >
-              <HardDrive className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-black tracking-widest uppercase">
-                {diskSpace.free_gb}GB / {diskSpace.total_gb}GB FREE
-              </span>
+              <div className="flex items-center gap-2">
+                <HardDrive className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-black tracking-widest uppercase">
+                  {diskSpace.free_gb}GB / {diskSpace.total_gb}GB FREE
+                </span>
+              </div>
+              {diskSpace.engine_file_gb && (
+                <span className="text-[9px] font-black tracking-widest uppercase opacity-70">
+                  VHDX {diskSpace.engine_file_gb}GB
+                </span>
+              )}
             </div>
           )}
+          <Button
+            variant="primary"
+            size="icon"
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Open Docker settings"
+            title="Open Docker settings"
+            className="rounded-lg shadow-lg shadow-primary/20"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -573,60 +622,16 @@ export const DockerManagement = memo(() => {
         </div>
       </header>
 
-      <Card className="group relative overflow-hidden transition-all duration-500 border-white/20 bg-surface/40 backdrop-blur-md shadow-lg">
-        {loading && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-300">
-            <Loader size="md" variant="primary" />
-          </div>
-        )}
-        <button
-          onClick={() => setShowStorageSettings(!showStorageSettings)}
-          className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-all duration-300 focus:outline-none relative z-10"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
-              <HardDrive className="h-4 w-4" />
-            </div>
-            <div className="text-left">
-              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
-                Storage & Engine Settings
-              </span>
-              <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5">
-                Configure Location & Performance
-              </p>
-            </div>
-          </div>
-          <motion.div
-            animate={{ rotate: showStorageSettings ? 0 : -90 }}
-            transition={{ duration: 0.3, ease: "anticipate" }}
-            className="text-white/20 group-hover:text-white transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </motion.div>
-        </button>
-        <motion.div
-          initial={false}
-          animate={{ height: showStorageSettings ? "auto" : 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="overflow-hidden"
-        >
-          <div className="p-4 pt-0 relative z-10 border-t border-white/5">
-            <StorageSettings onSettingsChanged={fetchData} />
-          </div>
-        </motion.div>
-      </Card>
+      <Modal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        title="Docker Settings"
+        description="Manage OpenFork Ubuntu storage, compaction, and engine location."
+        size="full"
+        scrollbarVariant="primary"
+      >
+        <StorageSettings compact embedded onSettingsChanged={fetchData} />
+      </Modal>
 
       {/* Download Progress Card */}
       {isDownloading && (
@@ -762,7 +767,7 @@ export const DockerManagement = memo(() => {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
               {actionLoading === "remove-all"
                 ? "Purging Repository..."
-                : "Surgically Removing Image..."}
+                : "Removing Image..."}
             </p>
           </div>
         )}
@@ -814,7 +819,7 @@ export const DockerManagement = memo(() => {
                         {image.size}
                       </span>
                       <span className="opacity-30">•</span>
-                      {image.created}
+                      {formatCreatedDate(image.created)}
                     </p>
                   </div>
                   <Button

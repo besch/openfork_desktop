@@ -22,6 +22,7 @@ const dockerMonitor = require("./src/docker-monitor.cjs");
 const engineInstall = require("./src/engine-install.cjs");
 const ipcDocker = require("./src/ipc-docker.cjs");
 const ipcDeps = require("./src/ipc-deps.cjs");
+const { AutoCompactManager } = require("./src/auto-compact-manager.cjs");
 
 function execFilePromise(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -30,6 +31,61 @@ function execFilePromise(command, args, options = {}) {
       resolve();
     });
   });
+}
+
+/**
+ * PATCH /api/dgn/provider/config to flip the transient `paused_for_compaction`
+ * flag. Called by AutoCompactManager around its compaction window so the
+ * orchestrator skips this provider while Python is briefly offline.
+ */
+async function setProviderPausedForCompaction(providerId, paused) {
+  if (!providerId) return { success: false, error: "Missing providerId" };
+  if (!session) return { success: false, error: "Not authenticated" };
+
+  return new Promise((resolve) => {
+    const url = `${ORCHESTRATOR_API_URL}/api/dgn/provider/config?providerId=${encodeURIComponent(
+      providerId,
+    )}`;
+    const request = net.request({ method: "PATCH", url });
+    request.setHeader("Authorization", `Bearer ${session.access_token}`);
+    request.setHeader("Content-Type", "application/json");
+    let body = "";
+    request.on("response", (response) => {
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
+      response.on("end", () => {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          parsed = { success: response.statusCode < 400 };
+        }
+        if (response.statusCode >= 400) {
+          resolve({
+            success: false,
+            error: parsed?.error || `HTTP ${response.statusCode}`,
+          });
+        } else {
+          resolve({ success: true, data: parsed });
+        }
+      });
+    });
+    request.on("error", (err) => {
+      resolve({ success: false, error: err.message });
+    });
+    request.write(JSON.stringify({ paused_for_compaction: !!paused }));
+    request.end();
+  });
+}
+
+function mapCleanupPolicy(routingConfig) {
+  if (routingConfig?.monetizeMode) return "monetize";
+  const mode = routingConfig?.communityMode || "none";
+  if (mode === "none") return "mine";
+  if (mode === "all") return "all";
+  if (mode === "trusted_projects") return "project";
+  return "users";
 }
 
 async function tryLinuxFallbackOpen(url) {
@@ -67,7 +123,9 @@ async function openExternal(url) {
         stdio: "ignore",
         env: process.env,
       });
-      console.log(`Opened URL in Windows host browser via explorer.exe: ${url}`);
+      console.log(
+        `Opened URL in Windows host browser via explorer.exe: ${url}`,
+      );
       return;
     } catch (err) {
       console.warn(
@@ -82,7 +140,9 @@ async function openExternal(url) {
       await tryLinuxFallbackOpen(url);
       return;
     } catch (err) {
-      console.warn(`Linux fallback opener failed; trying shell.openExternal: ${err.message}`);
+      console.warn(
+        `Linux fallback opener failed; trying shell.openExternal: ${err.message}`,
+      );
     }
   }
 
@@ -230,6 +290,7 @@ let session = null;
 let pythonManager;
 let scheduleManager;
 let cleanupManager;
+let autoCompactManager;
 let isQuittingApp = false;
 let pendingClientStart = null;
 
@@ -255,24 +316,26 @@ ipcDeps.init({
 });
 
 // Listen for auth events to keep the session fresh
-supabase.auth.onAuthStateChange((event, newSession) => {
-  console.log(`Supabase auth event: ${event}`);
-  session = newSession;
+const { data: authStateSubscription } = supabase.auth.onAuthStateChange(
+  (event, newSession) => {
+    console.log(`Supabase auth event: ${event}`);
+    session = newSession;
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("auth:session", session);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("auth:session", session);
 
-    if (
-      event === "SIGNED_OUT" ||
-      (event === "TOKEN_REFRESHED" && !newSession)
-    ) {
-      console.warn(
-        "Authentication state changed to unauthenticated, forcing UI refresh",
-      );
-      mainWindow.webContents.send("auth:force-refresh");
+      if (
+        event === "SIGNED_OUT" ||
+        (event === "TOKEN_REFRESHED" && !newSession)
+      ) {
+        console.warn(
+          "Authentication state changed to unauthenticated, forcing UI refresh",
+        );
+        mainWindow.webContents.send("auth:force-refresh");
+      }
     }
-  }
-});
+  },
+);
 
 // --- AUTHENTICATION ---
 
@@ -376,38 +439,6 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  // --- AUTO UPDATER ---
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on("update-available", (info) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:available", info);
-    }
-  });
-
-  autoUpdater.on("download-progress", (progressObj) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:progress", progressObj);
-    }
-  });
-
-  autoUpdater.on("update-downloaded", (info) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:downloaded", info);
-    }
-  });
-
-  autoUpdater.on("error", (err) => {
-    console.error("AutoUpdater error:", err);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update:error", {
-        message: err.message || "Update failed",
-        code: err.code || "UNKNOWN_ERROR",
-      });
-    }
-  });
-
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
@@ -444,6 +475,13 @@ function createWindow() {
         cleanupManager.notifyJobEnd(payload.service_type);
       }
     },
+    onImageEvicted: (payload) => {
+      if (cleanupManager) cleanupManager.notifyImageEvicted(payload);
+      if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);
+    },
+    onProviderRegistered: (providerId) => {
+      if (autoCompactManager) autoCompactManager.setCurrentProviderId(providerId);
+    },
   });
 
   scheduleManager = new ScheduleManager({ pythonManager, store, mainWindow });
@@ -452,11 +490,21 @@ function createWindow() {
   cleanupManager = new DockerCleanupManager({
     store,
     mainWindow,
-    execDockerCommand: dockerEngine.execDockerCommand,
   });
   if (cleanupManager.isEnabled()) {
     cleanupManager.startMonitoring();
   }
+
+  autoCompactManager = new AutoCompactManager({
+    app,
+    store,
+    mainWindow,
+    pythonManager,
+    dockerEngine,
+    dockerMonitor,
+    wslUtils,
+    setProviderPausedForCompaction: setProviderPausedForCompaction,
+  });
 
   mainWindow.on("close", (event) => {
     if (pythonManager && !pythonManager.isQuitting) {
@@ -478,6 +526,40 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:5173");
   }
 }
+
+// --- AUTO UPDATER ---
+// Registered once at startup so listeners don't accumulate if createWindow()
+// is called again (e.g. macOS activate with no open windows).
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on("update-available", (info) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:available", info);
+  }
+});
+
+autoUpdater.on("download-progress", (progressObj) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:progress", progressObj);
+  }
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:downloaded", info);
+  }
+});
+
+autoUpdater.on("error", (err) => {
+  console.error("AutoUpdater error:", err);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:error", {
+      message: err.message || "Update failed",
+      code: err.code || "UNKNOWN_ERROR",
+    });
+  }
+});
 
 app.whenReady().then(() => {
   registerAppImageProtocolHandler();
@@ -506,6 +588,17 @@ app.on("before-quit", async (event) => {
   isQuittingApp = true;
   if (pythonManager) {
     pythonManager.isQuitting = true;
+  }
+
+  // Release the Supabase auth subscription so its internal timers don't
+  // keep the event loop alive after we asked the app to quit.
+  try {
+    authStateSubscription?.subscription?.unsubscribe?.();
+  } catch (err) {
+    console.warn(
+      "Failed to unsubscribe Supabase auth listener:",
+      err?.message || err,
+    );
   }
 
   if (!pythonManager || !pythonManager.isRunning()) {
@@ -600,10 +693,7 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
     await pythonManager.start(service, routingConfig);
 
     if (cleanupManager) {
-      const mode = routingConfig?.communityMode || "none";
-      const legacyPolicy =
-        mode === "none" ? "mine" : mode === "all" ? "all" : "users";
-      cleanupManager.updatePolicy(legacyPolicy);
+      cleanupManager.updatePolicy(mapCleanupPolicy(routingConfig));
     }
   })().finally(() => {
     pendingClientStart = null;
@@ -623,13 +713,32 @@ ipcMain.handle(
       request.setHeader("Content-Type", "application/json");
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
+          let result;
           try {
-            resolve(JSON.parse(body));
+            result = JSON.parse(body);
           } catch {
-            resolve({ success: response.statusCode < 400 });
+            result = { success: response.statusCode < 400 };
           }
+
+          if (typeof result !== "object" || result === null) {
+            result = { success: response.statusCode < 400 };
+          }
+          if (result.success === undefined) {
+            result.success = response.statusCode < 400;
+          }
+
+          if (result.success && pythonManager) {
+            pythonManager.updateRoutingConfig(routingConfig);
+            if (cleanupManager) {
+              cleanupManager.updatePolicy(mapCleanupPolicy(routingConfig));
+            }
+          }
+
+          resolve(result);
         });
       });
       request.on("error", (err) => {
@@ -706,7 +815,9 @@ function makeAuthenticatedPostRequest(url) {
     request.setHeader("Content-Type", "application/json");
     let body = "";
     request.on("response", (response) => {
-      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
       response.on("end", () => {
         try {
           resolve(JSON.parse(body));
@@ -757,7 +868,9 @@ ipcMain.handle("monetize:get-provider-rate", async () => {
     request.setHeader("Authorization", `Bearer ${session.access_token}`);
     let body = "";
     request.on("response", (response) => {
-      response.on("data", (chunk) => { body += chunk.toString(); });
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
       response.on("end", () => {
         try {
           resolve(JSON.parse(body));
@@ -784,7 +897,9 @@ ipcMain.handle(
       request.setHeader("Content-Type", "application/json");
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           try {
             resolve(JSON.parse(body));
@@ -896,6 +1011,36 @@ ipcMain.handle("schedule:get-idle-time", () => {
   return powerMonitor.getSystemIdleTime();
 });
 
+// --- AUTO-COMPACT MANAGER IPC HANDLERS ---
+
+ipcMain.handle("auto-compact:get-status", () => {
+  if (!autoCompactManager) {
+    return { enabled: false, platformSupported: process.platform === "win32" };
+  }
+  return autoCompactManager.getStatus();
+});
+
+ipcMain.handle("auto-compact:set-enabled", (event, enabled) => {
+  if (autoCompactManager) {
+    autoCompactManager.setEnabled(!!enabled);
+  }
+  return { success: true };
+});
+
+ipcMain.handle("auto-compact:set-threshold-gb", (event, gb) => {
+  if (autoCompactManager) {
+    const bytes = Math.max(1, Number(gb) || 0) * 1024 ** 3;
+    autoCompactManager.setThresholdBytes(bytes);
+  }
+  return { success: true };
+});
+
+ipcMain.on("auto-compact:notify-manual-compact", () => {
+  if (autoCompactManager) {
+    autoCompactManager.notifyManualCompactCompleted();
+  }
+});
+
 // --- SEARCH & CONFIG IPC HANDLERS ---
 
 ipcMain.handle("search:users", async (event, term) => {
@@ -908,16 +1053,23 @@ ipcMain.handle("search:users", async (event, term) => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Search users failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Search users failed with status ${response.statusCode}: ${body}`,
+            );
           }
           try {
             resolve(JSON.parse(body));
           } catch (e) {
             console.error("Failed to parse search users response:", e);
-            resolve({ success: false, error: "Failed to parse server response." });
+            resolve({
+              success: false,
+              error: "Failed to parse server response.",
+            });
           }
         });
       });
@@ -929,7 +1081,10 @@ ipcMain.handle("search:users", async (event, term) => {
     });
   } catch (error) {
     console.error("Error searching users:", error);
-    return { success: false, error: "An unexpected error occurred during search." };
+    return {
+      success: false,
+      error: "An unexpected error occurred during search.",
+    };
   }
 });
 
@@ -943,16 +1098,23 @@ ipcMain.handle("search:projects", async (event, term) => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Search projects failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Search projects failed with status ${response.statusCode}: ${body}`,
+            );
           }
           try {
             resolve(JSON.parse(body));
           } catch (e) {
             console.error("Failed to parse search projects response:", e);
-            resolve({ success: false, error: "Failed to parse server response." });
+            resolve({
+              success: false,
+              error: "Failed to parse server response.",
+            });
           }
         });
       });
@@ -964,7 +1126,10 @@ ipcMain.handle("search:projects", async (event, term) => {
     });
   } catch (error) {
     console.error("Error searching projects:", error);
-    return { success: false, error: "An unexpected error occurred during search." };
+    return {
+      success: false,
+      error: "An unexpected error occurred during search.",
+    };
   }
 });
 
@@ -975,10 +1140,14 @@ ipcMain.handle("fetch:config", async () => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Fetch config failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Fetch config failed with status ${response.statusCode}: ${body}`,
+            );
             resolve({});
             return;
           }
@@ -1010,10 +1179,14 @@ ipcMain.handle("search:general", async (event, query) => {
     return new Promise((resolve) => {
       let body = "";
       request.on("response", (response) => {
-        response.on("data", (chunk) => { body += chunk.toString(); });
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
         response.on("end", () => {
           if (response.statusCode !== 200) {
-            console.error(`Search general failed with status ${response.statusCode}: ${body}`);
+            console.error(
+              `Search general failed with status ${response.statusCode}: ${body}`,
+            );
             resolve([]);
             return;
           }

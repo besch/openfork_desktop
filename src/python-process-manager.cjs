@@ -5,7 +5,7 @@ const { app } = require("electron");
 const http = require("http");
 
 class PythonProcessManager {
-  constructor({ supabase, mainWindow, userDataPath, onJobEvent }) {
+  constructor({ supabase, mainWindow, userDataPath, onJobEvent, onImageEvicted, onProviderRegistered }) {
     this.pythonProcess = null;
     this.shutdownServerPort = 8000;
     this.supabase = supabase;
@@ -15,6 +15,8 @@ class PythonProcessManager {
     this.authSubscription = null;
     this.currentDownloadImage = null; // Track current download to prevent race conditions
     this.onJobEvent = onJobEvent || null; // Optional callback for job events (used by DockerCleanupManager)
+    this.onImageEvicted = onImageEvicted || null; // Optional callback for IMAGE_EVICTED events (auto-compact + cleanup UI)
+    this.onProviderRegistered = onProviderRegistered || null; // Optional callback when Python reports its provider_id
 
     // Auth refresh debouncing
     this._lastRefreshAttempt = 0;
@@ -24,15 +26,37 @@ class PythonProcessManager {
     // Restart settings (stored when start() is called)
     this._lastService = null;
     this._lastRoutingConfig = null;
-    
+
     // Cleanup synchronization
     this._cleanupPromise = null;
+
+    // Idle predicates: number of jobs currently in flight as reported by Python.
+    // Used by AutoCompactManager to gate compaction on a fully idle window.
+    this._activeJobIds = new Set();
 
     this._listenForTokenRefresh();
   }
 
   isRunning() {
     return this.pythonProcess !== null;
+  }
+
+  /** True if Python has reported a JOB_START with no matching JOB_COMPLETE/FAILED/CLEARED yet. */
+  hasActiveJob() {
+    return this._activeJobIds.size > 0;
+  }
+
+  /** True if a Docker image download is currently in flight. */
+  hasQueuedDownloads() {
+    return this.currentDownloadImage !== null;
+  }
+
+  getLastRoutingConfig() {
+    return this._lastRoutingConfig;
+  }
+
+  getLastService() {
+    return this._lastService;
   }
 
   async cleanupRogueProcesses() {
@@ -44,31 +68,43 @@ class PythonProcessManager {
     this._cleanupPromise = new Promise((resolve) => {
       const platform = process.platform;
       const marker = "openfork_dgn_client_v1_marker";
-      
+
       console.log("Cleaning up potential rogue client processes...");
 
-      if (platform === "win32") {
-        // Use PowerShell to find processes by our unique command line marker
-        const psCommand = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
-        exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, (error) => {
-            // It's not really an error if no processes were found
-            setTimeout(() => {
-                this._cleanupPromise = null;
-                resolve();
-            }, 500);
-        });
-      } else {
-        // Unix (Linux/macOS) cleanup using pgrep and kill
-        // We look for the marker in the full command line
-        const cmd = `pgrep -af "${marker}" | awk '{print $1}' | xargs -r kill -9`;
-        exec(cmd, (error) => {
-            // Small delay to let OS release locks
-            setTimeout(() => {
-                this._cleanupPromise = null;
-                resolve();
-            }, 500);
-        });
-      }
+      // Hard cap so a hung shell can't block us forever; the next start() must
+      // proceed even if cleanup didn't fully confirm. 8s is generous for both
+      // PowerShell startup on Windows and pgrep+kill on Unix.
+      const HARD_TIMEOUT_MS = 8000;
+      // Brief grace after the kill returns so the OS can release pipes/locks
+      // before the next Python process spawns.
+      const POST_KILL_GRACE_MS = 200;
+
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        this._cleanupPromise = null;
+        resolve();
+      };
+
+      const hardTimer = setTimeout(() => {
+        if (!settled) {
+          console.warn(
+            `Rogue process cleanup did not return within ${HARD_TIMEOUT_MS}ms — proceeding anyway.`
+          );
+          finish();
+        }
+      }, HARD_TIMEOUT_MS);
+
+      const cmd = platform === "win32"
+        ? `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"`
+        : `pgrep -af "${marker}" | awk '{print $1}' | xargs -r kill -9`;
+
+      exec(cmd, (error) => {
+        // Non-zero exit just means no matching processes; not an error condition.
+        setTimeout(finish, POST_KILL_GRACE_MS);
+      });
     });
 
     return this._cleanupPromise;
@@ -171,6 +207,66 @@ class PythonProcessManager {
       console.error("Error writing to Python process stdin:", error);
     }
   }
+
+  _buildRoutingConfigPayload(routingConfig) {
+    const rc = routingConfig || {};
+    return {
+      process_own_jobs: rc.processOwnJobs ?? false,
+      community_mode: rc.communityMode ?? "none",
+      allowed_ids: Array.isArray(rc.trustedIds) ? rc.trustedIds : [],
+      monetize_mode: rc.monetizeMode ?? false,
+    };
+  }
+
+  updateRoutingConfig(routingConfig) {
+    this._lastRoutingConfig = routingConfig;
+
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.warn(
+        "Cannot update routing config: Python process not running or stdin not writable.",
+      );
+      return false;
+    }
+
+    const command = {
+      type: "UPDATE_ROUTING_CONFIG",
+      payload: this._buildRoutingConfigPayload(routingConfig),
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Sent routing config update command to Python process.");
+      return true;
+    } catch (error) {
+      console.error("Error writing routing config update to Python stdin:", error);
+      return false;
+    }
+  }
+
+  setCompactionPending(pending) {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.warn(
+        "Cannot update compaction state: Python process not running or stdin not writable.",
+      );
+      return false;
+    }
+
+    const command = {
+      type: "SET_COMPACTION_PENDING",
+      payload: {
+        pending: !!pending,
+      },
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log(`Sent compaction_pending=${!!pending} to Python process.`);
+      return true;
+    } catch (error) {
+      console.error("Error writing compaction state to Python stdin:", error);
+      return false;
+    }
+  }
   
   cancelDownload(serviceType) {
     if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
@@ -261,6 +357,10 @@ class PythonProcessManager {
     if (this.pythonProcess) {
       console.log("Python process is already running.");
       return;
+    }
+
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("openfork_client:provider-id", null);
     }
 
     // Wait for any pending cleanup to complete before starting
@@ -386,9 +486,18 @@ class PythonProcessManager {
             );
             (async () => {
               try {
-                // Force a refresh since the client reported the current token is invalid
+                // Hard timeout so a stuck refresh (network stall, never-resolving
+                // promise) cannot leave _refreshInProgress=true forever, which would
+                // silently swallow every future AUTH_EXPIRED signal.
+                const refreshPromise = this.supabase.auth.refreshSession();
+                const timeoutPromise = new Promise((_, reject) =>
+                  setTimeout(
+                    () => reject(new Error("auth refresh timed out after 15s")),
+                    15000
+                  )
+                );
                 const { data: freshData, error: refreshError } =
-                  await this.supabase.auth.refreshSession();
+                  await Promise.race([refreshPromise, timeoutPromise]);
 
                 if (refreshError || !freshData.session) {
                   console.error(
@@ -425,11 +534,41 @@ class PythonProcessManager {
                     );
                   }
                 }
+              } catch (err) {
+                // Timeout or any other unexpected refresh exception. Don't kill
+                // the session here — the next AUTH_EXPIRED signal can retry once
+                // the cooldown elapses.
+                console.error("Auth refresh attempt failed:", err?.message || err);
+                if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                  this.mainWindow.webContents.send("openfork_client:log", {
+                    type: "stderr",
+                    message: `Auth refresh failed (${err?.message || "unknown"}). Will retry on next signal.`,
+                  });
+                }
               } finally {
                 this._refreshInProgress = false;
               }
             })();
             return; // Handled
+          }
+
+          if (message.type === "PROVIDER_REGISTERED") {
+            const providerId =
+              message.payload?.provider_id || message.payload?.providerId;
+            if (providerId && this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send(
+                "openfork_client:provider-id",
+                providerId,
+              );
+            }
+            if (this.onProviderRegistered) {
+              try {
+                this.onProviderRegistered(providerId || null);
+              } catch (err) {
+                console.error("onProviderRegistered handler threw:", err);
+              }
+            }
+            return;
           }
 
           // Handle provider expiration (cleaned up by stale provider cron)
@@ -550,6 +689,15 @@ class PythonProcessManager {
               "openfork_client:job-status",
               { type: message.type, ...message.payload }
             );
+            // Track active jobs so AutoCompactManager can gate on idle.
+            const jobId = message.payload?.id;
+            if (jobId) {
+              if (message.type === "JOB_START") {
+                this._activeJobIds.add(jobId);
+              } else {
+                this._activeJobIds.delete(jobId);
+              }
+            }
             // Notify cleanup manager (if registered) about job lifecycle
             if (this.onJobEvent) {
               this.onJobEvent(message.type, message.payload || {});
@@ -593,6 +741,19 @@ class PythonProcessManager {
                type: "stderr",
                message: message.payload.message
              });
+             return;
+           }
+
+           // Forward Python-side image evictions to the auto-compact manager and
+           // monetize cleanup UI. Payload: { service_type, image, freed_bytes, reason }
+           if (message.type === "IMAGE_EVICTED") {
+             if (this.onImageEvicted) {
+               try {
+                 this.onImageEvicted(message.payload || {});
+               } catch (err) {
+                 console.error("onImageEvicted handler threw:", err);
+               }
+             }
              return;
            }
          } catch (e) {
@@ -646,8 +807,18 @@ class PythonProcessManager {
       this.pythonProcess.on("close", (code) => {
         console.log(`Python process exited with code ${code}`);
         this.mainWindow.webContents.send("openfork_client:status", "stopped");
+        this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
-        
+        this._activeJobIds.clear();
+        this.currentDownloadImage = null;
+        if (this.onProviderRegistered) {
+          try {
+            this.onProviderRegistered(null);
+          } catch (err) {
+            console.error("onProviderRegistered handler threw on close:", err);
+          }
+        }
+
         // Auto-cleanup zombies on exit
         this.cleanupRogueProcesses();
       });
@@ -655,6 +826,7 @@ class PythonProcessManager {
       this.pythonProcess.on("error", (err) => {
         console.error(`Failed to start Python process: ${err}`);
         this.mainWindow.webContents.send("openfork_client:status", "error");
+        this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
       });
     } catch (err) {

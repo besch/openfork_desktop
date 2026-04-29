@@ -80,7 +80,7 @@ export function Modal({
                 {title}
               </h2>
               {description && (
-                <p className="text-sm mt-1 text-zinc-400 break-words">
+                <p className="mt-1 text-sm leading-relaxed text-white/68 break-words max-w-2xl">
                   {description}
                 </p>
               )}

@@ -68,8 +68,10 @@ jobs:
           cp -r openfork_client/comfyui-storage bin/
           cp openfork_client/setup-wsl.ps1 bin/
           cp openfork_client/setup-linux.sh bin/
+          cp openfork_client/uninstall-engine.sh bin/
           cp scripts/uninstall-engine.ps1 bin/
           chmod +x bin/setup-linux.sh
+          chmod +x bin/uninstall-engine.sh
           rm -rf bin/comfyui-storage/storage
 
       - name: Set up Node.js
@@ -97,7 +99,7 @@ jobs:
           RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/${GITHUB_REF_NAME}" | \
             jq -r '.id // empty')
-          
+
           if [ -n "$RELEASE_ID" ] && [ "$RELEASE_ID" != "null" ]; then
             echo "Found existing release $RELEASE_ID, deleting it..."
             curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" \

@@ -119,6 +119,7 @@ interface ElectronAPI {
 
   onLog: (callback: (log: Omit<LogEntry, "timestamp">) => void) => CleanupFn;
   onStatusChange: (callback: (status: DGNClientStatus) => void) => CleanupFn;
+  onProviderId: (callback: (providerId: string | null) => void) => CleanupFn;
   onDockerProgress: (
     callback: (progress: DockerPullProgress | null) => void,
   ) => CleanupFn;
@@ -187,6 +188,8 @@ interface ElectronAPI {
       used_gb: string;
       free_gb: string;
       path: string;
+      engine_file_gb: string | null;
+      engine_file_path: string | null;
     };
   }>;
 
@@ -225,6 +228,37 @@ interface ElectronAPI {
   relocateStorage: (
     newDrivePath: string,
   ) => Promise<{ success: boolean; error?: string }>;
+
+  // Auto-compact (Windows only)
+  getAutoCompactStatus: () => Promise<{
+    enabled: boolean;
+    freedBytes: number;
+    thresholdBytes: number;
+    lastCompactTs: number;
+    compactInProgress: boolean;
+    platformSupported: boolean;
+  }>;
+  setAutoCompactEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+  setAutoCompactThresholdGB: (gb: number) => Promise<{ success: boolean }>;
+  notifyManualCompactCompleted: () => void;
+  onAutoCompactStatus: (
+    callback: (status: {
+      phase:
+        | "starting"
+        | "stopping_client"
+        | "compacting"
+        | "restarting_client"
+        | "completed"
+        | "failed";
+      enabled: boolean;
+      freedBytes: number;
+      thresholdBytes: number;
+      lastCompactTs: number;
+      compactInProgress: boolean;
+      platformSupported: boolean;
+      error?: string;
+    }) => void,
+  ) => CleanupFn;
 
   // Auto Updater - return cleanup functions
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;

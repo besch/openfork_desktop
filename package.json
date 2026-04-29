@@ -98,6 +98,7 @@
       "preload.cjs",
       "src/python-process-manager.cjs",
       "src/schedule-manager.cjs",
+      "src/auto-compact-manager.cjs",
       "src/docker-cleanup-manager.cjs",
       "src/settings.cjs",
       "src/wsl-utils.cjs",
@@ -115,7 +116,9 @@
         "from": "bin",
         "to": "bin",
         "filter": [
-          "**/*"
+          "client",
+          "client.exe",
+          "workflows/**/*"
         ]
       },
       {
@@ -123,8 +126,12 @@
         "to": "bin/setup-wsl.ps1"
       },
       {
-        "from": "../client/setup-linux.sh",
+        "from": "scripts/setup-linux.sh",
         "to": "bin/setup-linux.sh"
+      },
+      {
+        "from": "scripts/uninstall-engine.sh",
+        "to": "bin/uninstall-engine.sh"
       },
       {
         "from": "scripts/compact-wsl.ps1",
@@ -133,6 +140,10 @@
       {
         "from": "scripts/relocate-wsl.ps1",
         "to": "scripts/relocate-wsl.ps1"
+      },
+      {
+        "from": "scripts/uninstall-engine.ps1",
+        "to": "bin/uninstall-engine.ps1"
       }
     ],
     "win": {
@@ -146,6 +157,9 @@
       ],
       "icon": "public/logo.png",
       "maintainer": "Openfork <openforkvideo@gmail.com>"
+    },
+    "deb": {
+      "afterRemove": "build/postuninstall.sh"
     },
     "appImage": {
       "executableArgs": [

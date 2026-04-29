@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // DGN Client listeners - now return cleanup functions
   onLog: (callback) => createListener("openfork_client:log", callback),
   onStatusChange: (callback) => createListener("openfork_client:status", callback),
+  onProviderId: (callback) => createListener("openfork_client:provider-id", callback),
   onDockerProgress: (callback) => createListener("openfork_client:docker-progress", callback),
   onJobStatus: (callback) => createListener("openfork_client:job-status", callback),
   onDiskSpaceError: (callback) => createListener("openfork_client:disk-space-error", callback),
@@ -120,6 +121,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAvailableDrives: () => ipcRenderer.invoke("get-available-drives"),
   // Fired after image deletion in WSL Docker mode to prompt the user to compact the VHDX
   onCompactionSuggested: (callback) => createVoidListener("docker:compaction-suggested", callback),
+
+  // Auto-compact (Windows): listens for IMAGE_EVICTED events from Python and
+  // schedules VHDX compaction in idle windows once cumulative freed bytes
+  // cross the configured threshold.
+  getAutoCompactStatus: () => ipcRenderer.invoke("auto-compact:get-status"),
+  setAutoCompactEnabled: (enabled) =>
+    ipcRenderer.invoke("auto-compact:set-enabled", enabled),
+  setAutoCompactThresholdGB: (gb) =>
+    ipcRenderer.invoke("auto-compact:set-threshold-gb", gb),
+  notifyManualCompactCompleted: () =>
+    ipcRenderer.send("auto-compact:notify-manual-compact"),
+  onAutoCompactStatus: (callback) =>
+    createListener("auto-compact:status", callback),
   
   // Auto Updater - now return cleanup functions
   onUpdateAvailable: (callback) => createListener("update:available", callback),
