@@ -61,17 +61,17 @@ function parseInstallPhase(line) {
     { re: /Restarting WSL/i, phase: "Restarting WSL", percent: 55 },
     { re: /Enabling Sparse VHD/i, phase: "Optimizing disk storage", percent: 60 },
     { re: /Ensuring WSL is running/i, phase: "Running setup inside WSL…", percent: 63 },
-    { re: /\[Linux\].*Installing Docker/i, phase: "Installing Docker Engine", percent: 70 },
-    { re: /\[Linux\].*Downloading and installing Docker/i, phase: "Downloading Docker packages", percent: 72 },
-    { re: /\[Linux\].*Docker Engine installed/i, phase: "Docker Engine installed", percent: 78 },
-    { re: /\[Linux\].*Docker is already/i, phase: "Docker already present", percent: 65 },
-    { re: /\[Linux\].*Installing NVIDIA/i, phase: "Installing NVIDIA Container Toolkit", percent: 80 },
-    { re: /\[Linux\].*Updating package lists/i, phase: "Updating packages for NVIDIA toolkit", percent: 82 },
-    { re: /\[Linux\].*Downloading and installing NVIDIA/i, phase: "Installing NVIDIA toolkit packages", percent: 84 },
-    { re: /\[Linux\].*NVIDIA Container Toolkit is already/i, phase: "NVIDIA toolkit present", percent: 80 },
-    { re: /\[Linux\].*Configuring Docker/i, phase: "Configuring Docker TCP", percent: 88 },
-    { re: /\[Linux\].*Waiting for Docker daemon/i, phase: "Starting Docker daemon", percent: 93 },
-    { re: /\[Linux\].*Docker daemon is running/i, phase: "Docker daemon running", percent: 97 },
+    { re: /\[OpenFork\].*Installing Docker Engine|\[Linux\].*Installing Docker/i, phase: "Installing Docker Engine", percent: 70 },
+    { re: /\[OpenFork\].*Installing Docker|\[Linux\].*Downloading.*Docker/i, phase: "Downloading Docker packages", percent: 72 },
+    { re: /\[OpenFork\].*Docker is already installed|\[Linux\].*Docker Engine installed/i, phase: "Docker Engine installed", percent: 78 },
+    { re: /\[OpenFork\].*Docker is already|\[Linux\].*Docker is already/i, phase: "Docker already present", percent: 65 },
+    { re: /\[OpenFork\].*Installing NVIDIA Container Toolkit|\[Linux\].*Installing NVIDIA/i, phase: "Installing NVIDIA Container Toolkit", percent: 80 },
+    { re: /\[OpenFork\].*Updating package lists|\[Linux\].*Updating package lists/i, phase: "Updating packages for NVIDIA toolkit", percent: 82 },
+    { re: /\[OpenFork\].*Installing NVIDIA|\[Linux\].*Downloading.*NVIDIA/i, phase: "Installing NVIDIA toolkit packages", percent: 84 },
+    { re: /\[OpenFork\].*NVIDIA Container Toolkit is already|\[Linux\].*NVIDIA Container Toolkit is already/i, phase: "NVIDIA toolkit present", percent: 80 },
+    { re: /\[OpenFork\].*Configuring NVIDIA|\[Linux\].*Configuring Docker/i, phase: "Configuring Docker TCP", percent: 88 },
+    { re: /\[OpenFork\].*Waiting for Docker daemon|\[Linux\].*Waiting for Docker daemon/i, phase: "Starting Docker daemon", percent: 93 },
+    { re: /\[OpenFork\].*Docker daemon is running|\[Linux\].*Docker daemon is running/i, phase: "Docker daemon running", percent: 97 },
     { re: /Setup Complete|OpenFork AI Engine Setup Complete/i, phase: "Setup complete!", percent: 100 },
   ];
 
@@ -236,35 +236,80 @@ async function handleInstallEngine(installPath) {
     _setWslDistro(distroName);
     console.log("Installation process completed successfully.");
     return { success: true };
-  } else {
-    // Linux pkexec handler (no progress streaming on Linux)
-    const os = require("os");
-    const username = os.userInfo().username;
-    return new Promise((resolve) => {
-      console.log(`Using setup script: ${scriptPath}`);
-      // AppImage mounts under /tmp/.mount_* which is read-only; pkexec bash
-      // cannot read the script from there. Copy it to a writable temp path first.
-      const tmpScript = path.join(os.tmpdir(), "openfork-setup-linux.sh");
-      try {
-        fs.copyFileSync(scriptPath, tmpScript);
-        fs.chmodSync(tmpScript, 0o755);
-      } catch (copyErr) {
-        console.error("Failed to copy setup script to temp location:", copyErr.message);
-        resolve({ success: false, error: copyErr.message });
-        return;
-      }
-      execFile("pkexec", ["bash", tmpScript, username], (error) => {
-        try { fs.unlinkSync(tmpScript); } catch (_) {}
-        if (error) {
-          console.error("Installation process error:", error.message);
-          resolve({ success: false, error: error.message });
-        } else {
-          console.log("Installation process completed successfully.");
-          resolve({ success: true });
+   } else {
+      // Linux pkexec handler with progress streaming
+      const os = require("os");
+      const username = os.userInfo().username;
+      return new Promise((resolve) => {
+        console.log(`Using setup script: ${scriptPath}`);
+        // AppImage mounts under /tmp/.mount_* which is read-only; pkexec bash
+        // cannot read the script from there. Copy it to a writable temp path first.
+        const tmpScript = path.join(os.tmpdir(), "openfork-setup-linux.sh");
+        try {
+          fs.copyFileSync(scriptPath, tmpScript);
+          fs.chmodSync(tmpScript, 0o755);
+        } catch (copyErr) {
+          console.error("Failed to copy setup script to temp location:", copyErr.message);
+          resolve({ success: false, error: copyErr.message });
+          return;
         }
+
+        const mainWindow = _getMainWindow();
+        let lastPhase = "";
+        let lastPercent = 0;
+
+        // Use stdbuf to force line buffering so progress is streamed in real-time
+        const child = execFile("pkexec", ["stdbuf", "-oL", "bash", tmpScript, username], (error) => {
+          try { fs.unlinkSync(tmpScript); } catch (_) {}
+          if (error) {
+            console.error("Installation process error:", error.message);
+            resolve({ success: false, error: error.message });
+          } else {
+            // Send completion event
+            mainWindow?.webContents.send("deps:install-progress", {
+              line: "Setup Complete!",
+              phase: "Setup complete!",
+              percent: 100,
+            });
+            console.log("Installation process completed successfully.");
+            resolve({ success: true });
+          }
+        });
+
+        // Capture stdout and stderr for progress reporting
+        child.stdout?.on("data", (data) => {
+          const lines = data.toString().split("\n").map((l) => l.trim()).filter(Boolean);
+          for (const line of lines) {
+            const phaseInfo = parseInstallPhase(line);
+            if (phaseInfo) {
+              lastPhase = phaseInfo.phase;
+              lastPercent = phaseInfo.percent;
+            }
+            mainWindow?.webContents.send("deps:install-progress", {
+              line,
+              phase: lastPhase,
+              percent: lastPercent,
+            });
+          }
+        });
+
+        child.stderr?.on("data", (data) => {
+          const lines = data.toString().split("\n").map((l) => l.trim()).filter(Boolean);
+          for (const line of lines) {
+            const phaseInfo = parseInstallPhase(line);
+            if (phaseInfo) {
+              lastPhase = phaseInfo.phase;
+              lastPercent = phaseInfo.percent;
+            }
+            mainWindow?.webContents.send("deps:install-progress", {
+              line,
+              phase: lastPhase,
+              percent: lastPercent,
+            });
+          }
+        });
       });
-    });
-  }
+    }
 }
 
 function handleCancelInstall() {
