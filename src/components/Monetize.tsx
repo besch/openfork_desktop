@@ -139,7 +139,8 @@ export function Monetize() {
         // If no custom rate is set, default the input to the market-suggested rate
         // so the provider sees the optimal competitive rate immediately.
         const suggestedRate =
-          result.suggested_rate_cents_per_vram_gb_min ?? result.platform_rate_cents_per_vram_gb_min;
+          result.suggested_rate_cents_per_vram_gb_min ??
+          result.platform_rate_cents_per_vram_gb_min;
         const initialRate =
           result.custom_rate_cents_per_vram_gb_min !== null
             ? result.effective_rate
@@ -256,7 +257,9 @@ export function Monetize() {
       }
     } catch (error) {
       console.error("Stripe onboard error:", error);
-      setStripeError(getErrorMessage(error, "Failed to open Stripe onboarding"));
+      setStripeError(
+        getErrorMessage(error, "Failed to open Stripe onboarding"),
+      );
     } finally {
       setStripeLoading(false);
     }
@@ -286,17 +289,22 @@ export function Monetize() {
       if (isNaN(dollars) || dollars < 0) return;
       const centsPerVramGbMin = hourlyToRate(dollars);
       if (centsPerVramGbMin < rateInfo.floor_rate) {
-        setRateSaveError(`Minimum rate is $${rateToHourly(rateInfo.floor_rate).toFixed(3)}/hr`);
+        setRateSaveError(
+          `Minimum rate is $${rateToHourly(rateInfo.floor_rate).toFixed(3)}/hr`,
+        );
         return;
       }
       if (centsPerVramGbMin > rateInfo.ceiling_rate) {
-        setRateSaveError(`Maximum rate is $${rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr (${rateInfo.online_monetize_providers_count} provider(s) online)`);
+        setRateSaveError(
+          `Maximum rate is $${rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr (${rateInfo.online_monetize_providers_count} provider(s) online)`,
+        );
         return;
       }
       setRateSaving(true);
       setRateSaveError(null);
       try {
-        const result = await window.electronAPI.setProviderRate(centsPerVramGbMin);
+        const result =
+          await window.electronAPI.setProviderRate(centsPerVramGbMin);
         if (result.error) {
           setRateSaveError(result.error);
           if (result.cooldown_remaining_seconds) {
@@ -440,8 +448,8 @@ export function Monetize() {
                     Rate increases locked for{" "}
                     {cooldownSeconds >= 60
                       ? `${Math.ceil(cooldownSeconds / 60)}m`
-                      : `${cooldownSeconds}s`}
-                    {" "}— decreases and resets are always allowed
+                      : `${cooldownSeconds}s`}{" "}
+                    — decreases and resets are always allowed
                   </div>
                 )}
 
@@ -454,30 +462,43 @@ export function Monetize() {
                 )}
 
                 <p className="text-[10px] text-white/70">
-                  Based on {DISPLAY_VRAM_GB} GB GPU reference. Current allowed range:{" "}
+                  Based on {DISPLAY_VRAM_GB} GB GPU reference. Current allowed
+                  range:{" "}
                   <span className="text-white/90">
                     ${rateToHourly(rateInfo.floor_rate).toFixed(3)} – $
                     {rateToHourly(rateInfo.ceiling_rate).toFixed(3)}/hr
                   </span>
                   {rateInfo.online_monetize_providers_count > 0 && (
                     <span className="text-white/50">
-                      {" "}({rateInfo.online_monetize_providers_count} provider{rateInfo.online_monetize_providers_count !== 1 ? "s" : ""} online)
+                      {" "}
+                      ({rateInfo.online_monetize_providers_count} provider
+                      {rateInfo.online_monetize_providers_count !== 1
+                        ? "s"
+                        : ""}{" "}
+                      online)
                     </span>
                   )}
                 </p>
               </div>
 
               {/* Surge demand indicator */}
-              {rateInfo.surge_factor !== null && rateInfo.surge_factor > 1.0 && (
-                <div className="flex items-center gap-1.5 rounded-md border border-amber-400/20 bg-amber-400/5 px-2.5 py-1.5">
-                  <Flame size={12} className="text-amber-400 shrink-0" />
-                  <p className="text-[10px] text-amber-400/90">
-                    High demand — {rateInfo.pending_jobs_count} job{rateInfo.pending_jobs_count !== 1 ? "s" : ""} queued for{" "}
-                    {rateInfo.online_monetize_providers_count} provider{rateInfo.online_monetize_providers_count !== 1 ? "s" : ""}.
-                    Suggested rate raised {Math.round((rateInfo.surge_factor - 1) * 100)}% to attract providers.
-                  </p>
-                </div>
-              )}
+              {rateInfo.surge_factor !== null &&
+                rateInfo.surge_factor > 1.0 && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-amber-400/20 bg-amber-400/5 px-2.5 py-1.5">
+                    <Flame size={12} className="text-amber-400 shrink-0" />
+                    <p className="text-[10px] text-amber-400/90">
+                      High demand — {rateInfo.pending_jobs_count} job
+                      {rateInfo.pending_jobs_count !== 1 ? "s" : ""} queued for{" "}
+                      {rateInfo.online_monetize_providers_count} provider
+                      {rateInfo.online_monetize_providers_count !== 1
+                        ? "s"
+                        : ""}
+                      . Suggested rate raised{" "}
+                      {Math.round((rateInfo.surge_factor - 1) * 100)}% to
+                      attract providers.
+                    </p>
+                  </div>
+                )}
 
               {/* Preset buttons */}
               <div className="flex flex-wrap gap-2">
@@ -558,9 +579,13 @@ export function Monetize() {
                 <span className="text-muted-foreground">Market position</span>
                 <div className="flex items-center gap-1.5">
                   {currentInputRate !== null &&
-                  currentInputRate > rateInfo.platform_rate_cents_per_vram_gb_min ? (
+                  currentInputRate >
+                    rateInfo.platform_rate_cents_per_vram_gb_min ? (
                     <>
-                      <TrendingUp size={12} className="text-destructive-foreground" />
+                      <TrendingUp
+                        size={12}
+                        className="text-destructive-foreground"
+                      />
                       <Badge
                         variant="outline"
                         className="text-[10px] border-destructive/30 text-destructive-foreground"
@@ -574,8 +599,8 @@ export function Monetize() {
                         <>
                           <TrendingDown size={12} className="text-white" />
                           <Badge
-                            variant="outline"
-                            className="text-[10px] border-primary/30 text-primary"
+                            variant="primary"
+                            className="text-[10px] border-primary/30 text-white"
                           >
                             Competitive — more jobs likely
                           </Badge>
@@ -605,7 +630,9 @@ export function Monetize() {
                       )}
                     </>
                   ) : (
-                    <span className="text-muted-foreground text-[10px]">No market data yet</span>
+                    <span className="text-muted-foreground text-[10px]">
+                      No market data yet
+                    </span>
                   )}
                 </div>
               </div>
@@ -696,10 +723,7 @@ export function Monetize() {
                   disabled={stripeLoading}
                 >
                   {stripeLoading ? (
-                    <Loader
-                      size="xs"
-                      className="mr-2 animate-spin"
-                    />
+                    <Loader size="xs" className="mr-2 animate-spin" />
                   ) : (
                     <ExternalLink size={14} className="mr-2" />
                   )}
@@ -878,10 +902,10 @@ export function Monetize() {
                     </div>
                     <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                       <Badge
-                        variant="outline"
+                        variant="primary"
                         className={`text-[10px] ${
                           txn.status === "completed"
-                            ? "border-primary/30 text-primary"
+                            ? "border-primary/30 text-white"
                             : "border-merged-status/30 text-merged-status"
                         }`}
                       >
@@ -904,7 +928,6 @@ export function Monetize() {
             )}
           </CardContent>
         </Card>
-
       </div>
     </div>
   );
