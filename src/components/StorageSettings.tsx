@@ -175,12 +175,8 @@ export function StorageSettings({
             <HardDrive className="h-5 w-5" />
           </div>
           <div>
-            <h3 className={headingClassName}>
-              {storageTitle}
-            </h3>
-            <p className={subheadingClassName}>
-              {storageSubtitle}
-            </p>
+            <h3 className={headingClassName}>{storageTitle}</h3>
+            <p className={subheadingClassName}>{storageSubtitle}</p>
           </div>
         </div>
         {(diskInfo || loading) && (
@@ -188,7 +184,9 @@ export function StorageSettings({
             <div className="flex flex-col gap-2 sm:items-end">
               <div className="flex flex-wrap gap-2 sm:justify-end">
                 <div className={statChipClassName}>
-                  {diskInfo ? `Active: ${diskInfo.path}` : "Active: Detecting storage..."}
+                  {diskInfo
+                    ? `Active: ${diskInfo.path}`
+                    : "Active: Detecting storage..."}
                 </div>
                 {(diskInfo?.engine_file_gb || loading) && (
                   <div className={accentChipClassName}>
@@ -212,9 +210,7 @@ export function StorageSettings({
       {isWindows && (
         <div className={sectionClassName}>
           <div className="space-y-0.5">
-            <Label className={labelClassName}>
-              Windows Engine
-            </Label>
+            <Label className={labelClassName}>Windows Engine</Label>
             <p className={copyClassName}>
               OpenFork uses its dedicated Ubuntu distro for Docker on Windows.
             </p>
@@ -252,7 +248,9 @@ export function StorageSettings({
             <p className={helperTextClassName}>
               Auto-compact runs the VHDX shrink in idle windows after{" "}
               {Math.round((autoCompact.thresholdBytes || 0) / 1024 ** 3)} GB of
-              images have been evicted. Currently {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since last compaction.
+              images have been evicted. Currently{" "}
+              {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since
+              last compaction.
             </p>
             <Button
               variant={autoCompact.enabled ? "primary" : "ghost"}
@@ -275,7 +273,9 @@ export function StorageSettings({
             <div className={sectionClassName}>
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-0.5">
-                  <Label className={`${labelClassName} flex items-center gap-1.5`}>
+                  <Label
+                    className={`${labelClassName} flex items-center gap-1.5`}
+                  >
                     <HardDrive className="h-3 w-3" />
                     Disk Compaction
                   </Label>
@@ -287,7 +287,9 @@ export function StorageSettings({
                   <span
                     className={`shrink-0 ${readableMode ? "rounded-lg border border-amber-500/25 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] text-amber-200" : "rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-amber-300"}`}
                   >
-                    {diskInfo?.engine_file_gb ? `${diskInfo.engine_file_gb} GB` : "VHDX --"}
+                    {diskInfo?.engine_file_gb
+                      ? `${diskInfo.engine_file_gb} GB`
+                      : "VHDX --"}
                   </span>
                 )}
               </div>
@@ -318,7 +320,9 @@ export function StorageSettings({
           <div className="relative">
             <div className={sectionClassName}>
               <div className="space-y-0.5">
-                <Label className={`${labelClassName} flex items-center gap-1.5`}>
+                <Label
+                  className={`${labelClassName} flex items-center gap-1.5`}
+                >
                   <ArrowRightLeft className="h-3 w-3" />
                   Relocate Engine
                 </Label>
@@ -459,7 +463,7 @@ export function StorageSettings({
     setIsRelocating(true);
     setError(null);
     try {
-      const drivePath = `${selectedDrive}:\\OpenForkEngine\\wsl`;
+      const drivePath = `${selectedDrive}:\\OpenFork\\wsl`;
       const result = await window.electronAPI.relocateStorage(drivePath);
       if (!result.success) {
         setError(result.error || "Relocation failed");
