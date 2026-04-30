@@ -131,6 +131,14 @@ interface ElectronAPI {
       message: string;
     }) => void,
   ) => CleanupFn;
+  onImageEvicted: (
+    callback: (payload: {
+      service_type: string;
+      image: string;
+      freed_bytes: number;
+      reason: string;
+    }) => void,
+  ) => CleanupFn;
 
   // Authentication
   loginWithGoogle: () => Promise<void>;

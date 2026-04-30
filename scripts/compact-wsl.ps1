@@ -144,6 +144,28 @@ exit `$LASTEXITCODE
     }
 }
 
+function Invoke-BestEffortVhdxDetach {
+    param([string]$Path)
+
+    $cleanupFile = New-TemporaryFile
+    try {
+        $cleanupScript = @"
+select vdisk file="$Path"
+detach vdisk
+exit
+"@
+        $cleanupScript | Out-File -FilePath $cleanupFile -Encoding ascii
+        $cleanupResult = Invoke-ElevatedDiskPart -ScriptPath $cleanupFile.FullName
+        if ($cleanupResult.ExitCode -ne 0) {
+            Write-Host "Best-effort VHDX detach did not complete cleanly."
+        }
+    } catch {
+        Write-Host "Best-effort VHDX detach skipped: $($_.Exception.Message)"
+    } finally {
+        Remove-Item $cleanupFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 try {
     Write-Host "Reclaiming disk space for WSL distribution: $DistroName..."
 
@@ -205,6 +227,7 @@ exit
     }
 
     if ($diskpartResult.ExitCode -ne 0) {
+        Invoke-BestEffortVhdxDetach -Path $vhdxPath
         $detail = Get-DiskPartFailureSummary -Output $diskpartResult.Output
         if ($detail) {
             throw "DiskPart failed with exit code $($diskpartResult.ExitCode). $detail"

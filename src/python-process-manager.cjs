@@ -14,6 +14,7 @@ class PythonProcessManager {
     this.userDataPath = userDataPath;
     this.authSubscription = null;
     this.currentDownloadImage = null; // Track current download to prevent race conditions
+    this._downloadActivity = new Map(); // service_type/image -> queued/starting/downloading
     this.onJobEvent = onJobEvent || null; // Optional callback for job events (used by DockerCleanupManager)
     this.onImageEvicted = onImageEvicted || null; // Optional callback for IMAGE_EVICTED events (auto-compact + cleanup UI)
     this.onProviderRegistered = onProviderRegistered || null; // Optional callback when Python reports its provider_id
@@ -48,7 +49,7 @@ class PythonProcessManager {
 
   /** True if a Docker image download is currently in flight. */
   hasQueuedDownloads() {
-    return this.currentDownloadImage !== null;
+    return this.currentDownloadImage !== null || this._downloadActivity.size > 0;
   }
 
   getLastRoutingConfig() {
@@ -436,7 +437,12 @@ class PythonProcessManager {
     console.log(`Using CWD: ${cwd}`);
 
     try {
-      const spawnEnv = { ...process.env, PYTHONUNBUFFERED: "1" };
+      const spawnEnv = {
+        ...process.env,
+        PYTHONUNBUFFERED: "1",
+        PYTHONIOENCODING: "utf-8",
+        PYTHONUTF8: "1",
+      };
       if (process.platform === "win32") {
         // Only propagate an explicit Docker endpoint.
         // When OPENFORK_DOCKER_HOST is not set (Docker Desktop native mode) leave
@@ -627,6 +633,23 @@ class PythonProcessManager {
             return;
           }
 
+          if (message.type === "DOCKER_DOWNLOAD_STATE") {
+            const payload = message.payload || {};
+            const key = payload.service_type || payload.image;
+            const status = payload.status;
+            if (key) {
+              if (["queued", "starting", "downloading"].includes(status)) {
+                this._downloadActivity.set(key, {
+                  image: payload.image || null,
+                  status,
+                });
+              } else if (["completed", "failed", "cancelled"].includes(status)) {
+                this._downloadActivity.delete(key);
+              }
+            }
+            return;
+          }
+
           if (message.type === "DOCKER_PULL_COMPLETE") {
             const currentNorm = normalizeImage(this.currentDownloadImage);
             const messageNorm = normalizeImage(message.payload.image);
@@ -744,18 +767,25 @@ class PythonProcessManager {
              return;
            }
 
-           // Forward Python-side image evictions to the auto-compact manager and
-           // monetize cleanup UI. Payload: { service_type, image, freed_bytes, reason }
-           if (message.type === "IMAGE_EVICTED") {
-             if (this.onImageEvicted) {
-               try {
-                 this.onImageEvicted(message.payload || {});
-               } catch (err) {
-                 console.error("onImageEvicted handler threw:", err);
-               }
-             }
-             return;
-           }
+            // Forward Python-side image evictions to the auto-compact manager and
+            // monetize cleanup UI. Payload: { service_type, image, freed_bytes, reason }
+            if (message.type === "IMAGE_EVICTED") {
+              // Notify renderer so the UI can show a cleanup notification
+              if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                this.mainWindow.webContents.send(
+                  "openfork_client:image-evicted",
+                  message.payload
+                );
+              }
+              if (this.onImageEvicted) {
+                try {
+                  this.onImageEvicted(message.payload || {});
+                } catch (err) {
+                  console.error("onImageEvicted handler threw:", err);
+                }
+              }
+              return;
+            }
          } catch (e) {
            // Not a JSON message, treat as regular log
          }
@@ -811,6 +841,7 @@ class PythonProcessManager {
         this.pythonProcess = null;
         this._activeJobIds.clear();
         this.currentDownloadImage = null;
+        this._downloadActivity.clear();
         if (this.onProviderRegistered) {
           try {
             this.onProviderRegistered(null);
@@ -828,6 +859,7 @@ class PythonProcessManager {
         this.mainWindow.webContents.send("openfork_client:status", "error");
         this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
+        this._downloadActivity.clear();
       });
     } catch (err) {
       console.error(`Error spawning Python process: ${err}`);

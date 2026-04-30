@@ -87,15 +87,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // General Search
   searchGeneral: (query) => ipcRenderer.invoke("search:general", query),
 
-  // Docker Management
-  listDockerImages: () => ipcRenderer.invoke("docker:list-images"),
-  listDockerContainers: () => ipcRenderer.invoke("docker:list-containers"),
-  removeDockerImage: (imageId) => ipcRenderer.invoke("docker:remove-image", imageId),
-  removeAllDockerImages: () => ipcRenderer.invoke("docker:remove-all-images"),
-  stopContainer: (containerId) => ipcRenderer.invoke("docker:stop-container", containerId),
-  stopAllContainers: () => ipcRenderer.invoke("docker:stop-all-containers"),
-  purgeOpenForkData: () => ipcRenderer.invoke("docker:clean-openfork"),
-  getDiskSpace: () => ipcRenderer.invoke("docker:get-disk-space"),
+   // Docker Management
+   listDockerImages: () => ipcRenderer.invoke("docker:list-images"),
+   listDockerContainers: () => ipcRenderer.invoke("docker:list-containers"),
+   removeDockerImage: (imageId) => ipcRenderer.invoke("docker:remove-image", imageId),
+   removeAllDockerImages: () => ipcRenderer.invoke("docker:remove-all-images"),
+   stopContainer: (containerId) => ipcRenderer.invoke("docker:stop-container", containerId),
+   stopAllContainers: () => ipcRenderer.invoke("docker:stop-all-containers"),
+   purgeOpenForkData: () => ipcRenderer.invoke("docker:clean-openfork"),
+   getDiskSpace: () => ipcRenderer.invoke("docker:get-disk-space"),
+   onImageEvicted: (callback) => createListener("openfork_client:image-evicted", callback),
 
   // Docker Monitoring
   startDockerMonitoring: () => ipcRenderer.send("docker:start-monitoring"),
