@@ -68,8 +68,8 @@ const RATE_PRESETS = [
   { label: "+50%", multiplier: 1.5 },
 ];
 
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatMillicents(millicents: number): string {
+  return `$${(millicents / 1000).toFixed(2)}`;
 }
 
 function formatDate(iso: string): string {
@@ -108,7 +108,8 @@ function estimateJobEarnings(
   vramGb: number,
   durationMin: number,
 ): number {
-  return Math.ceil(vramGb * durationMin * rateCentsPerVramGbMin);
+  // Returns millicents (internal unit)
+  return Math.ceil(vramGb * durationMin * rateCentsPerVramGbMin * 10);
 }
 
 export function Monetize() {
@@ -202,8 +203,7 @@ export function Monetize() {
 
   const handleWithdraw = useCallback(async () => {
     if (!monetizeWallet) return;
-    const amount = monetizeWallet.available_to_withdraw_cents;
-    if (amount < 500) return;
+    const amount = Math.floor(monetizeWallet.available_to_withdraw_cents / 10); // Convert millicents to cents for API
 
     setWithdrawing(true);
     setWithdrawError(null);
@@ -562,10 +562,10 @@ export function Monetize() {
                         </span>
                         <div className="flex items-center gap-2 tabular-nums">
                           <span className="font-medium text-white">
-                            {formatCents(perJob)}/job
+                            {formatMillicents(perJob)}/job
                           </span>
                           <span className="text-muted-foreground/60">
-                            ({formatCents(perHour)}/hr)
+                             ({formatMillicents(perHour)}/hr)
                           </span>
                         </div>
                       </div>
@@ -651,26 +651,26 @@ export function Monetize() {
         {[
           {
             label: "Pending Earnings",
-            value: wallet ? formatCents(wallet.pending_earnings_cents) : "—",
+            value: wallet ? formatMillicents(wallet.pending_earnings_cents) : "—",
             color: "text-amber-400",
           },
           {
             label: "Available to Withdraw",
             value: wallet
-              ? formatCents(wallet.available_to_withdraw_cents)
-              : "—",
+              ? formatMillicents(wallet.available_to_withdraw_cents)
+                : "—",
             color: "text-emerald-400",
           },
           {
             label: "Lifetime Earned",
-            value: wallet
-              ? formatCents(wallet.total_earned_lifetime_cents)
-              : "—",
+              value: wallet
+                ? formatMillicents(wallet.total_earned_lifetime_cents)
+                : "—",
             color: "text-white",
           },
           {
             label: "Total Withdrawn",
-            value: wallet ? formatCents(wallet.total_withdrawn_cents) : "—",
+              value: wallet ? formatMillicents(wallet.total_withdrawn_cents) : "—",
             color: "text-muted/60",
           },
         ].map((item, i) => (
@@ -812,8 +812,8 @@ export function Monetize() {
               </p>
             ) : availableAmount < 500 ? (
               <p className="text-sm text-muted-foreground">
-                Minimum withdrawal is $5.00. You have{" "}
-                {formatCents(availableAmount)} available.
+                 Minimum withdrawal is $5.00. You have{" "}
+                  {formatMillicents(availableAmount)} available.
               </p>
             ) : (
               <>
@@ -823,7 +823,7 @@ export function Monetize() {
                       Available balance
                     </span>
                     <span className="font-semibold text-primary">
-                      {formatCents(availableAmount)}
+                        {formatMillicents(availableAmount)}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -856,7 +856,7 @@ export function Monetize() {
                   ) : (
                     <ArrowDownToLine size={14} className="mr-2 text-white" />
                   )}
-                  Withdraw {formatCents(availableAmount)}
+                  Withdraw {formatMillicents(availableAmount)}
                 </Button>
               </>
             )}
@@ -919,7 +919,7 @@ export function Monetize() {
                         }`}
                       >
                         {txn.amount_cents >= 0 ? "+" : ""}
-                        {formatCents(txn.amount_cents)}
+                         {formatMillicents(txn.amount_cents)}
                       </span>
                     </div>
                   </div>
