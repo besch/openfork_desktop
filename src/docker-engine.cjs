@@ -287,6 +287,33 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function execFileWithOutput(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+function getWslTerminateErrorText(error) {
+  return `${error?.message || ""}\n${error?.stderr || ""}\n${error?.stdout || ""}`.toLowerCase();
+}
+
+function isIgnorableWslTerminateError(error) {
+  const text = getWslTerminateErrorText(error);
+  return (
+    text.includes("is not running") ||
+    text.includes("not currently running") ||
+    text.includes("operation completed successfully")
+  );
+}
+
 function pingDockerApiHost(host, timeoutMs = 1500) {
   if (process.platform !== "win32") return Promise.resolve(true);
   return new Promise((resolve) => {
@@ -347,6 +374,96 @@ async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
     }
   }
   return null;
+}
+
+async function restartWslDockerEngine({
+  wslDistro = null,
+  waitTimeoutMs = 120000,
+  onPhase = null,
+} = {}) {
+  if (process.platform !== "win32") {
+    throw new Error("WSL Docker recovery is only available on Windows.");
+  }
+
+  const distro = wslDistro || (await wslUtils.getWslDistroName());
+  if (!distro) {
+    throw new Error("The OpenFork Ubuntu distro could not be found.");
+  }
+
+  const notifyPhase = (phase) => {
+    if (typeof onPhase === "function") {
+      try {
+        onPhase(phase);
+      } catch (err) {
+        console.warn("WSL recovery phase callback failed:", err?.message || err);
+      }
+    }
+  };
+
+  delete process.env.OPENFORK_DOCKER_HOST;
+  process.env.OPENFORK_WSL_DISTRO = distro;
+
+  notifyPhase("restarting_wsl");
+  console.warn(`Restarting WSL distro '${distro}' to recover Docker API access...`);
+  try {
+    await execFileWithOutput("wsl.exe", ["--terminate", distro], {
+      timeout: 60000,
+      windowsHide: true,
+    });
+  } catch (error) {
+    if (!isIgnorableWslTerminateError(error)) {
+      throw new Error(
+        `Failed to terminate WSL distro '${distro}': ${error.stderr || error.message}`,
+      );
+    }
+  }
+
+  await sleep(2000);
+
+  notifyPhase("reconnecting");
+  const startDockerCommand = [
+    "set -e",
+    "if ! docker info >/dev/null 2>&1; then",
+    "  (systemctl restart docker || service docker restart || (mkdir -p /var/log/openfork && nohup /usr/bin/dockerd >/var/log/openfork/dockerd.log 2>&1 &)) >/dev/null 2>&1 || true",
+    "fi",
+    "for i in $(seq 1 60); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done",
+    "exit 1",
+  ].join("\n");
+
+  const startResult = await runDockerCheckCommand(startDockerCommand, {
+    useWsl: true,
+    wslDistro: distro,
+    wslUser: "root",
+    timeoutMs: waitTimeoutMs,
+  });
+
+  if (!startResult.success) {
+    throw new Error(
+      startResult.stderr ||
+        startResult.error ||
+        `Docker did not start inside WSL distro '${distro}'.`,
+    );
+  }
+
+  const deadline = Date.now() + waitTimeoutMs;
+  let lastStatus = null;
+  while (Date.now() < deadline) {
+    lastStatus = await resolveDockerStatus({
+      allowNativeStart: false,
+      wslHostTimeoutMs: 10000,
+    });
+    if (lastStatus.running) {
+      console.log(`Docker API recovered for WSL distro '${distro}'.`);
+      return lastStatus;
+    }
+    await sleep(3000);
+  }
+
+  throw new Error(
+    `Docker API did not become reachable after restarting WSL${
+      lastStatus?.error ? ` (${lastStatus.error})` : ""
+    }.`,
+  );
 }
 
 // --- WSL DOCKER CHECK ---
@@ -603,6 +720,7 @@ module.exports = {
   runDockerCheckCommand,
   pingDockerApiHost,
   resolveWindowsDockerApiEndpoint,
+  restartWslDockerEngine,
   checkWslDockerStatus,
   resolveDockerStatus,
   getActiveWindowsInstallStatus,

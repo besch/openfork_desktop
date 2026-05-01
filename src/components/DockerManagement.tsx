@@ -26,6 +26,19 @@ interface ConfirmDialogState {
   onConfirm: () => void;
 }
 
+interface WslRecoveryStatus {
+  phase:
+    | "stopping_client"
+    | "restarting_wsl"
+    | "reconnecting"
+    | "restarting_client"
+    | "completed"
+    | "failed";
+  recoveryInProgress: boolean;
+  platformSupported: boolean;
+  error?: string;
+}
+
 export const DockerManagement = memo(() => {
   const [platform, setPlatform] = useState<"win32" | "linux" | "darwin">(
     "win32",
@@ -79,6 +92,8 @@ export const DockerManagement = memo(() => {
      freed_bytes: number;
      reason: string;
    } | null>(null);
+  const [wslRecoveryStatus, setWslRecoveryStatus] =
+    useState<WslRecoveryStatus | null>(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
@@ -239,6 +254,22 @@ export const DockerManagement = memo(() => {
      return cleanup;
    }, []);
 
+  // Listen for automatic WSL recovery when the Windows -> WSL Docker API drops.
+  useEffect(() => {
+    const cleanup = window.electronAPI.onWslRecoveryStatus((status) => {
+      setWslRecoveryStatus(() => {
+        if (status.phase === "completed" || status.phase === "failed") {
+          setTimeout(() => setWslRecoveryStatus(null), 8000);
+        }
+        return status;
+      });
+      if (status.phase === "completed") {
+        fetchData();
+      }
+    });
+    return cleanup;
+  }, [fetchData]);
+
   // Subscribe to app-wide Docker monitoring updates.
   useEffect(() => {
     const cleanupContainers = window.electronAPI.onDockerContainersUpdate(
@@ -387,6 +418,23 @@ export const DockerManagement = memo(() => {
     dockerPullProgress !== null &&
     (status === "starting" || status === "running");
   const engineLabel = platform === "linux" ? "Linux Docker" : "OpenFork Ubuntu";
+  const wslRecoveryLabel = (() => {
+    if (!wslRecoveryStatus) return "";
+    switch (wslRecoveryStatus.phase) {
+      case "stopping_client":
+        return "Stopping DGN client...";
+      case "restarting_wsl":
+        return "Restarting OpenFork Ubuntu...";
+      case "reconnecting":
+        return "Reconnecting Docker API...";
+      case "restarting_client":
+        return "Starting DGN client...";
+      case "completed":
+        return "Recovery complete";
+      case "failed":
+        return `Recovery failed: ${wslRecoveryStatus.error || "Unknown error"}`;
+    }
+  })();
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -428,6 +476,49 @@ export const DockerManagement = memo(() => {
             size="sm"
             onClick={() => setEngineSwitchNotice(null)}
             className="text-blue-300 hover:bg-blue-500/20 h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
+      )}
+
+      {wslRecoveryStatus && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`border text-white rounded-lg p-4 flex items-center justify-between gap-3 shadow-lg ${
+            wslRecoveryStatus.phase === "failed"
+              ? "bg-destructive/10 border-destructive/30"
+              : wslRecoveryStatus.phase === "completed"
+                ? "bg-emerald-500/10 border-emerald-500/30"
+                : "bg-amber-500/10 border-amber-500/30"
+          }`}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            {wslRecoveryStatus.phase === "failed" ? (
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            ) : wslRecoveryStatus.phase === "completed" ? (
+              <RefreshCw className="h-4 w-4 text-emerald-400 shrink-0" />
+            ) : (
+              <Loader size="sm" variant="primary" className="shrink-0" />
+            )}
+            <span
+              className={`text-xs font-bold uppercase tracking-widest truncate ${
+                wslRecoveryStatus.phase === "failed"
+                  ? "text-destructive"
+                  : wslRecoveryStatus.phase === "completed"
+                    ? "text-emerald-300"
+                    : "text-amber-300"
+              }`}
+            >
+              WSL Recovery: <span className="text-white">{wslRecoveryLabel}</span>
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setWslRecoveryStatus(null)}
+            className="text-white/70 hover:bg-white/10 h-8 w-8 p-0 shrink-0"
           >
             <X className="h-4 w-4" />
           </Button>

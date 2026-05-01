@@ -115,6 +115,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   fixLinuxDockerPermissions: () => ipcRenderer.invoke("deps:fix-linux-docker-permissions"),
   onWslDistroMissing: (callback) => createListener("docker:wsl-distro-missing", callback),
   onEngineSwitch: (callback) => createListener("docker:engine-switched", callback),
+  onWslRecoveryStatus: (callback) =>
+    createListener("docker:wsl-recovery-status", callback),
 
   // Disk Management
   relocateStorage: (newDrivePath) => ipcRenderer.invoke("docker:relocate-storage", newDrivePath),

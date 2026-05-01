@@ -86,6 +86,19 @@ interface InstallProgressEvent {
   percent: number;
 }
 
+interface WslRecoveryStatus {
+  phase:
+    | "stopping_client"
+    | "restarting_wsl"
+    | "reconnecting"
+    | "restarting_client"
+    | "completed"
+    | "failed";
+  recoveryInProgress: boolean;
+  platformSupported: boolean;
+  error?: string;
+}
+
 interface ProviderRateInfo {
   custom_rate_cents_per_vram_gb_min: number | null;
   platform_rate_cents_per_vram_gb_min: number;
@@ -227,6 +240,9 @@ interface ElectronAPI {
   onWslDistroMissing: (callback: () => void) => CleanupFn;
   onEngineSwitch: (
     callback: (data: { from: string; to: string }) => void,
+  ) => CleanupFn;
+  onWslRecoveryStatus: (
+    callback: (status: WslRecoveryStatus) => void,
   ) => CleanupFn;
 
   // Disk Management

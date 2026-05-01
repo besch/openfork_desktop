@@ -4,9 +4,11 @@ const dockerEngine = require("./docker-engine.cjs");
 const wslUtils = require("./wsl-utils.cjs");
 
 let _getMainWindow;
+let _getPythonManager;
 
-function init({ getMainWindow }) {
+function init({ getMainWindow, getPythonManager }) {
   _getMainWindow = getMainWindow;
+  _getPythonManager = getPythonManager;
 }
 
 let dockerMonitorInterval = null;
@@ -14,6 +16,11 @@ let lastContainersJson = "";
 let lastImagesJson = "";
 let dockerMonitorConsecutiveFailures = 0;
 const DOCKER_MONITOR_MAX_FAILURES = 3;
+let dockerApiUnreachableFailures = 0;
+let wslRecoveryInProgress = false;
+let lastWslRecoveryTs = 0;
+const DOCKER_API_RECOVERY_FAILURES = 3;
+const WSL_RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 
 // Track the active engine across polls so we can emit an event when it changes.
 let _lastKnownActiveEngine = null;
@@ -22,6 +29,136 @@ let _lastKnownActiveEngine = null;
 let _cachedRoutingResult = null;
 let _cachedRoutingTimestamp = 0;
 const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
+
+function notifyWslRecoveryStatus(payload) {
+  const mainWindow = _getMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const isTerminal =
+    payload?.phase === "completed" || payload?.phase === "failed";
+  mainWindow.webContents.send("docker:wsl-recovery-status", {
+    ...payload,
+    recoveryInProgress: isTerminal ? false : wslRecoveryInProgress,
+    platformSupported: process.platform === "win32",
+  });
+}
+
+function logToRenderer(type, message) {
+  const mainWindow = _getMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("openfork_client:log", { type, message });
+}
+
+function clearDockerLists() {
+  const mainWindow = _getMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  if (lastContainersJson !== "") {
+    lastContainersJson = "";
+    mainWindow.webContents.send("docker:containers-update", []);
+  }
+  if (lastImagesJson !== "") {
+    lastImagesJson = "";
+    mainWindow.webContents.send("docker:images-update", []);
+  }
+}
+
+function shouldRecoverWslDocker() {
+  if (process.platform !== "win32") return false;
+  if (wslRecoveryInProgress) return false;
+  if (dockerApiUnreachableFailures < DOCKER_API_RECOVERY_FAILURES) return false;
+  if (Date.now() - lastWslRecoveryTs < WSL_RECOVERY_COOLDOWN_MS) return false;
+
+  const pythonManager = _getPythonManager?.();
+  if (!pythonManager?.isRunning?.()) return false;
+  if (!pythonManager.getLastService?.()) return false;
+
+  return true;
+}
+
+function maybeRecoverWslDocker(dockerStatus) {
+  if (!shouldRecoverWslDocker()) return;
+
+  runWslRecoveryFlow(dockerStatus).catch((err) => {
+    console.error("Docker monitor WSL recovery failed:", err);
+  });
+}
+
+async function runWslRecoveryFlow(dockerStatus) {
+  const pythonManager = _getPythonManager?.();
+  if (!pythonManager?.isRunning?.()) return;
+
+  wslRecoveryInProgress = true;
+  lastWslRecoveryTs = Date.now();
+
+  const lastService = pythonManager.getLastService?.();
+  const lastRoutingConfig = pythonManager.getLastRoutingConfig?.();
+  const wasMonitoring = isDockerMonitoringActive();
+
+  try {
+    console.warn(
+      "Docker API has been unreachable for multiple polls. Restarting OpenFork Ubuntu and DGN client...",
+    );
+    logToRenderer(
+      "stderr",
+      "Docker API is unreachable. Restarting OpenFork Ubuntu and reconnecting the DGN client...",
+    );
+
+    notifyWslRecoveryStatus({
+      phase: "stopping_client",
+      error: undefined,
+    });
+    await pythonManager.stop();
+
+    if (wasMonitoring) {
+      stopDockerMonitoring();
+    }
+    resetDockerRoutingCache();
+    clearDockerLists();
+
+    await dockerEngine.restartWslDockerEngine({
+      wslDistro: dockerStatus?.wslDistro,
+      onPhase: (phase) => {
+        notifyWslRecoveryStatus({ phase, error: undefined });
+      },
+    });
+
+    dockerApiUnreachableFailures = 0;
+    dockerMonitorConsecutiveFailures = 0;
+    resetDockerRoutingCache();
+
+    if (lastService && !pythonManager.isRunning()) {
+      notifyWslRecoveryStatus({
+        phase: "restarting_client",
+        error: undefined,
+      });
+      await pythonManager.start(lastService, lastRoutingConfig);
+    }
+
+    notifyWslRecoveryStatus({
+      phase: "completed",
+      error: undefined,
+    });
+    logToRenderer(
+      "stdout",
+      "OpenFork Ubuntu recovered. The DGN client is reconnecting with the previous settings.",
+    );
+  } catch (err) {
+    const message = err?.message || String(err);
+    console.error("WSL Docker recovery failed:", message);
+    notifyWslRecoveryStatus({
+      phase: "failed",
+      error: message,
+    });
+    logToRenderer("stderr", `Automatic WSL recovery failed: ${message}`);
+  } finally {
+    wslRecoveryInProgress = false;
+    resetDockerRoutingCache();
+    if (wasMonitoring) {
+      startDockerMonitoring();
+    }
+  }
+}
 
 /**
  * Ensures that OPENFORK_DOCKER_HOST is correctly set for the active Docker engine.
@@ -92,6 +229,16 @@ async function checkDockerUpdates() {
     }
 
     if (!dockerStatus.running) {
+      if (
+        process.platform === "win32" &&
+        dockerStatus.error === "DOCKER_API_UNREACHABLE"
+      ) {
+        dockerApiUnreachableFailures++;
+        maybeRecoverWslDocker(dockerStatus);
+      } else {
+        dockerApiUnreachableFailures = 0;
+      }
+
       // If containers were found inside WSL, trust the listing over the
       // TCP-based status check and reset the failure counter.
       if (containersOutput && containersOutput.trim().length > 0) {
@@ -158,6 +305,7 @@ async function checkDockerUpdates() {
 
     // Docker is running — reset the failure counter
     dockerMonitorConsecutiveFailures = 0;
+    dockerApiUnreachableFailures = 0;
 
     // Send container updates
     if (containersOutput !== lastContainersJson) {

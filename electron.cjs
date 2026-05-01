@@ -283,7 +283,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
 settings.init(store);
 wslUtils.init({ store, execFile: _execFile });
 dockerEngine.init({ getMainWindow: () => mainWindow });
-dockerMonitor.init({ getMainWindow: () => mainWindow });
+dockerMonitor.init({
+  getMainWindow: () => mainWindow,
+  getPythonManager: () => pythonManager,
+});
 
 let mainWindow;
 let session = null;
@@ -658,6 +661,8 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
   }
 
   pendingClientStart = (async () => {
+    let recoveredWslDocker = false;
+
     if (process.platform === "win32") {
       const wslDistro = await wslUtils.getWslDistroName();
       if (wslDistro) {
@@ -666,9 +671,58 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
         delete process.env.OPENFORK_WSL_DISTRO;
       }
 
-      const dockerStatus = await dockerEngine.resolveDockerStatus({
+      let dockerStatus = await dockerEngine.resolveDockerStatus({
         allowNativeStart: false,
       });
+
+      const notifyWslRecoveryStatus = (phase, error) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("docker:wsl-recovery-status", {
+            phase,
+            error,
+            recoveryInProgress: phase !== "completed" && phase !== "failed",
+            platformSupported: process.platform === "win32",
+          });
+        }
+      };
+
+      if (
+        !dockerStatus.running &&
+        dockerStatus.error === "DOCKER_API_UNREACHABLE"
+      ) {
+        const recoveryMessage =
+          "OpenFork Ubuntu is running, but its Docker API is unreachable. Restarting WSL before starting the DGN client...";
+        console.warn(recoveryMessage);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("openfork_client:log", {
+            type: "stderr",
+            message: recoveryMessage,
+          });
+        }
+
+        try {
+          dockerStatus = await dockerEngine.restartWslDockerEngine({
+            wslDistro: dockerStatus.wslDistro,
+            onPhase: (phase) => notifyWslRecoveryStatus(phase),
+          });
+          dockerMonitor.resetDockerRoutingCache();
+          recoveredWslDocker = true;
+          notifyWslRecoveryStatus("restarting_client");
+        } catch (err) {
+          const message = `Automatic WSL restart failed: ${err?.message || err}`;
+          console.error(message);
+          notifyWslRecoveryStatus("failed", err?.message || String(err));
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("openfork_client:log", {
+              type: "stderr",
+              message,
+            });
+            mainWindow.webContents.send("openfork_client:status", "stopped");
+          }
+          return;
+        }
+      }
+
       if (!dockerStatus.running) {
         const message =
           dockerStatus.error === "DOCKER_API_UNREACHABLE"
@@ -691,6 +745,14 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
     }
 
     await pythonManager.start(service, routingConfig);
+
+    if (recoveredWslDocker && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("docker:wsl-recovery-status", {
+        phase: "completed",
+        recoveryInProgress: false,
+        platformSupported: process.platform === "win32",
+      });
+    }
 
     if (cleanupManager) {
       cleanupManager.updatePolicy(mapCleanupPolicy(routingConfig));
