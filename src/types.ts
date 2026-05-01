@@ -84,12 +84,12 @@ export const DEFAULT_ROUTING_CONFIG: ProviderRoutingConfig = {
 };
 
 export interface MonetizeWallet {
-  pending_earnings_cents: number;
-  available_to_withdraw_cents: number;
-  total_earned_lifetime_cents: number;
-  total_withdrawn_cents: number;
-  prepaid_balance_cents: number;
-  total_purchased_cents: number;
+  pending_earnings_millicents: number;
+  available_to_withdraw_millicents: number;
+  total_earned_lifetime_millicents: number;
+  total_withdrawn_millicents: number;
+  prepaid_balance_millicents: number;
+  total_purchased_millicents: number;
   stripe_account_verified: boolean;
   stripe_details_submitted: boolean;
 }
