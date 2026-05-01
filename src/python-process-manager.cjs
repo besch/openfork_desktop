@@ -4,6 +4,18 @@ const fs = require("fs");
 const { app } = require("electron");
 const http = require("http");
 
+function isInvalidSupabaseRefreshTokenError(error) {
+  const code = error?.code || error?.error_code;
+  const message = error?.message || String(error || "");
+  return (
+    code === "refresh_token_already_used" ||
+    code === "refresh_token_not_found" ||
+    message.includes("Invalid Refresh Token") ||
+    message.includes("refresh_token_already_used") ||
+    message.includes("refresh_token_not_found")
+  );
+}
+
 class PythonProcessManager {
   constructor({ supabase, mainWindow, userDataPath, onJobEvent, onImageEvicted, onProviderRegistered }) {
     this.pythonProcess = null;
@@ -35,7 +47,6 @@ class PythonProcessManager {
     // Used by AutoCompactManager to gate compaction on a fully idle window.
     this._activeJobIds = new Set();
 
-    this._listenForTokenRefresh();
   }
 
   isRunning() {
@@ -326,22 +337,45 @@ class PythonProcessManager {
     }
   }
 
-  _listenForTokenRefresh() {
-    if (this.authSubscription) {
-      this.authSubscription.unsubscribe();
+  handleAuthStateChange(event, session) {
+    if (event === "TOKEN_REFRESHED" && session && this.pythonProcess) {
+      console.log("Token refreshed proactively. Pushing update to Python.");
+      this._sendTokensToPython(session.access_token, session.refresh_token);
+    } else if (event === "SIGNED_OUT" && this.pythonProcess) {
+      console.log("User signed out. Stopping Python client.");
+      this.stop();
     }
-    const { data: subscription } = this.supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "TOKEN_REFRESHED" && session) {
-          console.log("Token refreshed proactively. Pushing update to Python.");
-          this._sendTokensToPython(session.access_token, session.refresh_token);
-        } else if (event === "SIGNED_OUT") {
-          console.log("User signed out. Stopping Python client.");
-          this.stop();
-        }
-      }
+  }
+
+  async _handlePermanentAuthFailure(error, userMessage = "Authentication failed. Please log in again.") {
+    const detail = error?.message || error;
+    console.warn(
+      detail
+        ? `Supabase session is no longer recoverable: ${detail}`
+        : "Supabase session is no longer recoverable."
     );
-    this.authSubscription = subscription;
+
+    if (this.pythonProcess) {
+      this._sendAuthFailedPermanentlyToPython();
+    }
+
+    try {
+      await this.supabase.auth.signOut({ scope: "local" });
+    } catch (signOutError) {
+      console.warn(
+        "Failed to clear local Supabase session:",
+        signOutError?.message || signOutError
+      );
+    }
+
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("auth:session", null);
+      this.mainWindow.webContents.send("auth:force-logout");
+      this.mainWindow.webContents.send("openfork_client:log", {
+        type: "stderr",
+        message: userMessage,
+      });
+    }
   }
 
   async start(service, routingConfig) {
@@ -372,10 +406,32 @@ class PythonProcessManager {
     // Ensure no rogue processes are running before we start a fresh one
     await this.cleanupRogueProcesses();
 
-    const { data, error: sessionError } = await this.supabase.auth.getSession();
-    if (sessionError || !data.session) {
-      console.error("Could not get session:", sessionError?.message);
-      await this.supabase.auth.signOut();
+    let currentSession = null;
+    try {
+      const { data, error: sessionError } = await this.supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      currentSession = data.session;
+    } catch (error) {
+      console.error("Could not get session:", error?.message || error);
+      if (isInvalidSupabaseRefreshTokenError(error)) {
+        await this._handlePermanentAuthFailure(
+          error,
+          "Your session has expired. Please log in again to start the client."
+        );
+      } else if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send("openfork_client:log", {
+          type: "stderr",
+          message:
+            "Could not validate your session. Please try again in a moment.",
+        });
+      }
+      this.mainWindow.webContents.send("openfork_client:status", "stopped");
+      return;
+    }
+
+    if (!currentSession) {
+      console.error("Could not get session: no active session.");
+      await this.supabase.auth.signOut({ scope: "local" });
       this.mainWindow.webContents.send("openfork_client:log", {
         type: "stderr",
         message:
@@ -388,8 +444,6 @@ class PythonProcessManager {
     // Store settings for restart capability
     this._lastService = service;
     this._lastRoutingConfig = routingConfig;
-
-    const currentSession = data.session;
 
     const { command, args: initialArgs } = this.getPythonCommand();
 
@@ -510,19 +564,9 @@ class PythonProcessManager {
                     "Could not recover session. Notifying Python and forcing logout.",
                     refreshError?.message
                   );
-                  
-                  // Tell Python that auth has permanently failed
-                  this._sendAuthFailedPermanentlyToPython();
-
-                  // Notify the renderer process about the auth failure
-                  if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-                    this.mainWindow.webContents.send("auth:session", null);
-                    this.mainWindow.webContents.send("auth:force-logout");
-                    this.mainWindow.webContents.send("openfork_client:log", {
-                      type: "stderr",
-                      message: "Authentication failed. Please log in again.",
-                    });
-                  }
+                  await this._handlePermanentAuthFailure(
+                    refreshError || new Error("No session returned from refresh.")
+                  );
                 } else {
                   console.log(
                     "Recovered session via refresh. Pushing new tokens to Python."
@@ -541,6 +585,11 @@ class PythonProcessManager {
                   }
                 }
               } catch (err) {
+                if (isInvalidSupabaseRefreshTokenError(err)) {
+                  await this._handlePermanentAuthFailure(err);
+                  return;
+                }
+
                 // Timeout or any other unexpected refresh exception. Don't kill
                 // the session here — the next AUTH_EXPIRED signal can retry once
                 // the cooldown elapses.

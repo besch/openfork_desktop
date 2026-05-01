@@ -296,6 +296,39 @@ let cleanupManager;
 let autoCompactManager;
 let isQuittingApp = false;
 let pendingClientStart = null;
+let authStateSubscription = null;
+
+function isInvalidSupabaseRefreshTokenError(error) {
+  const code = error?.code || error?.error_code;
+  const message = error?.message || String(error || "");
+  return (
+    code === "refresh_token_already_used" ||
+    code === "refresh_token_not_found" ||
+    message.includes("Invalid Refresh Token") ||
+    message.includes("refresh_token_already_used") ||
+    message.includes("refresh_token_not_found")
+  );
+}
+
+async function clearLocalAuthSession(reason, error) {
+  const detail = error?.message || error;
+  console.warn(detail ? `${reason}: ${detail}` : reason);
+
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (signOutError) {
+    console.warn(
+      "Failed to clear local Supabase session:",
+      signOutError?.message || signOutError,
+    );
+  }
+
+  session = null;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:session", null);
+    mainWindow.webContents.send("auth:force-logout");
+  }
+}
 
 // Init modules that need runtime state (mainWindow, pythonManager)
 engineInstall.init({
@@ -318,27 +351,36 @@ ipcDeps.init({
   openExternal,
 });
 
-// Listen for auth events to keep the session fresh
-const { data: authStateSubscription } = supabase.auth.onAuthStateChange(
-  (event, newSession) => {
-    console.log(`Supabase auth event: ${event}`);
-    session = newSession;
+function handleSupabaseAuthStateChange(event, newSession) {
+  console.log(`Supabase auth event: ${event}`);
+  session = newSession;
 
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("auth:session", session);
+  if (pythonManager) {
+    pythonManager.handleAuthStateChange(event, newSession);
+  }
 
-      if (
-        event === "SIGNED_OUT" ||
-        (event === "TOKEN_REFRESHED" && !newSession)
-      ) {
-        console.warn(
-          "Authentication state changed to unauthenticated, forcing UI refresh",
-        );
-        mainWindow.webContents.send("auth:force-refresh");
-      }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:session", session);
+
+    if (
+      event === "SIGNED_OUT" ||
+      (event === "TOKEN_REFRESHED" && !newSession)
+    ) {
+      console.warn(
+        "Authentication state changed to unauthenticated, forcing UI refresh",
+      );
+      mainWindow.webContents.send("auth:force-refresh");
     }
-  },
-);
+  }
+}
+
+function subscribeAuthStateChanges() {
+  if (authStateSubscription) return;
+  const { data } = supabase.auth.onAuthStateChange(
+    handleSupabaseAuthStateChange,
+  );
+  authStateSubscription = data;
+}
 
 // --- AUTHENTICATION ---
 
@@ -367,26 +409,15 @@ async function logout() {
 
 async function hydrateInitialSession() {
   try {
-    const { data } = await supabase.auth.getSession();
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
     session = data.session;
   } catch (error) {
-    const message = error?.message || String(error);
-    if (
-      message.includes("Invalid Refresh Token") ||
-      message.includes("refresh_token_not_found")
-    ) {
-      console.warn(
+    if (isInvalidSupabaseRefreshTokenError(error)) {
+      await clearLocalAuthSession(
         "Stored Supabase refresh token is invalid. Clearing local session.",
+        error,
       );
-      try {
-        await supabase.auth.signOut({ scope: "local" });
-      } catch (signOutError) {
-        console.warn(
-          "Failed to clear local session after invalid refresh token:",
-          signOutError?.message || signOutError,
-        );
-      }
-      session = null;
       return;
     }
     throw error;
@@ -456,6 +487,7 @@ function createWindow() {
       console.error("Failed to hydrate initial session:", error);
       session = null;
     }
+    subscribeAuthStateChanges();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("auth:session", session);
     }
