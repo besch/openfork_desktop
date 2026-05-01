@@ -544,7 +544,7 @@ export const DockerManagement = memo(() => {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="bg-destructive-foreground text-white rounded-lg p-4 flex items-center justify-between shadow-lg border border-white/10"
+          className="bg-destructive text-white rounded-lg p-4 flex items-center justify-between shadow-lg border border-white/10"
         >
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5" />
