@@ -3,15 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import config from "../config.json";
 
 const supabaseUrl = config.SUPABASE_URL;
-const supabaseAnonKey = config.SUPABASE_ANON_KEY;
+const supabasePublishableKey = config.SUPABASE_PUBLISHABLE_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl || !supabasePublishableKey) {
   console.error(
-    "Supabase credentials not found. Make sure to create a .env file in the dgn_client_desktop directory."
+    "Supabase credentials not found. Make sure config.json has SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY."
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     // The main process handles session persistence via electron-store.
     // The renderer client uses in-memory storage and gets the session from main.

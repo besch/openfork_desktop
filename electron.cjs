@@ -262,10 +262,10 @@ if (process.defaultApp) {
 const store = new Store();
 const {
   SUPABASE_URL,
-  SUPABASE_ANON_KEY,
+  SUPABASE_PUBLISHABLE_KEY,
   ORCHESTRATOR_API_URL,
 } = require("./config.json");
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: {
       getItem: (key) => store.get(key),
