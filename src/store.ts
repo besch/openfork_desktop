@@ -142,7 +142,17 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         .rpc("get_monetize_wallet_summary", { p_user_id: session.user.id })
         .single();
       if (!error && data) {
-        set({ monetizeWallet: data as MonetizeWallet });
+        // Map RPC response (may use old _cents names) to new _millicents names
+        const wallet = {
+          ...data,
+          pending_earnings_millicents: data.pending_earnings_millicents ?? data.pending_earnings_cents ?? 0,
+          available_to_withdraw_millicents: data.available_to_withdraw_millicents ?? data.available_to_withdraw_cents ?? 0,
+          total_earned_lifetime_millicents: data.total_earned_lifetime_millicents ?? data.total_earned_lifetime_cents ?? 0,
+          total_withdrawn_millicents: data.total_withdrawn_millicents ?? data.total_withdrawn_cents ?? 0,
+          prepaid_balance_millicents: data.prepaid_balance_millicents ?? data.prepaid_balance_cents ?? 0,
+          total_purchased_millicents: data.total_purchased_millicents ?? data.total_purchased_cents ?? 0,
+        };
+        set({ monetizeWallet: wallet as MonetizeWallet });
       }
     } catch (err) {
       console.error("store.ts: Error fetching monetize wallet:", err);

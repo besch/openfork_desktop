@@ -203,7 +203,7 @@ export function Monetize() {
 
   const handleWithdraw = useCallback(async () => {
     if (!monetizeWallet) return;
-    const amount = Math.floor(monetizeWallet.available_to_withdraw_millicents / 10); // Convert millicents to cents for API
+    const amount = Math.floor(monetizewallet.available_to_withdraw_millicents ?? wallet.available_to_withdraw_cents / 10); // Convert millicents to cents for API
 
     setWithdrawing(true);
     setWithdrawError(null);
@@ -651,26 +651,26 @@ export function Monetize() {
         {[
           {
             label: "Pending Earnings",
-            value: wallet ? formatMillicents(wallet.pending_earnings_millicents) : "—",
+            value: wallet ? formatMillicents(wallet.pending_earnings_millicents ?? wallet.pending_earnings_cents) : "—",
             color: "text-amber-400",
           },
           {
             label: "Available to Withdraw",
             value: wallet
-              ? formatMillicents(wallet.available_to_withdraw_millicents)
+              ? formatMillicents(wallet.available_to_withdraw_millicents ?? wallet.available_to_withdraw_cents)
                 : "—",
             color: "text-emerald-400",
           },
           {
             label: "Lifetime Earned",
               value: wallet
-                ? formatMillicents(wallet.total_earned_lifetime_millicents)
+                ? formatMillicents(wallet.total_earned_lifetime_millicents ?? wallet.total_earned_lifetime_cents)
                 : "—",
             color: "text-white",
           },
           {
             label: "Total Withdrawn",
-              value: wallet ? formatMillicents(wallet.total_withdrawn_millicents) : "—",
+              value: wallet ? formatMillicents(wallet.total_withdrawn_millicents ?? wallet.total_withdrawn_cents) : "—",
             color: "text-muted/60",
           },
         ].map((item, i) => (
@@ -913,13 +913,13 @@ export function Monetize() {
                       </Badge>
                       <span
                         className={`text-sm font-medium ${
-                          txn.amount_millicents < 0
+                          txn.amount_millicents ?? txn.amount_cents < 0
                             ? "text-destructive-foreground"
                             : "text-white"
                         }`}
                       >
-                        {txn.amount_millicents >= 0 ? "+" : ""}
-                         {formatMillicents(txn.amount_millicents)}
+                        {txn.amount_millicents ?? txn.amount_cents >= 0 ? "+" : ""}
+                         {formatMillicents(txn.amount_millicents ?? txn.amount_cents)}
                       </span>
                     </div>
                   </div>
@@ -932,3 +932,4 @@ export function Monetize() {
     </div>
   );
 }
+
