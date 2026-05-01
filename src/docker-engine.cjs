@@ -212,6 +212,17 @@ function classifyDockerCheckError(errorMessage = "", stderr = "") {
   ) {
     return "DOCKER_CLI_NOT_FOUND";
   }
+  // WSL VHDX is locked by a stale/zombie WSL instance. Terminating and
+  // restarting WSL will release the lock. Surface this as a distinct code
+  // so docker-monitor can trigger the WSL recovery flow.
+  if (
+    combined.includes("sharing_violation") ||
+    combined.includes("error_sharing_violation") ||
+    combined.includes("attach disk") ||
+    combined.includes("hcs/error_sharing_violation")
+  ) {
+    return "WSL_VHDX_LOCKED";
+  }
   return null;
 }
 
@@ -239,7 +250,12 @@ function runDockerCheckCommand(
         { timeout: timeoutMs ?? WSL_DOCKER_CHECK_TIMEOUT_MS },
         (error, stdout, stderr) => {
           if (error) {
-            const errorCode = classifyDockerCheckError(error.message, stderr);
+            // WSL prints SHARING_VIOLATION to stdout, not stderr — combine all
+            // three sources so the VHDX-locked case is correctly classified.
+            const errorCode = classifyDockerCheckError(
+              `${error.message}\n${stdout || ""}`,
+              stderr,
+            );
             if (errorCode !== "DOCKER_CLI_NOT_FOUND") {
               console.log(`Check command '${cmd}' failed: ${error.message}`);
               console.log(`WSL Stdout: ${stdout}`);
@@ -249,6 +265,7 @@ function runDockerCheckCommand(
               success: false,
               error: error.message,
               stderr: stderr?.trim() || "",
+              stdout: stdout?.trim() || "",
               code: errorCode || undefined,
             });
             return;
@@ -514,7 +531,28 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
     timeoutMs: WSL_DOCKER_CHECK_TIMEOUT_MS,
   });
   if (!versionResult.success) {
-    if (versionResult.code !== "DOCKER_CLI_NOT_FOUND") {
+    const errorCode =
+      versionResult.code ||
+      classifyDockerCheckError(versionResult.error, versionResult.stderr) ||
+      undefined;
+    if (errorCode === "WSL_VHDX_LOCKED") {
+      // The VHDX is held by a zombie WSL instance. Report as installed-but-not-running
+      // with the specific error code so the monitor can trigger restartWslDockerEngine.
+      console.warn(
+        `WSL distro '${wslDistro}' VHDX is locked (SHARING_VIOLATION). ` +
+          "Docker will be unreachable until WSL is terminated and restarted.",
+      );
+      return {
+        installed: true,
+        running: false,
+        isNative: false,
+        installDrive,
+        storagePath,
+        error: "DOCKER_API_UNREACHABLE",
+        wslDistro,
+      };
+    }
+    if (errorCode !== "DOCKER_CLI_NOT_FOUND") {
       console.log(`Docker CLI not found inside WSL distro '${wslDistro}'`);
     }
     return {
@@ -523,10 +561,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       isNative: false,
       installDrive,
       storagePath,
-      error:
-        versionResult.code ||
-        classifyDockerCheckError(versionResult.error, versionResult.stderr) ||
-        undefined,
+      error: errorCode,
       wslDistro,
     };
   }

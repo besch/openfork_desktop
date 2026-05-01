@@ -19,7 +19,9 @@ const DOCKER_MONITOR_MAX_FAILURES = 3;
 let dockerApiUnreachableFailures = 0;
 let wslRecoveryInProgress = false;
 let lastWslRecoveryTs = 0;
-const DOCKER_API_RECOVERY_FAILURES = 3;
+// Trigger recovery after 2 consecutive DOCKER_API_UNREACHABLE polls (faster
+// response to container crash / WSL VHDX lock-up than the previous 3).
+const DOCKER_API_RECOVERY_FAILURES = 2;
 const WSL_RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 
 // Track the active engine across polls so we can emit an event when it changes.
