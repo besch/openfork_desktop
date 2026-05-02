@@ -561,16 +561,33 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
         wslDistro,
       };
     }
-    if (errorCode !== "DOCKER_CLI_NOT_FOUND") {
-      console.log(`Docker CLI not found inside WSL distro '${wslDistro}'`);
+    if (errorCode === "DOCKER_CLI_NOT_FOUND") {
+      return {
+        installed: false,
+        running: false,
+        isNative: false,
+        installDrive,
+        storagePath,
+        error: errorCode,
+        wslDistro,
+      };
     }
+    // Unclassified failure on a confirmed-existing distro. Silent exits (empty
+    // stdout/stderr) happen when WSL is degrading before a full crash — the
+    // service is alive enough for wsl.exe to connect but too stressed to run
+    // commands. Treat as DOCKER_API_UNREACHABLE so the monitor's recovery
+    // counter accumulates immediately instead of being reset each poll.
+    console.warn(
+      `docker --version failed with unclassified error in WSL distro '${wslDistro}' ` +
+        `(${errorCode || "no error code"}); treating as DOCKER_API_UNREACHABLE`,
+    );
     return {
-      installed: false,
+      installed: true,
       running: false,
       isNative: false,
       installDrive,
       storagePath,
-      error: errorCode,
+      error: "DOCKER_API_UNREACHABLE",
       wslDistro,
     };
   }
