@@ -602,8 +602,14 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       };
     }
     // TCP also unreachable — Docker genuinely not ready.
+    // Use DOCKER_API_UNREACHABLE as the catch-all so the monitor can trigger
+    // the recovery flow even when docker info exits silently (empty stdout/stderr).
+    const infoErrorCode =
+      infoResult.code ||
+      classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
+      "DOCKER_API_UNREACHABLE";
     console.log(
-      `Docker is installed in WSL distro '${wslDistro}' but not ready:`,
+      `Docker is installed in WSL distro '${wslDistro}' but not ready (${infoErrorCode}):`,
       infoResult.error,
     );
     return {
@@ -612,10 +618,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       isNative: false,
       installDrive,
       storagePath,
-      error:
-        infoResult.code ||
-        classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
-        undefined,
+      error: infoErrorCode,
       wslDistro,
     };
   }
