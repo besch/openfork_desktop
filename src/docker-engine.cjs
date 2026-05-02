@@ -223,6 +223,15 @@ function classifyDockerCheckError(errorMessage = "", stderr = "") {
   ) {
     return "WSL_VHDX_LOCKED";
   }
+  // WSL service crash (Wsl/Service/E_UNEXPECTED). The distro and its processes
+  // remain intact but new wsl.exe connections fail. Treat identically to a
+  // VHDX lock — the same restartWslDockerEngine() recovery flow applies.
+  if (
+    combined.includes("wsl/service/e_unexpected") ||
+    combined.includes("catastrophic failure")
+  ) {
+    return "WSL_VHDX_LOCKED";
+  }
   return null;
 }
 
@@ -536,10 +545,10 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       classifyDockerCheckError(versionResult.error, versionResult.stderr) ||
       undefined;
     if (errorCode === "WSL_VHDX_LOCKED") {
-      // The VHDX is held by a zombie WSL instance. Report as installed-but-not-running
-      // with the specific error code so the monitor can trigger restartWslDockerEngine.
+      // The VHDX is held by a zombie WSL instance, or the WSL service crashed
+      // (Wsl/Service/E_UNEXPECTED). Either way, a WSL restart is required.
       console.warn(
-        `WSL distro '${wslDistro}' VHDX is locked (SHARING_VIOLATION). ` +
+        `WSL distro '${wslDistro}' is unreachable (VHDX lock or service crash). ` +
           "Docker will be unreachable until WSL is terminated and restarted.",
       );
       return {
