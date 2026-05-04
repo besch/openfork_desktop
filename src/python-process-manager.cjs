@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { app } = require("electron");
 const http = require("http");
+const dockerMonitor = require("./docker-monitor.cjs");
 
 function isInvalidSupabaseRefreshTokenError(error) {
   const code = error?.code || error?.error_code;
@@ -694,6 +695,9 @@ class PythonProcessManager {
                 });
               } else if (["completed", "failed", "cancelled"].includes(status)) {
                 this._downloadActivity.delete(key);
+                if (status === "completed") {
+                  dockerMonitor.notifyLargeDownloadCompleted();
+                }
               }
             }
             return;

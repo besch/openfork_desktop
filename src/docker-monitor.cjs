@@ -19,9 +19,17 @@ const DOCKER_MONITOR_MAX_FAILURES = 3;
 let dockerApiUnreachableFailures = 0;
 let wslRecoveryInProgress = false;
 let lastWslRecoveryTs = 0;
-// Trigger recovery after 2 consecutive DOCKER_API_UNREACHABLE polls (faster
-// response to container crash / WSL VHDX lock-up than the previous 3).
-const DOCKER_API_RECOVERY_FAILURES = 2;
+let lastLargeDownloadCompletedTs = 0;
+// Trigger recovery after 6 consecutive DOCKER_API_UNREACHABLE polls (30 seconds
+// at 5s polling). Large image downloads (8-24 GB) temporarily saturate the
+// Docker daemon with overlay2 extraction work — the previous threshold of 2
+// (10 seconds) was too aggressive and fired recovery during normal post-download
+// I/O, stopping the Python client unnecessarily.
+// During the first 3 minutes after a large download, the threshold is raised
+// further to 18 polls (90 seconds) to give Docker extra settling time.
+const DOCKER_API_RECOVERY_FAILURES = 6;
+const DOCKER_API_RECOVERY_FAILURES_POST_DOWNLOAD = 18;
+const POST_DOWNLOAD_GRACE_MS = 3 * 60 * 1000;
 const WSL_RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 
 // Track the active engine across polls so we can emit an event when it changes.
@@ -68,14 +76,30 @@ function clearDockerLists() {
 function shouldRecoverWslDocker() {
   if (process.platform !== "win32") return false;
   if (wslRecoveryInProgress) return false;
-  if (dockerApiUnreachableFailures < DOCKER_API_RECOVERY_FAILURES) return false;
   if (Date.now() - lastWslRecoveryTs < WSL_RECOVERY_COOLDOWN_MS) return false;
 
   const pythonManager = _getPythonManager?.();
   if (!pythonManager?.isRunning?.()) return false;
   if (!pythonManager.getLastService?.()) return false;
 
-  return true;
+  const threshold =
+    Date.now() - lastLargeDownloadCompletedTs < POST_DOWNLOAD_GRACE_MS
+      ? DOCKER_API_RECOVERY_FAILURES_POST_DOWNLOAD
+      : DOCKER_API_RECOVERY_FAILURES;
+
+  return dockerApiUnreachableFailures >= threshold;
+}
+
+/**
+ * Called by PythonProcessManager when Python reports a DOCKER_DOWNLOAD_STATE
+ * completed event. Resets the post-download grace window so the monitor backs
+ * off its recovery trigger threshold for the next few minutes.
+ */
+function notifyLargeDownloadCompleted() {
+  lastLargeDownloadCompletedTs = Date.now();
+  console.log(
+    "Docker monitor: large download completed — using relaxed recovery threshold for the next 3 minutes.",
+  );
 }
 
 function maybeRecoverWslDocker(dockerStatus) {
@@ -425,4 +449,5 @@ module.exports = {
   stopDockerMonitoring,
   isDockerMonitoringActive,
   resetDockerRoutingCache,
+  notifyLargeDownloadCompleted,
 };
