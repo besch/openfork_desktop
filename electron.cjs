@@ -720,7 +720,8 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
 
       if (
         !dockerStatus.running &&
-        dockerStatus.error === "DOCKER_API_UNREACHABLE"
+        (dockerStatus.error === "DOCKER_API_UNREACHABLE" ||
+          dockerStatus.error === "WSL_VHDX_LOCKED")
       ) {
         const recoveryMessage =
           "OpenFork Ubuntu is running, but its Docker API is unreachable. Restarting WSL before starting the DGN client...";

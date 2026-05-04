@@ -227,6 +227,26 @@ class AutoCompactManager {
 
       await this._runPowerShell(scriptPath, wslDistro);
 
+      // Ensure WSL Docker is reachable before restarting Python.
+      // Compaction can leave the VHDX briefly locked or WSL stopped.
+      try {
+        const dockerStatus = await this.dockerEngine.resolveDockerStatus({
+          allowNativeStart: false,
+          wslHostTimeoutMs: 10000,
+        });
+        if (!dockerStatus.running) {
+          this._notify("auto-compact:status", { phase: "recovering_wsl" });
+          await this.dockerEngine.restartWslDockerEngine({
+            wslDistro,
+            onPhase: (phase) => {
+              this._notify("auto-compact:status", { phase: `recovering_${phase}` });
+            },
+          });
+        }
+      } catch (recoveryErr) {
+        console.error("AutoCompactManager: post-compaction WSL recovery failed:", recoveryErr);
+      }
+
       // 4. Reset counters.
       this._freedSinceLastCompact = 0;
       this._lastCompactTs = Date.now();

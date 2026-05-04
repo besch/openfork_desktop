@@ -117,7 +117,7 @@ async function execDockerCommand(command) {
       execFile(
         "wsl.exe",
         args,
-        { maxBuffer: 1024 * 1024 * 10 },
+        { maxBuffer: 1024 * 1024 * 10, encoding: "utf8" },
         (error, stdout, stderr) => {
           if (error) {
             const msg = `${error.message}\n${stderr || ""}`.toLowerCase();
@@ -256,7 +256,7 @@ function runDockerCheckCommand(
       execFile(
         "wsl.exe",
         args,
-        { timeout: timeoutMs ?? WSL_DOCKER_CHECK_TIMEOUT_MS },
+        { timeout: timeoutMs ?? WSL_DOCKER_CHECK_TIMEOUT_MS, encoding: "utf8" },
         (error, stdout, stderr) => {
           if (error) {
             // WSL prints SHARING_VIOLATION to stdout, not stderr — combine all
@@ -435,6 +435,7 @@ async function restartWslDockerEngine({
     await execFileWithOutput("wsl.exe", ["--terminate", distro], {
       timeout: 60000,
       windowsHide: true,
+      encoding: "utf8",
     });
   } catch (error) {
     if (!isIgnorableWslTerminateError(error)) {
@@ -542,7 +543,10 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
   if (!versionResult.success) {
     const errorCode =
       versionResult.code ||
-      classifyDockerCheckError(versionResult.error, versionResult.stderr) ||
+      classifyDockerCheckError(
+        `${versionResult.error}\n${versionResult.stdout || ""}`,
+        versionResult.stderr
+      ) ||
       undefined;
     if (errorCode === "WSL_VHDX_LOCKED") {
       // The VHDX is held by a zombie WSL instance, or the WSL service crashed

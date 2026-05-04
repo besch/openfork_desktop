@@ -142,6 +142,8 @@ export const DockerManagement = memo(() => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setDiskSpaceError(null);
+    setEngineSwitchNotice(null);
     try {
       const nextDockerStatus = await window.electronAPI.checkDocker();
 
@@ -210,6 +212,21 @@ export const DockerManagement = memo(() => {
       fetchData();
     }
   }, [dockerPullProgress, status, fetchData]);
+
+  // Clear stale disk-space error when a new download starts (space was freed).
+  useEffect(() => {
+    if (dockerPullProgress !== null) {
+      setDiskSpaceError(null);
+    }
+  }, [dockerPullProgress]);
+
+  // Clear Docker-related errors when the client reaches a healthy state.
+  useEffect(() => {
+    if (status === "running" || status === "stopped") {
+      setError(null);
+      setDiskSpaceError(null);
+    }
+  }, [status]);
 
   // Handle disk space errors
   useEffect(() => {
@@ -654,52 +671,38 @@ export const DockerManagement = memo(() => {
 
       {/* Disk Space Error Alert */}
       {diskSpaceError && (
-        <Card className="bg-destructive/10 border-destructive/30">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-4">
-              <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-2">
-                <h3 className="text-xs font-black uppercase tracking-widest text-destructive flex items-center gap-2">
-                  Insufficient Disk Space
-                </h3>
-                <div className="text-sm space-y-1">
-                  <p>
-                    Cannot download{" "}
-                    <span className="font-mono font-bold">
-                      {diskSpaceError.image_name}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-destructive/80">Need:</span>{" "}
-                    <span className="font-black">
-                      {diskSpaceError.required_gb} GB
-                    </span>{" "}
-                    <span className="text-muted-foreground">
-                      (including 5 GB safety buffer)
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-destructive/80">Available:</span>{" "}
-                    <span className="font-black">
-                      {diskSpaceError.available_gb} GB
-                    </span>
-                  </p>
-                </div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground pt-2">
-                  Please free up disk space and try again.
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDiskSpaceError(null)}
-                className="ml-auto"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="bg-destructive text-white rounded-lg p-4 flex items-start justify-between shadow-lg border border-white/10"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="text-sm font-bold uppercase block">
+                Insufficient Disk Space: {diskSpaceError.image_name}
+              </span>
+              <p className="text-xs opacity-90">
+                Need:{" "}
+                <span className="font-black">{diskSpaceError.required_gb} GB</span>{" "}
+                (including 5 GB buffer) · Available:{" "}
+                <span className="font-black">{diskSpaceError.available_gb} GB</span>
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-wide opacity-70 pt-1">
+                Please free up disk space and try again.
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDiskSpaceError(null)}
+            className="text-white hover:bg-white/20 h-8 w-8 p-0 transition-colors shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
       )}
 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
