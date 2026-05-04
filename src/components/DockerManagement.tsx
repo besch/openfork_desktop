@@ -73,25 +73,25 @@ export const DockerManagement = memo(() => {
     to: string;
   } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-   const [autoCompactStatus, setAutoCompactStatus] = useState<{
-     phase:
-       | "starting"
-       | "stopping_client"
-       | "compacting"
-       | "restarting_client"
-       | "completed"
-       | "failed";
-     compactInProgress: boolean;
-     platformSupported: boolean;
-     error?: string;
-   } | null>(null);
+  const [autoCompactStatus, setAutoCompactStatus] = useState<{
+    phase:
+      | "starting"
+      | "stopping_client"
+      | "compacting"
+      | "restarting_client"
+      | "completed"
+      | "failed";
+    compactInProgress: boolean;
+    platformSupported: boolean;
+    error?: string;
+  } | null>(null);
 
-   const [imageEvictedNotification, setImageEvictedNotification] = useState<{
-     service_type: string;
-     image: string;
-     freed_bytes: number;
-     reason: string;
-   } | null>(null);
+  const [imageEvictedNotification, setImageEvictedNotification] = useState<{
+    service_type: string;
+    image: string;
+    freed_bytes: number;
+    reason: string;
+  } | null>(null);
   const [wslRecoveryStatus, setWslRecoveryStatus] =
     useState<WslRecoveryStatus | null>(null);
 
@@ -245,31 +245,31 @@ export const DockerManagement = memo(() => {
     return cleanup;
   }, [fetchData]);
 
-   // Listen for auto-compact status updates (Windows only).
-   useEffect(() => {
-     const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
-       setAutoCompactStatus(() => {
-         if (status.phase === "completed" || status.phase === "failed") {
-           setTimeout(() => setAutoCompactStatus(null), 8000);
-         }
-         return status;
-       });
-       if (status.phase === "completed") {
-         fetchData();
-       }
-     });
-     return cleanup;
-   }, [fetchData]);
+  // Listen for auto-compact status updates (Windows only).
+  useEffect(() => {
+    const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
+      setAutoCompactStatus(() => {
+        if (status.phase === "completed" || status.phase === "failed") {
+          setTimeout(() => setAutoCompactStatus(null), 8000);
+        }
+        return status;
+      });
+      if (status.phase === "completed") {
+        fetchData();
+      }
+    });
+    return cleanup;
+  }, [fetchData]);
 
-   // Listen for image eviction events from Python (disk space reclamation).
-   useEffect(() => {
-     const cleanup = window.electronAPI.onImageEvicted((payload) => {
-       setImageEvictedNotification(payload);
-       // Auto-hide after 6 seconds
-       setTimeout(() => setImageEvictedNotification(null), 6000);
-     });
-     return cleanup;
-   }, []);
+  // Listen for image eviction events from Python (disk space reclamation).
+  useEffect(() => {
+    const cleanup = window.electronAPI.onImageEvicted((payload) => {
+      setImageEvictedNotification(payload);
+      // Auto-hide after 6 seconds
+      setTimeout(() => setImageEvictedNotification(null), 6000);
+    });
+    return cleanup;
+  }, []);
 
   // Listen for automatic WSL recovery when the Windows -> WSL Docker API drops.
   useEffect(() => {
@@ -528,7 +528,8 @@ export const DockerManagement = memo(() => {
                     : "text-amber-300"
               }`}
             >
-              WSL Recovery: <span className="text-white">{wslRecoveryLabel}</span>
+              WSL Recovery:{" "}
+              <span className="text-white">{wslRecoveryLabel}</span>
             </span>
           </div>
           <Button
@@ -590,62 +591,64 @@ export const DockerManagement = memo(() => {
           </motion.div>
         )}
 
-       {autoCompactStatus?.phase === "failed" &&
-         !autoCompactStatus.compactInProgress && (
-           <motion.div
-             initial={{ opacity: 0, y: -10 }}
-             animate={{ opacity: 1, y: 0 }}
-             className="bg-destructive/10 border border-destructive/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-           >
-             <div className="flex items-center gap-3">
-               <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-               <span className="text-xs font-bold uppercase tracking-widest text-destructive">
-                 Auto-Compact failed:{" "}
-                 {autoCompactStatus.error || "Unknown error"}
-               </span>
-             </div>
-             <Button
-               variant="ghost"
-               size="sm"
-               onClick={() => setAutoCompactStatus(null)}
-               className="text-destructive hover:bg-destructive/20 h-8 w-8 p-0"
-             >
-               <X className="h-4 w-4" />
-             </Button>
-           </motion.div>
-         )}
+      {autoCompactStatus?.phase === "failed" &&
+        !autoCompactStatus.compactInProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-destructive/10 border border-destructive/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-widest text-destructive">
+                Auto-Compact failed:{" "}
+                {autoCompactStatus.error || "Unknown error"}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAutoCompactStatus(null)}
+              className="text-destructive hover:bg-destructive/20 h-8 w-8 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </motion.div>
+        )}
 
-       {imageEvictedNotification && (
-         <motion.div
-           initial={{ opacity: 0, y: -10 }}
-           animate={{ opacity: 1, y: 0 }}
-           className="bg-blue-500/10 border border-blue-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-         >
-           <div className="flex items-center gap-3 min-w-0">
-             <HardDrive className="h-4 w-4 text-blue-400 shrink-0" />
-             <div className="min-w-0">
-               <span className="text-xs font-bold uppercase tracking-widest text-blue-300">
-                 Reclaimed{" "}
-                 {imageEvictedNotification.freed_bytes > 0
-                   ? `${(imageEvictedNotification.freed_bytes / 1024 ** 3).toFixed(1)} GB`
-                   : "disk space"}
-                 {" "}from{" "}
-                 <span className="text-white">
-                   {imageEvictedNotification.service_type || imageEvictedNotification.image || "image"}
-                 </span>
-               </span>
-             </div>
-           </div>
-           <Button
-             variant="ghost"
-             size="sm"
-             onClick={() => setImageEvictedNotification(null)}
-             className="text-blue-300 hover:bg-blue-500/20 h-8 w-8 p-0 shrink-0"
-           >
-             <X className="h-4 w-4" />
-           </Button>
-         </motion.div>
-       )}
+      {imageEvictedNotification && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-blue-500/10 border border-blue-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <HardDrive className="h-4 w-4 text-blue-400 shrink-0" />
+            <div className="min-w-0">
+              <span className="text-xs font-bold uppercase tracking-widest text-blue-300">
+                Reclaimed{" "}
+                {imageEvictedNotification.freed_bytes > 0
+                  ? `${(imageEvictedNotification.freed_bytes / 1024 ** 3).toFixed(1)} GB`
+                  : "disk space"}{" "}
+                from{" "}
+                <span className="text-white">
+                  {imageEvictedNotification.service_type ||
+                    imageEvictedNotification.image ||
+                    "image"}
+                </span>
+              </span>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setImageEvictedNotification(null)}
+            className="text-blue-300 hover:bg-blue-500/20 h-8 w-8 p-0 shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
+      )}
 
       {error && (
         <motion.div
@@ -685,9 +688,13 @@ export const DockerManagement = memo(() => {
               </span>
               <p className="text-xs opacity-90">
                 Need:{" "}
-                <span className="font-black">{diskSpaceError.required_gb} GB</span>{" "}
+                <span className="font-black">
+                  {diskSpaceError.required_gb} GB
+                </span>{" "}
                 (including 5 GB buffer) · Available:{" "}
-                <span className="font-black">{diskSpaceError.available_gb} GB</span>
+                <span className="font-black">
+                  {diskSpaceError.available_gb} GB
+                </span>
               </p>
               <p className="text-[10px] font-bold uppercase tracking-wide opacity-70 pt-1">
                 Please free up disk space and try again.
@@ -747,9 +754,8 @@ export const DockerManagement = memo(() => {
             onClick={() => setIsSettingsOpen(true)}
             aria-label="Open Docker settings"
             title="Open Docker settings"
-            className="rounded-lg shadow-lg shadow-primary/20"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-4 w-4 text-white/70" />
           </Button>
           <Button
             variant="ghost"

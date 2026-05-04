@@ -70,28 +70,32 @@ export function Modal({
       }}
     >
       <div
-        className={`relative w-full ${sizeClasses[size]} max-h-[90vh] rounded-lg shadow-2xl shadow-black/80 overflow-hidden flex flex-col text-foreground border border-white/10 bg-surface`}
+        className={`relative w-full ${sizeClasses[size]} max-h-[90vh] rounded-2xl shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col text-foreground border border-white/10 bg-[#0c0a09] backdrop-blur-2xl animate-in zoom-in-95 duration-300`}
       >
+        {/* Subtle glow effect */}
+        <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
+
         {/* Header */}
-        <div className="flex-shrink-0 px-6 py-4 bg-surface border-b border-white/5">
+        <div className="flex-shrink-0 px-8 py-6 border-b border-white/5 relative z-10 bg-white/[0.01]">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight truncate max-w-[calc(100vw-120px)]">
+              <h2 className="text-xl font-bold text-white tracking-tight truncate max-w-[calc(100vw-120px)]">
                 {title}
               </h2>
               {description && (
-                <p className="mt-1 text-sm leading-relaxed text-white/68 break-words max-w-2xl">
+                <p className="mt-1.5 text-[13px] leading-relaxed text-white/50 break-words max-w-2xl font-medium">
                   {description}
                 </p>
               )}
             </div>
             <Button
-              variant="destructive"
-              size="icon-sm"
+              variant="ghost"
+              size="icon"
               onClick={onClose}
-              className="rounded-lg"
+              className="rounded-xl hover:bg-white/5 hover:text-white transition-all duration-300 border border-transparent hover:border-white/10"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </Button>
           </div>
         </div>
@@ -100,12 +104,12 @@ export function Modal({
         {hasChildren(children) && (
           <div
             className={cn(
-              "flex-1 overflow-y-auto p-6 scrollbar-thin",
+              "flex-1 overflow-y-auto p-8 scrollbar-thin relative z-10",
               scrollbarVariant === "primary" && "scrollbar-primary",
             )}
             style={{
               background:
-                "linear-gradient(to bottom, transparent, rgba(0,0,0,0.1))",
+                "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.02), transparent)",
             }}
           >
             {children}
@@ -114,7 +118,7 @@ export function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="flex-shrink-0 px-6 py-4 bg-surface/80 backdrop-blur-sm border-t border-white/5">
+          <div className="flex-shrink-0 px-8 py-6 bg-white/[0.02] backdrop-blur-sm border-t border-white/5 relative z-10">
             {footer}
           </div>
         )}

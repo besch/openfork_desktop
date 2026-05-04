@@ -242,42 +242,42 @@ export function StorageSettings({
         : "Native Linux Docker runtime";
   const readableMode = compact || embedded;
   const sectionClassName = readableMode
-    ? "rounded-xl border border-white/12 bg-black/30 p-3.5 space-y-3 shadow-inner shadow-black/10"
-    : "rounded-lg border border-white/10 bg-white/5 p-4 space-y-3";
+    ? "rounded-2xl border border-white/10 bg-white/[0.02] backdrop-blur-md p-5 space-y-4 shadow-2xl shadow-black/20 transition-all duration-300 hover:bg-white/[0.04] hover:border-white/20"
+    : "rounded-xl border border-white/10 bg-white/5 p-6 space-y-4 shadow-xl";
   const headingClassName = readableMode
-    ? "text-xs font-semibold tracking-[0.06em] text-white"
-    : "text-[10px] font-black uppercase tracking-[0.2em] text-white/90";
+    ? "text-sm font-bold tracking-tight text-white/90"
+    : "text-xs font-black uppercase tracking-[0.2em] text-white/90";
   const subheadingClassName = readableMode
-    ? "text-[11px] text-white/68 leading-relaxed mt-1"
-    : "text-[9px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5";
+    ? "text-[12px] text-white/50 leading-relaxed mt-1"
+    : "text-[10px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5";
   const statChipClassName = readableMode
-    ? "max-w-full truncate text-[10px] text-white/88 bg-white/8 font-semibold tracking-[0.05em] px-3 py-1.5 rounded-lg border border-white/10"
+    ? "max-w-full truncate text-[11px] text-white/70 bg-white/[0.03] font-medium tracking-tight px-3 py-1.5 rounded-xl border border-white/10 transition-colors hover:bg-white/[0.06]"
     : "max-w-full truncate text-[9px] text-white/80 bg-white/5 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/5";
   const accentChipClassName = readableMode
-    ? "text-[10px] text-amber-200 bg-amber-500/12 font-semibold tracking-[0.05em] px-3 py-1.5 rounded-lg border border-amber-500/25"
+    ? "text-[11px] text-amber-400 bg-amber-500/10 font-semibold tracking-tight px-3 py-1.5 rounded-xl border border-amber-500/20 shadow-lg shadow-amber-500/5"
     : "text-[9px] text-amber-300/90 bg-amber-500/10 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-amber-500/20";
   const summaryClassName = readableMode
-    ? "text-[11px] font-semibold tracking-[0.04em] text-white/92"
+    ? "text-[12px] font-semibold tracking-tight text-white/80"
     : "text-[10px] font-black tracking-widest text-white/90 uppercase";
   const labelClassName = readableMode
-    ? "text-[11px] font-semibold tracking-[0.04em] text-white/94"
+    ? "text-[12px] font-bold tracking-tight text-white/90"
     : "text-[10px] font-black uppercase tracking-widest text-white/90";
   const copyClassName = readableMode
-    ? "text-[11px] text-white/74 leading-relaxed"
+    ? "text-[12px] text-white/60 leading-relaxed"
     : "text-[9px] text-white/40 font-black uppercase leading-relaxed";
   const copyMutedClassName = readableMode
-    ? "text-[11px] text-white/70 leading-relaxed"
+    ? "text-[12px] text-white/50 leading-relaxed"
     : "text-[9px] text-white/30 font-black uppercase leading-relaxed";
   const helperTextClassName = readableMode
-    ? "text-[11px] text-white/70 leading-relaxed sm:flex-1"
+    ? "text-[12px] text-white/50 leading-relaxed sm:flex-1"
     : "text-[9px] text-white/55 font-black uppercase leading-relaxed sm:flex-1";
   const emptyStateClassName = readableMode
-    ? "text-[11px] font-medium tracking-[0.03em] text-white/80 leading-relaxed"
+    ? "text-[12px] font-medium tracking-tight text-white/70 leading-relaxed"
     : "text-[9px] font-black uppercase tracking-[0.15em] text-white/80 leading-relaxed";
   const buttonTextClassName = readableMode
-    ? "px-4 h-8 text-[10px] font-semibold uppercase tracking-[0.08em]"
+    ? "px-5 h-9 text-[11px] font-bold tracking-tight"
     : "px-4 h-8 text-[10px] font-black uppercase tracking-widest";
-  const sectionRadiusClassName = readableMode ? "rounded-xl" : "rounded-lg";
+  const sectionRadiusClassName = readableMode ? "rounded-2xl" : "rounded-xl";
   const renderSectionLoadingOverlay = () => (
     <div
       className={`absolute inset-0 z-20 flex flex-col items-center justify-center ${sectionRadiusClassName} bg-black/38 backdrop-blur-[2px] animate-in fade-in duration-300`}
@@ -288,21 +288,21 @@ export function StorageSettings({
   const body = (
     <>
       <div
-        className={`${compact ? "flex flex-col gap-3 border-b border-white/5 pb-4" : "flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6"}`}
+        className={`${compact ? "flex flex-col gap-4 border-b border-white/5 pb-6" : "flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-white/5 pb-8"}`}
       >
-        <div className="flex items-center gap-4">
-          <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
-            <HardDrive className="h-5 w-5" />
+        <div className="flex items-center gap-5">
+          <div className="p-3 rounded-2xl bg-black/40 border border-amber-500/20 shadow-2xl shadow-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+            <HardDrive className="h-6 w-6" />
           </div>
           <div>
-            <h3 className={headingClassName}>{storageTitle}</h3>
-            <p className={subheadingClassName}>{storageSubtitle}</p>
+            <h3 className={headingClassName + " text-base"}>{storageTitle}</h3>
+            <p className={subheadingClassName + " text-[13px]"}>{storageSubtitle}</p>
           </div>
         </div>
         {(diskInfo || loading) && (
           <div className="relative">
-            <div className="flex flex-col gap-2 sm:items-end">
-              <div className="flex flex-wrap gap-2 sm:justify-end">
+            <div className="flex flex-col gap-3 sm:items-end">
+              <div className="flex flex-wrap gap-2.5 sm:justify-end">
                 <div className={statChipClassName}>
                   {diskInfo
                     ? `Active: ${diskInfo.path}`
@@ -459,7 +459,7 @@ export function StorageSettings({
                     onValueChange={setSelectedDrive}
                     disabled={loading || isRelocating}
                   >
-                    <SelectTrigger className="w-full h-8 text-[11px] bg-background/50 border-white/10 hover:bg-background/80 transition-colors">
+                    <SelectTrigger className="w-full h-9 text-[12px] bg-black/60 border-white/10 hover:bg-black/80 hover:border-white/20 transition-all rounded-xl shadow-inner">
                       <SelectValue placeholder="Select Drive" />
                     </SelectTrigger>
                     <SelectContent>
@@ -548,57 +548,57 @@ export function StorageSettings({
             </div>
 
             {/* Scalar thresholds */}
-            <div
-              className={`grid grid-cols-1 ${compact ? "xl:grid-cols-3" : "sm:grid-cols-3"} gap-3`}
-            >
-              {[
-                {
-                  label: "Minimum free disk space to accept new jobs (GB)",
-                  key: "DISK_PRESSURE_HEALTHY_GB",
-                  min: 20,
-                  max: 500,
-                },
-                {
-                  label:
-                    "Critical low disk space when client will stop accepting new jobs (GB)",
-                  key: "DISK_PRESSURE_CRITICAL_GB",
-                  min: 5,
-                  max: 500,
-                },
-                {
-                  label: "Private mode job limit",
-                  key: "MINE_POLICY_PRESSURE_CAP",
-                  min: 1,
-                  max: 50,
-                },
-              ].map((field) => (
-                <div key={field.key} className="space-y-1">
-                  <Label className={labelClassName}>{field.label}</Label>
-                  <input
-                    type="number"
-                    min={field.min}
-                    max={field.max}
-                    value={
-                      pythonConfig[
-                        field.key as keyof typeof pythonConfig
-                      ] as number
-                    }
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      setPythonConfig((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              [field.key]: isNaN(val) ? field.min : val,
-                            }
-                          : prev,
-                      );
-                    }}
-                    className="w-full h-8 px-2 rounded-lg bg-black/40 border border-white/10 text-white text-[11px] font-semibold focus:outline-none focus:border-amber-500/50 transition-colors"
-                  />
-                </div>
-              ))}
-            </div>
+              <div
+                className={`grid grid-cols-1 ${compact ? "xl:grid-cols-3" : "sm:grid-cols-3"} gap-4`}
+              >
+                {[
+                  {
+                    label: "Minimum free disk space (GB)",
+                    key: "DISK_PRESSURE_HEALTHY_GB",
+                    min: 20,
+                    max: 500,
+                  },
+                  {
+                    label:
+                      "Critical low disk space threshold (GB)",
+                    key: "DISK_PRESSURE_CRITICAL_GB",
+                    min: 5,
+                    max: 500,
+                  },
+                  {
+                    label: "Private mode job limit",
+                    key: "MINE_POLICY_PRESSURE_CAP",
+                    min: 1,
+                    max: 50,
+                  },
+                ].map((field) => (
+                  <div key={field.key} className="space-y-2">
+                    <Label className={labelClassName}>{field.label}</Label>
+                    <input
+                      type="number"
+                      min={field.min}
+                      max={field.max}
+                      value={
+                        pythonConfig[
+                          field.key as keyof typeof pythonConfig
+                        ] as number
+                      }
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setPythonConfig((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                [field.key]: isNaN(val) ? field.min : val,
+                              }
+                            : prev,
+                        );
+                      }}
+                      className="w-full h-10 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-[13px] font-semibold focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all shadow-inner"
+                    />
+                  </div>
+                ))}
+              </div>
 
             {/* Policy grids */}
             {[
@@ -689,10 +689,10 @@ export function StorageSettings({
                                 };
                               });
                             }}
-                            className="w-full h-7 px-2 rounded-lg bg-black/40 border border-white/10 text-white text-[11px] font-semibold focus:outline-none focus:border-amber-500/50 transition-colors"
+                            className="w-full h-9 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-[12px] font-semibold focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all shadow-inner"
                           />
                         ) : (
-                          <div className="w-full h-7 px-2 rounded-lg bg-white/5 border border-white/5 text-white/30 text-[11px] font-semibold flex items-center">
+                          <div className="w-full h-9 px-3 rounded-xl bg-white/5 border border-white/5 text-white/30 text-[12px] font-semibold flex items-center">
                             —
                           </div>
                         )}
