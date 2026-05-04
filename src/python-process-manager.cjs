@@ -698,9 +698,26 @@ class PythonProcessManager {
                   status,
                 });
               } else if (["completed", "failed", "cancelled"].includes(status)) {
-                this._downloadActivity.delete(key);
                 if (status === "completed") {
+                  // Keep the activity entry live during the post-download grace window
+                  // so hasQueuedDownloads() stays true while Docker extracts overlay2
+                  // layers (disk at 100%, TCP API intermittently refusing connections).
+                  // AutoCompactManager must not fire compaction during this window.
+                  const POST_DOWNLOAD_ACTIVITY_GRACE_MS = 90 * 1000; // 90 seconds
+                  this._downloadActivity.set(key, {
+                    image: payload.image || null,
+                    status: "settling",
+                  });
+                  setTimeout(() => {
+                    // Only clear if still in settling state (not replaced by a new download)
+                    const current = this._downloadActivity.get(key);
+                    if (current && current.status === "settling") {
+                      this._downloadActivity.delete(key);
+                    }
+                  }, POST_DOWNLOAD_ACTIVITY_GRACE_MS);
                   dockerMonitor.notifyLargeDownloadCompleted();
+                } else {
+                  this._downloadActivity.delete(key);
                 }
               }
             }
