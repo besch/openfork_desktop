@@ -99,6 +99,21 @@ interface WslRecoveryStatus {
   error?: string;
 }
 
+interface PythonConfigData {
+  POLICY_MAX_CACHED_IMAGES: Record<string, number | null>;
+  POLICY_IDLE_TIMEOUT_MINUTES: Record<string, number | null>;
+  DISK_PRESSURE_HEALTHY_GB: number;
+  DISK_PRESSURE_CRITICAL_GB: number;
+  MINE_POLICY_PRESSURE_CAP: number;
+}
+
+interface PythonConfigResult {
+  success: boolean;
+  data?: PythonConfigData;
+  defaults?: PythonConfigData;
+  error?: string;
+}
+
 interface ProviderRateInfo {
   custom_rate_cents_per_vram_gb_min: number | null;
   platform_rate_cents_per_vram_gb_min: number;
@@ -294,6 +309,11 @@ interface ElectronAPI {
   // Settings persistence
   loadSettings: () => Promise<Record<string, unknown> | null>;
   saveSettings: (settings: Record<string, unknown>) => Promise<SettingsResult>;
+
+  // Python config overrides
+  getPythonConfig: () => Promise<PythonConfigResult>;
+  setPythonConfig: (config: Partial<PythonConfigData>) => Promise<{ success: boolean; error?: string }>;
+  resetPythonConfig: () => Promise<{ success: boolean; error?: string }>;
 
   // Schedule Management
   getScheduleConfig: () => Promise<ScheduleConfig>;

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
 const path = require("path");
 const os = require("os");
+const fs = require("fs");
 const { execFile: _execFile } = require("child_process");
 
 const Store = require("electron-store").default;
@@ -1067,6 +1068,94 @@ ipcMain.handle("save-settings", async (event, newSettings) => {
   } catch (error) {
     console.error("Error saving settings:", error);
     return { success: false, error: error.message };
+  }
+});
+
+// --- PYTHON CONFIG OVERRIDES IPC HANDLERS ---
+
+const DEFAULT_PYTHON_CONFIG = {
+  POLICY_MAX_CACHED_IMAGES: {
+    monetize: 3,
+    all: 4,
+    project: 6,
+    users: 6,
+    mine: null,
+  },
+  POLICY_IDLE_TIMEOUT_MINUTES: {
+    monetize: 90,
+    all: 120,
+    project: 240,
+    users: 240,
+    mine: null,
+  },
+  DISK_PRESSURE_HEALTHY_GB: 50,
+  DISK_PRESSURE_CRITICAL_GB: 20,
+  MINE_POLICY_PRESSURE_CAP: 8,
+};
+
+function getConfigOverridesPath() {
+  return path.join(app.getPath("userData"), "config_overrides.json");
+}
+
+function readConfigOverrides() {
+  const filePath = getConfigOverridesPath();
+  try {
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    }
+  } catch (e) {
+    console.error("Failed to read config overrides:", e);
+  }
+  return {};
+}
+
+function writeConfigOverrides(overrides) {
+  const filePath = getConfigOverridesPath();
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(overrides, null, 2), "utf8");
+    return true;
+  } catch (e) {
+    console.error("Failed to write config overrides:", e);
+    return false;
+  }
+}
+
+ipcMain.handle("python-config:get", () => {
+  const overrides = readConfigOverrides();
+  return {
+    success: true,
+    data: {
+      ...DEFAULT_PYTHON_CONFIG,
+      ...overrides,
+    },
+    defaults: DEFAULT_PYTHON_CONFIG,
+  };
+});
+
+ipcMain.handle("python-config:set", (event, payload) => {
+  try {
+    const overrides = readConfigOverrides();
+    const merged = { ...overrides, ...payload };
+    if (!writeConfigOverrides(merged)) {
+      return { success: false, error: "Failed to write overrides file." };
+    }
+    return { success: true };
+  } catch (e) {
+    console.error("Error setting python config:", e);
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle("python-config:reset", () => {
+  try {
+    const filePath = getConfigOverridesPath();
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return { success: true };
+  } catch (e) {
+    console.error("Error resetting python config:", e);
+    return { success: false, error: e.message };
   }
 });
 

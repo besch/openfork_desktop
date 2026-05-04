@@ -17,6 +17,10 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Sparkles,
+  Settings,
+  RotateCcw,
+  Save,
+  Info,
 } from "lucide-react";
 
 interface StorageSettingsProps {
@@ -59,6 +63,18 @@ export function StorageSettings({
     platformSupported: boolean;
   } | null>(null);
 
+  // Python advanced config overrides
+  const [pythonConfig, setPythonConfig] = useState<{
+    POLICY_MAX_CACHED_IMAGES: Record<string, number | null>;
+    POLICY_IDLE_TIMEOUT_MINUTES: Record<string, number | null>;
+    DISK_PRESSURE_HEALTHY_GB: number;
+    DISK_PRESSURE_CRITICAL_GB: number;
+    MINE_POLICY_PRESSURE_CAP: number;
+  } | null>(null);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [configSuccess, setConfigSuccess] = useState(false);
+
   const refreshAutoCompactStatus = useCallback(async () => {
     try {
       const status = await window.electronAPI.getAutoCompactStatus();
@@ -67,6 +83,109 @@ export function StorageSettings({
       console.error("Failed to get auto-compact status:", e);
     }
   }, []);
+
+  const loadPythonConfig = useCallback(async () => {
+    try {
+      setConfigLoading(true);
+      const result = await window.electronAPI.getPythonConfig();
+      if (result.success && result.data) {
+        setPythonConfig(result.data);
+      }
+    } catch (e) {
+      console.error("Failed to load python config:", e);
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
+
+  const validateAndSavePythonConfig = async () => {
+    if (!pythonConfig) return;
+    setConfigError(null);
+    setConfigSuccess(false);
+
+    const {
+      DISK_PRESSURE_HEALTHY_GB,
+      DISK_PRESSURE_CRITICAL_GB,
+      MINE_POLICY_PRESSURE_CAP,
+      POLICY_MAX_CACHED_IMAGES,
+      POLICY_IDLE_TIMEOUT_MINUTES,
+    } = pythonConfig;
+
+    if (DISK_PRESSURE_CRITICAL_GB >= DISK_PRESSURE_HEALTHY_GB) {
+      setConfigError(
+        "Critical Low Space must be lower than Minimum Free Space.",
+      );
+      return;
+    }
+    if (DISK_PRESSURE_HEALTHY_GB < 20) {
+      setConfigError("Minimum Free Space must be at least 20 GB.");
+      return;
+    }
+    if (DISK_PRESSURE_CRITICAL_GB < 5) {
+      setConfigError("Critical Low Space must be at least 5 GB.");
+      return;
+    }
+    if (MINE_POLICY_PRESSURE_CAP < 1) {
+      setConfigError("Private Mode Job Limit must be at least 1.");
+      return;
+    }
+
+    for (const [policy, val] of Object.entries(POLICY_MAX_CACHED_IMAGES)) {
+      if (policy === "mine") continue;
+      if (val === null || (typeof val === "number" && val < 1)) {
+        setConfigError(`Max cached images for '${policy}' must be at least 1.`);
+        return;
+      }
+    }
+
+    for (const [policy, val] of Object.entries(POLICY_IDLE_TIMEOUT_MINUTES)) {
+      if (policy === "mine") continue;
+      if (val === null || (typeof val === "number" && val < 10)) {
+        setConfigError(
+          `Idle timeout for '${policy}' must be at least 10 minutes.`,
+        );
+        return;
+      }
+    }
+
+    try {
+      const result = await window.electronAPI.setPythonConfig(pythonConfig);
+      if (result.success) {
+        setConfigSuccess(true);
+        setTimeout(() => setConfigSuccess(false), 4000);
+      } else {
+        setConfigError(result.error || "Failed to save config.");
+      }
+    } catch (e) {
+      setConfigError(e instanceof Error ? e.message : "Failed to save config.");
+    }
+  };
+
+  const resetPythonConfig = async () => {
+    if (
+      !window.confirm(
+        "Reset all advanced client config values to their defaults? Changes take effect after restarting the DGN client.",
+      )
+    ) {
+      return;
+    }
+    setConfigError(null);
+    setConfigSuccess(false);
+    try {
+      const result = await window.electronAPI.resetPythonConfig();
+      if (result.success) {
+        await loadPythonConfig();
+        setConfigSuccess(true);
+        setTimeout(() => setConfigSuccess(false), 4000);
+      } else {
+        setConfigError(result.error || "Failed to reset config.");
+      }
+    } catch (e) {
+      setConfigError(
+        e instanceof Error ? e.message : "Failed to reset config.",
+      );
+    }
+  };
 
   const refreshData = async () => {
     setLoading(true);
@@ -96,11 +215,12 @@ export function StorageSettings({
     });
     refreshData();
     refreshAutoCompactStatus();
+    loadPythonConfig();
     const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
       setAutoCompact(status);
     });
     return cleanup;
-  }, [refreshAutoCompactStatus]);
+  }, [refreshAutoCompactStatus, loadPythonConfig]);
 
   const isWindows = platform === "win32";
   const isWslMode = isWindows && dockerStatus?.isNative === false;
@@ -402,6 +522,241 @@ export function StorageSettings({
           </p>
         </div>
       )}
+
+      {/* Advanced Client Config */}
+      <div className={sectionClassName}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-0.5">
+            <Label className={`${labelClassName} flex items-center gap-1.5`}>
+              <Settings className="h-3 w-3" />
+              Advanced Client Config
+            </Label>
+            <p className={copyMutedClassName}>
+              Tune disk-pressure thresholds, cache caps, and idle timeouts.
+            </p>
+          </div>
+        </div>
+
+        {pythonConfig && (
+          <div className="space-y-3 pt-1">
+            {/* Warning banner */}
+            <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+              <Info className="h-3 w-3 text-amber-300 shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-300">
+                Changes take effect after restarting the DGN client.
+              </span>
+            </div>
+
+            {/* Scalar thresholds */}
+            <div
+              className={`grid grid-cols-1 ${compact ? "xl:grid-cols-3" : "sm:grid-cols-3"} gap-3`}
+            >
+              {[
+                {
+                  label: "Minimum free disk space to accept new jobs (GB)",
+                  key: "DISK_PRESSURE_HEALTHY_GB",
+                  min: 20,
+                  max: 500,
+                },
+                {
+                  label:
+                    "Critical low disk space when client will stop accepting new jobs (GB)",
+                  key: "DISK_PRESSURE_CRITICAL_GB",
+                  min: 5,
+                  max: 500,
+                },
+                {
+                  label: "Private mode job limit",
+                  key: "MINE_POLICY_PRESSURE_CAP",
+                  min: 1,
+                  max: 50,
+                },
+              ].map((field) => (
+                <div key={field.key} className="space-y-1">
+                  <Label className={labelClassName}>{field.label}</Label>
+                  <input
+                    type="number"
+                    min={field.min}
+                    max={field.max}
+                    value={
+                      pythonConfig[
+                        field.key as keyof typeof pythonConfig
+                      ] as number
+                    }
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setPythonConfig((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              [field.key]: isNaN(val) ? field.min : val,
+                            }
+                          : prev,
+                      );
+                    }}
+                    className="w-full h-8 px-2 rounded-lg bg-black/40 border border-white/10 text-white text-[11px] font-semibold focus:outline-none focus:border-amber-500/50 transition-colors"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Policy grids */}
+            {[
+              {
+                title: "Max Cached Images Per Policy",
+                key: "POLICY_MAX_CACHED_IMAGES",
+                mineLabel: "Unlimited",
+                min: 1,
+              },
+              {
+                title: "Idle Timeout (minutes)",
+                key: "POLICY_IDLE_TIMEOUT_MINUTES",
+                mineLabel: "Disabled",
+                min: 10,
+              },
+            ].map((group) => (
+              <div key={group.key} className="space-y-2">
+                <Label className={labelClassName}>{group.title}</Label>
+                <div
+                  className={`grid grid-cols-2 ${compact ? "xl:grid-cols-5" : "sm:grid-cols-5"} gap-2`}
+                >
+                  {Object.entries(
+                    pythonConfig[
+                      group.key as
+                        | "POLICY_MAX_CACHED_IMAGES"
+                        | "POLICY_IDLE_TIMEOUT_MINUTES"
+                    ],
+                  ).map(([policy, val]) => {
+                    const isMine = policy === "mine";
+                    const isNull = val === null || val === 0;
+                    return (
+                      <div key={policy} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-white/70">
+                            {policy}
+                          </span>
+                          {isMine && (
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isNull}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setPythonConfig((prev) => {
+                                    if (!prev) return prev;
+                                    const next = {
+                                      ...prev,
+                                      [group.key]: {
+                                        ...prev[
+                                          group.key as
+                                            | "POLICY_MAX_CACHED_IMAGES"
+                                            | "POLICY_IDLE_TIMEOUT_MINUTES"
+                                        ],
+                                        [policy]: checked ? null : group.min,
+                                      },
+                                    };
+                                    return next;
+                                  });
+                                }}
+                                className="accent-amber-500 h-3 w-3"
+                              />
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-white/50">
+                                {group.mineLabel}
+                              </span>
+                            </label>
+                          )}
+                        </div>
+                        {!isMine || !isNull ? (
+                          <input
+                            type="number"
+                            min={group.min}
+                            max={10080}
+                            value={val ?? ""}
+                            onChange={(e) => {
+                              const num = parseInt(e.target.value, 10);
+                              setPythonConfig((prev) => {
+                                if (!prev) return prev;
+                                return {
+                                  ...prev,
+                                  [group.key]: {
+                                    ...prev[
+                                      group.key as
+                                        | "POLICY_MAX_CACHED_IMAGES"
+                                        | "POLICY_IDLE_TIMEOUT_MINUTES"
+                                    ],
+                                    [policy]: isNaN(num) ? group.min : num,
+                                  },
+                                };
+                              });
+                            }}
+                            className="w-full h-7 px-2 rounded-lg bg-black/40 border border-white/10 text-white text-[11px] font-semibold focus:outline-none focus:border-amber-500/50 transition-colors"
+                          />
+                        ) : (
+                          <div className="w-full h-7 px-2 rounded-lg bg-white/5 border border-white/5 text-white/30 text-[11px] font-semibold flex items-center">
+                            —
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+              <div className="flex-1 min-w-0">
+                {configError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 text-destructive"
+                  >
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">
+                      {configError}
+                    </span>
+                  </motion.div>
+                )}
+                {configSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-2 text-emerald-400"
+                  >
+                    <Sparkles className="h-3 w-3 shrink-0" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">
+                      Config saved. Restart the DGN client to apply.
+                    </span>
+                  </motion.div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`${buttonTextClassName}`}
+                  onClick={resetPythonConfig}
+                  disabled={configLoading}
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                  Reset to Default
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className={`${buttonTextClassName}`}
+                  onClick={validateAndSavePythonConfig}
+                  disabled={configLoading}
+                >
+                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                  Save Config
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {error && (
         <motion.div

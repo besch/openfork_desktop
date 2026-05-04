@@ -498,6 +498,10 @@ class PythonProcessManager {
         PYTHONIOENCODING: "utf-8",
         PYTHONUTF8: "1",
       };
+      // Point Python config.py at the user overrides file so overrides are
+      // applied at import time before any downstream module reads them.
+      const configOverridesPath = path.join(this.userDataPath, "config_overrides.json");
+      spawnEnv.OPENFORK_CONFIG_OVERRIDES_PATH = configOverridesPath;
       if (process.platform === "win32") {
         // Only propagate an explicit Docker endpoint.
         // When OPENFORK_DOCKER_HOST is not set (Docker Desktop native mode) leave

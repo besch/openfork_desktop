@@ -149,6 +149,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   loadSettings: () => ipcRenderer.invoke("load-settings"),
   saveSettings: (settings) => ipcRenderer.invoke("save-settings", settings),
 
+  // Python config overrides
+  getPythonConfig: () => ipcRenderer.invoke("python-config:get"),
+  setPythonConfig: (config) => ipcRenderer.invoke("python-config:set", config),
+  resetPythonConfig: () => ipcRenderer.invoke("python-config:reset"),
+
   // Schedule Management
   getScheduleConfig: () => ipcRenderer.invoke("schedule:get-config"),
   setScheduleConfig: (config) => ipcRenderer.invoke("schedule:set-config", config),
