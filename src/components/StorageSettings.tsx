@@ -603,7 +603,7 @@ export function StorageSettings({
             {/* Policy grids */}
             {[
               {
-                title: "Max Cached Images Per Policy",
+                title: "Max Cached Docker Images Per Policy",
                 key: "POLICY_MAX_CACHED_IMAGES",
                 mineLabel: "Unlimited",
                 min: 1,
