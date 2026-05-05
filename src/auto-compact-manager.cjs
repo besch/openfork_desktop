@@ -1,16 +1,14 @@
 const { execFile } = require("child_process");
-const fs = require("fs");
 const path = require("path");
 
 /**
  * AutoCompactManager — Windows-only orchestrator for automatic VHDX compaction.
  *
- * After Python evicts cached Docker images, the WSL VHDX file on the host may
- * still stay large even though Linux free space increased. This manager watches
- * IMAGE_EVICTED events from Python and, once cumulative freed bytes cross a
- * threshold, schedules
- * a compaction during the next fully-idle window if the Windows host drive is
- * actually under space pressure:
+ * After Python evicts cached Docker images, the WSL VHDX file on the host stays
+ * the same size. The user has to either click "Reclaim Disk Space" in Storage
+ * Settings or wait for it to fragment further. This manager watches IMAGE_EVICTED
+ * events from Python and, once cumulative freed bytes cross a threshold, schedules
+ * a compaction during the next fully-idle window:
  *
  *   - DGN client is currently running (we won't start it).
  *   - No active job in flight (hasActiveJob() === false).
@@ -29,7 +27,6 @@ class AutoCompactManager {
   static DEFAULT_THRESHOLD_BYTES = 20 * 1024 ** 3; // 20 GB
   static IDLE_CHECK_INTERVAL_MS = 30 * 1000; // 30 seconds
   static MIN_COMPACT_GAP_MS = 60 * 60 * 1000; // 1 hour minimum between auto-compactions
-  static DEFAULT_HOST_PRESSURE_FREE_BYTES = 50 * 1024 ** 3; // Mirrors DISK_PRESSURE_HEALTHY_GB default
 
   constructor({
     app,
@@ -57,7 +54,8 @@ class AutoCompactManager {
     this._lastCompactTs = Number(saved.lastCompactTs || 0);
     this._enabled = saved.enabled !== false; // default on
     this._thresholdBytes =
-      Number(saved.thresholdBytes) || AutoCompactManager.DEFAULT_THRESHOLD_BYTES;
+      Number(saved.thresholdBytes) ||
+      AutoCompactManager.DEFAULT_THRESHOLD_BYTES;
 
     this._idleTimer = null;
     this._compactInProgress = false;
@@ -69,7 +67,10 @@ class AutoCompactManager {
     if (this._interruptedCompaction) {
       // Clear the stale flag immediately so it only shows once per launch.
       const current = this.store.get("autoCompactState") || {};
-      this.store.set("autoCompactState", { ...current, compactInProgress: false });
+      this.store.set("autoCompactState", {
+        ...current,
+        compactInProgress: false,
+      });
     }
   }
 
@@ -147,7 +148,10 @@ class AutoCompactManager {
     if (!this._enabled) return false;
     if (this._compactInProgress) return false;
     if (this._freedSinceLastCompact < this._thresholdBytes) return false;
-    if (Date.now() - this._lastCompactTs < AutoCompactManager.MIN_COMPACT_GAP_MS)
+    if (
+      Date.now() - this._lastCompactTs <
+      AutoCompactManager.MIN_COMPACT_GAP_MS
+    )
       return false;
     return true;
   }
@@ -190,122 +194,9 @@ class AutoCompactManager {
       return;
     }
     this._stopIdleWatch();
-    this._runCompactionFlowIfNeeded().catch((err) => {
+    this._runCompactionFlow().catch((err) => {
       console.error("AutoCompactManager: compaction flow failed:", err);
     });
-  }
-
-  async _runCompactionFlowIfNeeded() {
-    const freeBytes = await this._getHostDriveFreeBytes();
-    const pressureThresholdBytes = this._getHostPressureThresholdBytes();
-    if (
-      Number.isFinite(freeBytes) &&
-      Number.isFinite(pressureThresholdBytes) &&
-      freeBytes > pressureThresholdBytes
-    ) {
-      const freeGb = (freeBytes / 1024 ** 3).toFixed(1);
-      const thresholdGb = (pressureThresholdBytes / 1024 ** 3).toFixed(1);
-      console.log(
-        `AutoCompactManager: skipping auto-compaction because the host drive still has ${freeGb} GB free.`,
-      );
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-        this.mainWindow.webContents.send("openfork_client:log", {
-          type: "stdout",
-          message:
-            `Auto-compact skipped: the Windows drive still has ${freeGb} GB free ` +
-            `(configured pressure threshold: ${thresholdGb} GB). ` +
-            "Offline VHDX compaction is reserved for low-space situations.",
-        });
-      }
-      // Treat the accumulated evictions as already handled. On sparse VHDs the
-      // host file may already have shrunk; on non-sparse setups we can defer the
-      // expensive offline compact until the Windows drive crosses the same
-      // healthy/pressure boundary used by the Python disk-pressure policy.
-      this._freedSinceLastCompact = 0;
-      this._lastCompactTs = Date.now();
-      this._persistState();
-      return;
-    }
-
-    await this._runCompactionFlow();
-  }
-
-  async _getHostDriveFreeBytes() {
-    if (process.platform !== "win32") return null;
-
-    let driveLetter = ((process.env.SYSTEMDRIVE || "C:").match(/^([a-zA-Z]):/) || [])[1] || "C";
-
-    try {
-      const wslDistro = (await this.wslUtils?.getWslDistroName?.()) ?? null;
-      const storagePath = wslDistro
-        ? (await this.wslUtils?.resolveWslStoragePath?.(wslDistro)) ?? null
-        : null;
-      const storageRoot = storagePath ? path.parse(storagePath).root : "";
-      const storageDrive =
-        typeof storageRoot === "string"
-          ? (storageRoot.match(/^([a-zA-Z]):\\$/) || [])[1]
-          : null;
-      if (storageDrive) {
-        driveLetter = storageDrive.toUpperCase();
-      }
-    } catch (err) {
-      console.warn(
-        "AutoCompactManager: could not resolve WSL storage drive for disk-pressure check:",
-        err?.message || err,
-      );
-    }
-
-    return new Promise((resolve) => {
-      execFile(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          `(Get-PSDrive -Name '${driveLetter}' -ErrorAction Stop).Free`,
-        ],
-        { windowsHide: true, timeout: 10000 },
-        (error, stdout) => {
-          if (error) {
-            console.warn(
-              `AutoCompactManager: could not query free space for drive ${driveLetter}:`,
-              error.message,
-            );
-            resolve(null);
-            return;
-          }
-
-          const freeBytes = Number((stdout || "").toString().trim());
-          resolve(Number.isFinite(freeBytes) ? freeBytes : null);
-        },
-      );
-    });
-  }
-
-  _getHostPressureThresholdBytes() {
-    const defaultBytes = AutoCompactManager.DEFAULT_HOST_PRESSURE_FREE_BYTES;
-
-    try {
-      const overridesPath = path.join(this.app.getPath("userData"), "config_overrides.json");
-      if (!fs.existsSync(overridesPath)) {
-        return defaultBytes;
-      }
-
-      const raw = fs.readFileSync(overridesPath, "utf8");
-      const overrides = JSON.parse(raw);
-      const healthyGb = Number(overrides?.DISK_PRESSURE_HEALTHY_GB);
-      if (!Number.isFinite(healthyGb) || healthyGb <= 0) {
-        return defaultBytes;
-      }
-
-      return healthyGb * 1024 ** 3;
-    } catch (err) {
-      console.warn(
-        "AutoCompactManager: could not read disk-pressure threshold from config overrides:",
-        err?.message || err,
-      );
-      return defaultBytes;
-    }
   }
 
   async _runCompactionFlow() {
@@ -317,7 +208,8 @@ class AutoCompactManager {
     const providerId = this._currentProviderId;
     const lastService = this.pythonManager.getLastService?.();
     const lastRoutingConfig = this.pythonManager.getLastRoutingConfig?.();
-    const wasMonitoring = this.dockerMonitor?.isDockerMonitoringActive?.() ?? false;
+    const wasMonitoring =
+      this.dockerMonitor?.isDockerMonitoringActive?.() ?? false;
 
     let pausedSet = false;
     try {
@@ -355,8 +247,7 @@ class AutoCompactManager {
       this.dockerMonitor?.stopDockerMonitoring?.();
       this.dockerMonitor?.resetDockerRoutingCache?.();
 
-      const wslDistro =
-        (await this.wslUtils?.getWslDistroName?.()) ?? null;
+      const wslDistro = (await this.wslUtils?.getWslDistroName?.()) ?? null;
       if (!wslDistro) {
         throw new Error("WSL distro not found; aborting auto-compact.");
       }
@@ -378,12 +269,17 @@ class AutoCompactManager {
           await this.dockerEngine.restartWslDockerEngine({
             wslDistro,
             onPhase: (phase) => {
-              this._notify("auto-compact:status", { phase: `recovering_${phase}` });
+              this._notify("auto-compact:status", {
+                phase: `recovering_${phase}`,
+              });
             },
           });
         }
       } catch (recoveryErr) {
-        console.error("AutoCompactManager: post-compaction WSL recovery failed:", recoveryErr);
+        console.error(
+          "AutoCompactManager: post-compaction WSL recovery failed:",
+          recoveryErr,
+        );
       }
 
       // 4. Reset counters.
@@ -409,7 +305,10 @@ class AutoCompactManager {
       // compact leaves _freedSinceLastCompact above threshold and _lastCompactTs
       // unchanged, causing compaction to re-trigger on the next eviction event
       // (a stop → fail → restart → stop loop).
-      if (this._lastCompactTs === 0 || Date.now() - this._lastCompactTs > 1000) {
+      if (
+        this._lastCompactTs === 0 ||
+        Date.now() - this._lastCompactTs > 1000
+      ) {
         this._lastCompactTs = Date.now();
         this._persistState();
       }
@@ -472,7 +371,9 @@ class AutoCompactManager {
         { windowsHide: true, timeout: 10 * 60 * 1000 },
         (error, stdout, stderr) => {
           if (error) {
-            const detail = (stderr || stdout || error.message).toString().trim();
+            const detail = (stderr || stdout || error.message)
+              .toString()
+              .trim();
             reject(new Error(detail || "compact-wsl.ps1 failed"));
           } else {
             resolve();

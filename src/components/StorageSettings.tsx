@@ -296,7 +296,9 @@ export function StorageSettings({
           </div>
           <div>
             <h3 className={headingClassName + " text-base"}>{storageTitle}</h3>
-            <p className={subheadingClassName + " text-[13px]"}>{storageSubtitle}</p>
+            <p className={subheadingClassName + " text-[13px]"}>
+              {storageSubtitle}
+            </p>
           </div>
         </div>
         {(diskInfo || loading) && (
@@ -368,8 +370,7 @@ export function StorageSettings({
             <p className={helperTextClassName}>
               Auto-compact runs the VHDX shrink in idle windows after{" "}
               {Math.round((autoCompact.thresholdBytes || 0) / 1024 ** 3)} GB of
-              images have been evicted, but only when the Windows drive is below
-              the configured disk-pressure threshold. Currently{" "}
+              images have been evicted. Currently{" "}
               {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since
               last compaction.
             </p>
@@ -549,57 +550,56 @@ export function StorageSettings({
             </div>
 
             {/* Scalar thresholds */}
-              <div
-                className={`grid grid-cols-1 ${compact ? "xl:grid-cols-3" : "sm:grid-cols-3"} gap-4`}
-              >
-                {[
-                  {
-                    label: "Minimum free disk space (GB)",
-                    key: "DISK_PRESSURE_HEALTHY_GB",
-                    min: 20,
-                    max: 500,
-                  },
-                  {
-                    label:
-                      "Critical low disk space threshold (GB)",
-                    key: "DISK_PRESSURE_CRITICAL_GB",
-                    min: 5,
-                    max: 500,
-                  },
-                  {
-                    label: "Private mode job limit",
-                    key: "MINE_POLICY_PRESSURE_CAP",
-                    min: 1,
-                    max: 50,
-                  },
-                ].map((field) => (
-                  <div key={field.key} className="space-y-2">
-                    <Label className={labelClassName}>{field.label}</Label>
-                    <input
-                      type="number"
-                      min={field.min}
-                      max={field.max}
-                      value={
-                        pythonConfig[
-                          field.key as keyof typeof pythonConfig
-                        ] as number
-                      }
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        setPythonConfig((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                [field.key]: isNaN(val) ? field.min : val,
-                              }
-                            : prev,
-                        );
-                      }}
-                      className="w-full h-10 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-[13px] font-semibold focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all shadow-inner"
-                    />
-                  </div>
-                ))}
-              </div>
+            <div
+              className={`grid grid-cols-1 ${compact ? "xl:grid-cols-3" : "sm:grid-cols-3"} gap-4`}
+            >
+              {[
+                {
+                  label: "Minimum free disk space (GB)",
+                  key: "DISK_PRESSURE_HEALTHY_GB",
+                  min: 20,
+                  max: 500,
+                },
+                {
+                  label: "Critical low disk space threshold (GB)",
+                  key: "DISK_PRESSURE_CRITICAL_GB",
+                  min: 5,
+                  max: 500,
+                },
+                {
+                  label: "Private mode job limit",
+                  key: "MINE_POLICY_PRESSURE_CAP",
+                  min: 1,
+                  max: 50,
+                },
+              ].map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label className={labelClassName}>{field.label}</Label>
+                  <input
+                    type="number"
+                    min={field.min}
+                    max={field.max}
+                    value={
+                      pythonConfig[
+                        field.key as keyof typeof pythonConfig
+                      ] as number
+                    }
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setPythonConfig((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              [field.key]: isNaN(val) ? field.min : val,
+                            }
+                          : prev,
+                      );
+                    }}
+                    className="w-full h-10 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-[13px] font-semibold focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all shadow-inner"
+                  />
+                </div>
+              ))}
+            </div>
 
             {/* Policy grids */}
             {[
