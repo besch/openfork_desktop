@@ -368,7 +368,8 @@ export function StorageSettings({
             <p className={helperTextClassName}>
               Auto-compact runs the VHDX shrink in idle windows after{" "}
               {Math.round((autoCompact.thresholdBytes || 0) / 1024 ** 3)} GB of
-              images have been evicted. Currently{" "}
+              images have been evicted, but only when the Windows drive is below
+              the configured disk-pressure threshold. Currently{" "}
               {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since
               last compaction.
             </p>
