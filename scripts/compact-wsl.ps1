@@ -57,15 +57,12 @@ function Wait-ForVhdxReady {
     )
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    do {
-        wsl.exe --terminate $Name 2>$null | Out-Null
-        wsl.exe --shutdown 2>$null | Out-Null
-        Start-Sleep -Milliseconds 750
-
+    while ((Get-Date) -lt $deadline) {
         if ((Test-Path $Path) -and (Test-FileExclusiveAccess -Path $Path)) {
             return
         }
-    } while ((Get-Date) -lt $deadline)
+        Start-Sleep -Milliseconds 750
+    }
 
     throw "Timed out waiting for exclusive access to '$Path'. Another WSL or OpenFork process is still using the distro disk."
 }
@@ -108,21 +105,16 @@ function Invoke-ElevatedDiskPart {
 
     $guid = [Guid]::NewGuid().ToString("N")
     $tempRoot = [System.IO.Path]::GetTempPath()
-    $runnerPath = Join-Path $tempRoot "openfork-compact-$guid.ps1"
     $logPath = Join-Path $tempRoot "openfork-compact-$guid.log"
 
     try {
         $escapedScriptPath = $ScriptPath.Replace("'", "''")
         $escapedLogPath = $logPath.Replace("'", "''")
-        $runnerScript = @"
-`$ErrorActionPreference = 'Stop'
-& diskpart.exe /s '$escapedScriptPath' *> '$escapedLogPath'
-exit `$LASTEXITCODE
-"@
-        $runnerScript | Out-File -FilePath $runnerPath -Encoding ascii
+        $cmd = "`$ErrorActionPreference = 'Stop'; & diskpart.exe /s '$escapedScriptPath' *> '$escapedLogPath'; exit `$LASTEXITCODE"
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
 
         $process = Start-Process powershell.exe `
-            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$runnerPath`"") `
+            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encoded) `
             -Verb RunAs `
             -WindowStyle Hidden `
             -Wait `
@@ -139,7 +131,6 @@ exit `$LASTEXITCODE
             Output = $output
         }
     } finally {
-        Remove-Item $runnerPath -Force -ErrorAction SilentlyContinue
         Remove-Item $logPath -Force -ErrorAction SilentlyContinue
     }
 }
@@ -195,7 +186,7 @@ try {
     # compaction has more reclaimable space to work with.
     Write-Host "Trimming free space inside WSL..."
     try {
-        wsl.exe -d $DistroName --user root -- bash -lc "sync && (command -v fstrim >/dev/null 2>&1 && fstrim -av || true)" | Out-Null
+        wsl.exe -d $DistroName --user root -- bash -lc "sync && (command -v fstrim >/dev/null 2>&1 && fstrim -av || true)"
     } catch {
         Write-Host "WSL trim skipped: $($_.Exception.Message)"
     }
@@ -204,6 +195,7 @@ try {
     Write-Host "Shutting down WSL..."
     wsl --terminate $DistroName
     wsl --shutdown
+    Start-Sleep -Seconds 2
     Write-Host "Waiting for the VHDX to be released..."
     Wait-ForVhdxReady -Name $DistroName -Path $vhdxPath
     
