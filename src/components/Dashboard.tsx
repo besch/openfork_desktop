@@ -109,9 +109,18 @@ const PowerButton = memo(
     status: string;
   }) => {
     const buttonVariants = {
-      off: { backgroundColor: "#22c55e", boxShadow: "0px 4px 15px rgba(34, 197, 94, 0.4)" },
-      on: { backgroundColor: "#ef4444", boxShadow: "0px 4px 15px rgba(239, 68, 68, 0.4)" },
-      starting: { backgroundColor: "#eab308", boxShadow: "0px 4px 15px rgba(234, 179, 8, 0.4)" },
+      off: {
+        backgroundColor: "#22c55e",
+        boxShadow: "0px 4px 15px rgba(34, 197, 94, 0.4)",
+      },
+      on: {
+        backgroundColor: "#ef4444",
+        boxShadow: "0px 4px 15px rgba(239, 68, 68, 0.4)",
+      },
+      starting: {
+        backgroundColor: "#eab308",
+        boxShadow: "0px 4px 15px rgba(234, 179, 8, 0.4)",
+      },
     };
 
     const iconAnimation = {
@@ -197,14 +206,18 @@ export const Dashboard = memo(() => {
           newConfig,
         );
         if (!result.success) {
-          console.error("Failed to update provider routing config:", result.error);
+          console.error(
+            "Failed to update provider routing config:",
+            result.error,
+          );
         }
       }
     },
     [setRoutingConfig, savePersistentSettings, isRunning, providerId],
   );
 
-  const isProcessingAndRunning = status === "running" && jobState.status === "processing";
+  const isProcessingAndRunning =
+    status === "running" && jobState.status === "processing";
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -221,19 +234,6 @@ export const Dashboard = memo(() => {
               <StatusIndicator />
             </div>
           </div>
-
-          {isRunning && (
-            <AnimatePresence>
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-[10px] font-black uppercase tracking-widest text-emerald-400/60"
-              >
-                Settings apply live
-              </motion.span>
-            </AnimatePresence>
-          )}
         </div>
       </header>
 
