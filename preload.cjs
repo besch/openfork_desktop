@@ -135,6 +135,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("auto-compact:set-threshold-gb", gb),
   notifyManualCompactCompleted: () =>
     ipcRenderer.send("auto-compact:notify-manual-compact"),
+  clearAutoCompactInterrupted: () =>
+    ipcRenderer.invoke("auto-compact:clear-interrupted"),
   onAutoCompactStatus: (callback) =>
     createListener("auto-compact:status", callback),
   

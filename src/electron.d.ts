@@ -276,19 +276,15 @@ interface ElectronAPI {
     lastCompactTs: number;
     compactInProgress: boolean;
     platformSupported: boolean;
+    interruptedCompaction: boolean;
   }>;
   setAutoCompactEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
   setAutoCompactThresholdGB: (gb: number) => Promise<{ success: boolean }>;
   notifyManualCompactCompleted: () => void;
+  clearAutoCompactInterrupted: () => Promise<{ success: boolean }>;
   onAutoCompactStatus: (
     callback: (status: {
-      phase:
-        | "starting"
-        | "stopping_client"
-        | "compacting"
-        | "restarting_client"
-        | "completed"
-        | "failed";
+      phase: string;
       enabled: boolean;
       freedBytes: number;
       thresholdBytes: number;

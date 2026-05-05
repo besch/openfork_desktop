@@ -689,6 +689,17 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
     return;
   }
 
+  if (autoCompactManager && autoCompactManager.getStatus().compactInProgress) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("openfork_client:log", {
+        type: "stderr",
+        message: "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
+      });
+      mainWindow.webContents.send("openfork_client:status", "stopped");
+    }
+    return;
+  }
+
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("openfork_client:status", "starting");
   }
@@ -1223,6 +1234,13 @@ ipcMain.on("auto-compact:notify-manual-compact", () => {
   if (autoCompactManager) {
     autoCompactManager.notifyManualCompactCompleted();
   }
+});
+
+ipcMain.handle("auto-compact:clear-interrupted", () => {
+  if (autoCompactManager) {
+    autoCompactManager.clearInterruptedCompaction();
+  }
+  return { success: true };
 });
 
 // --- SEARCH & CONFIG IPC HANDLERS ---

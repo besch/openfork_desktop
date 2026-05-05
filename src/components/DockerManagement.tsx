@@ -74,17 +74,12 @@ export const DockerManagement = memo(() => {
   } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [autoCompactStatus, setAutoCompactStatus] = useState<{
-    phase:
-      | "starting"
-      | "stopping_client"
-      | "compacting"
-      | "restarting_client"
-      | "completed"
-      | "failed";
+    phase?: string;
     compactInProgress: boolean;
     platformSupported: boolean;
     error?: string;
   } | null>(null);
+  const [interruptedCompaction, setInterruptedCompaction] = useState(false);
 
   const [imageEvictedNotification, setImageEvictedNotification] = useState<{
     service_type: string;
@@ -151,9 +146,10 @@ export const DockerManagement = memo(() => {
       // where Docker is reachable even when the Windows→WSL TCP API (port 2375)
       // is flaky.  Only skip image listing when the status check says Docker is
       // down because image listing depends on the same routing.
-      const [containersResult, diskResult] = await Promise.all([
+      const [containersResult, diskResult, compactStatus] = await Promise.all([
         window.electronAPI.listDockerContainers(),
         window.electronAPI.getDiskSpace(),
+        window.electronAPI.getAutoCompactStatus?.() ?? Promise.resolve(null),
       ]);
 
       const hasRunningContainers =
@@ -165,8 +161,11 @@ export const DockerManagement = memo(() => {
         setImages([]);
         setContainers([]);
         useClientStore.getState().setDockerContainers([]);
-        setError(describeDockerState(nextDockerStatus));
         if (diskResult.success) setDiskSpace(diskResult.data);
+        // Suppress Docker error while compaction has WSL intentionally offline.
+        if (!compactStatus?.compactInProgress) {
+          setError(describeDockerState(nextDockerStatus));
+        }
         return;
       }
 
@@ -202,6 +201,13 @@ export const DockerManagement = memo(() => {
   useEffect(() => {
     window.electronAPI.getProcessInfo().then((info) => {
       setPlatform(info.platform as "win32" | "linux" | "darwin");
+    });
+    window.electronAPI.getAutoCompactStatus?.().then((status) => {
+      if (status?.compactInProgress) {
+        setAutoCompactStatus(status);
+      } else if (status?.interruptedCompaction) {
+        setInterruptedCompaction(true);
+      }
     });
     fetchData();
   }, [fetchData]);
@@ -558,9 +564,11 @@ export const DockerManagement = memo(() => {
                   ? "Pausing client..."
                   : autoCompactStatus.phase === "compacting"
                     ? "Shrinking VHDX..."
-                    : autoCompactStatus.phase === "restarting_client"
-                      ? "Restarting client..."
-                      : "Preparing..."}
+                    : autoCompactStatus.phase?.startsWith("recovering_")
+                      ? "Recovering WSL engine..."
+                      : autoCompactStatus.phase === "restarting_client"
+                        ? "Restarting client..."
+                        : "In progress..."}
               </span>
             </span>
           </div>
@@ -615,6 +623,35 @@ export const DockerManagement = memo(() => {
             </Button>
           </motion.div>
         )}
+
+      {interruptedCompaction && platform === "win32" && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-500/10 border border-amber-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
+        >
+          <div className="flex items-center gap-3">
+            <HardDrive className="h-4 w-4 text-amber-400 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
+              Previous compaction interrupted —{" "}
+              <span className="text-white/80 normal-case font-medium">
+                DGN client will start normally
+              </span>
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setInterruptedCompaction(false);
+              window.electronAPI.clearAutoCompactInterrupted?.();
+            }}
+            className="text-amber-300 hover:bg-amber-500/20 h-8 w-8 p-0 shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </motion.div>
+      )}
 
       {imageEvictedNotification && (
         <motion.div

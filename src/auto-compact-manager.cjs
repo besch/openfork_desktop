@@ -59,6 +59,15 @@ class AutoCompactManager {
     this._idleTimer = null;
     this._compactInProgress = false;
     this._currentProviderId = null;
+
+    // Detect interrupted compaction: if the app was force-quit during a compaction
+    // the stored flag will be true while nothing is actually running.
+    this._interruptedCompaction = saved.compactInProgress === true;
+    if (this._interruptedCompaction) {
+      // Clear the stale flag immediately so it only shows once per launch.
+      const current = this.store.get("autoCompactState") || {};
+      this.store.set("autoCompactState", { ...current, compactInProgress: false });
+    }
   }
 
   /** Wired to PythonProcessManager via onImageEvicted. */
@@ -110,7 +119,12 @@ class AutoCompactManager {
       lastCompactTs: this._lastCompactTs,
       compactInProgress: this._compactInProgress,
       platformSupported: process.platform === "win32",
+      interruptedCompaction: this._interruptedCompaction,
     };
+  }
+
+  clearInterruptedCompaction() {
+    this._interruptedCompaction = false;
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -121,6 +135,7 @@ class AutoCompactManager {
       lastCompactTs: this._lastCompactTs,
       enabled: this._enabled,
       thresholdBytes: this._thresholdBytes,
+      compactInProgress: this._compactInProgress,
     });
   }
 
@@ -179,6 +194,8 @@ class AutoCompactManager {
 
   async _runCompactionFlow() {
     this._compactInProgress = true;
+    this._interruptedCompaction = false;
+    this._persistState();
     this._notify("auto-compact:status", { phase: "starting" });
 
     const providerId = this._currentProviderId;
@@ -286,6 +303,7 @@ class AutoCompactManager {
         this.dockerMonitor?.startDockerMonitoring?.();
       }
       this._compactInProgress = false;
+      this._persistState();
     }
   }
 
