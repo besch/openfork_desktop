@@ -205,6 +205,12 @@ class AutoCompactManager {
 
     let pausedSet = false;
     try {
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send("openfork_client:log", {
+          type: "stdout",
+          message: `Auto-compact: ${Math.round(this._freedSinceLastCompact / 1024 ** 3)} GB of Docker images evicted since last compaction. Pausing DGN client to reclaim disk space...`,
+        });
+      }
       // 1. Tell the orchestrator we are pausing job acceptance.
       try {
         this.pythonManager.setCompactionPending?.(true);
@@ -275,16 +281,43 @@ class AutoCompactManager {
         phase: "failed",
         error: err?.message || String(err),
       });
-      } finally {
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send("openfork_client:log", {
+          type: "stderr",
+          message: `Auto-compact failed: ${err?.message || err}. Client will restart.`,
+        });
+      }
+    } finally {
+      // Always update the attempt timestamp so _shouldCompact() enforces the
+      // 1-hour cooldown even after a failed compaction. Without this, a failed
+      // compact leaves _freedSinceLastCompact above threshold and _lastCompactTs
+      // unchanged, causing compaction to re-trigger on the next eviction event
+      // (a stop → fail → restart → stop loop).
+      if (this._lastCompactTs === 0 || Date.now() - this._lastCompactTs > 1000) {
+        this._lastCompactTs = Date.now();
+        this._persistState();
+      }
       this.pythonManager.setCompactionPending?.(false);
       // 5. Restart Python with the previous service/routing config.
       try {
         if (lastService && !this.pythonManager.isRunning()) {
           this._notify("auto-compact:status", { phase: "restarting_client" });
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            this.mainWindow.webContents.send("openfork_client:log", {
+              type: "stdout",
+              message: "Auto-compact finished. Restarting DGN client...",
+            });
+          }
           await this.pythonManager.start(lastService, lastRoutingConfig);
         }
       } catch (err) {
         console.error("AutoCompactManager: failed to restart client:", err);
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send("openfork_client:log", {
+            type: "stderr",
+            message: `Auto-compact: failed to restart DGN client: ${err?.message || err}`,
+          });
+        }
       }
       // 6. Clear the orchestrator pause flag (best-effort).
       if (pausedSet) {
