@@ -167,6 +167,53 @@ class AutoCompactManager {
     return this.getStatus();
   }
 
+  adoptExternalCompaction(details = {}) {
+    if (process.platform !== "win32") return this.getStatus();
+
+    const lastService =
+      this.pythonManager?.getLastService?.() || this._lastServiceForRestart;
+    const lastRoutingConfig =
+      this.pythonManager?.getLastRoutingConfig?.() ||
+      this._lastRoutingConfigForRestart;
+
+    if (!this._compactInProgress) {
+      this._compactInProgress = true;
+      this._ownedCompactionFlow = false;
+      this._interruptedCompaction = false;
+      this._phase = "external_compacting";
+      this._lastError = undefined;
+      this._compactStartedTs = Date.now();
+      this._restartAfterCompact = !!lastService;
+      this._lastServiceForRestart = lastService || null;
+      this._lastRoutingConfigForRestart = lastRoutingConfig || null;
+      this._pausedProviderId = this._currentProviderId || this._pausedProviderId;
+      this._persistState();
+      this._notify("auto-compact:status", {
+        phase: this._phase,
+        external: true,
+        source: details.source,
+      });
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send("openfork_client:log", {
+          type: "stdout",
+          message:
+            "OpenFork detected that the Ubuntu disk is locked by a host disk operation. Treating it as active disk compaction and waiting for it to finish.",
+        });
+      }
+    } else if (this._phase === "waiting_for_compaction") {
+      this._phase = "external_compacting";
+      this._persistState();
+      this._notify("auto-compact:status", {
+        phase: this._phase,
+        external: true,
+        source: details.source,
+      });
+    }
+
+    this._startRecoveryWatch();
+    return this.getStatus();
+  }
+
   // ── Internal ──────────────────────────────────────────────────────────────
 
   _persistState() {

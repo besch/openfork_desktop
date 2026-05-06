@@ -13,13 +13,15 @@ const WSL_LINUX_PATH =
 
 let _getMainWindow;
 let _getInstallState;
+let _onWslVhdxLocked;
 // On Linux, set when the user is in the docker group but hasn't re-logged in yet.
 // Commands are then wrapped with `sg docker -c "..."` to pick up the group mid-session.
 let useSgDocker = false;
 
-function init({ getMainWindow, getInstallState }) {
+function init({ getMainWindow, getInstallState, onWslVhdxLocked }) {
   if (getMainWindow) _getMainWindow = getMainWindow;
   if (getInstallState) _getInstallState = getInstallState;
+  if (onWslVhdxLocked) _onWslVhdxLocked = onWslVhdxLocked;
 }
 
 // --- SECURITY HELPERS ---
@@ -61,6 +63,18 @@ function emitCompactionSuggested() {
   const mainWindow = _getMainWindow();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("docker:compaction-suggested");
+  }
+}
+
+function emitWslVhdxLocked(payload = {}) {
+  if (typeof _onWslVhdxLocked !== "function") return;
+  try {
+    _onWslVhdxLocked(payload);
+  } catch (err) {
+    console.warn(
+      "Failed to notify VHDX lock observer:",
+      err?.message || err,
+    );
   }
 }
 
@@ -120,7 +134,22 @@ async function execDockerCommand(command) {
         { maxBuffer: 1024 * 1024 * 10, encoding: "utf8" },
         (error, stdout, stderr) => {
           if (error) {
-            const msg = `${error.message}\n${stderr || ""}`.toLowerCase();
+            const msg = `${error.message}\n${stdout || ""}\n${
+              stderr || ""
+            }`.toLowerCase();
+            const errorCode = classifyDockerCheckError(
+              `${error.message}\n${stdout || ""}`,
+              stderr,
+            );
+            if (errorCode === "WSL_VHDX_LOCKED") {
+              emitWslVhdxLocked({
+                wslDistro,
+                source: "docker-command",
+                command,
+              });
+              resolve("");
+              return;
+            }
             // Gracefully handle common Docker/WSL failures
             if (
               msg.includes("is not running") ||
@@ -202,7 +231,10 @@ async function execDockerCommand(command) {
 // --- DOCKER STATUS DETECTION ---
 
 function classifyDockerCheckError(errorMessage = "", stderr = "") {
-  const combined = `${errorMessage}\n${stderr}`.toLowerCase();
+  const combined = `${errorMessage}\n${stderr}`
+    .replace(/\0/g, "")
+    .toLowerCase();
+  const compact = combined.replace(/[\s\\/_:;.,|()[\]{}'"-]+/g, "");
   if (combined.includes("permission denied")) return "DOCKER_PERMISSION_DENIED";
   if (
     combined.includes("docker: command not found") ||
@@ -218,8 +250,16 @@ function classifyDockerCheckError(errorMessage = "", stderr = "") {
   if (
     combined.includes("sharing_violation") ||
     combined.includes("error_sharing_violation") ||
+    compact.includes("errorsharingviolation") ||
+    compact.includes("hcserrorsharingviolation") ||
     combined.includes("attach disk") ||
-    combined.includes("hcs/error_sharing_violation")
+    combined.includes("hcs/error_sharing_violation") ||
+    combined.includes("the process cannot access the file") ||
+    combined.includes("because it is being used by another process") ||
+    combined.includes("jest on używany przez inny proces") ||
+    combined.includes("jest on u|ywany przez inny proces") ||
+    combined.includes("proces nie może uzyskać dostępu do pliku") ||
+    combined.includes("proces nie mo|e uzyska dostpu do pliku")
   ) {
     return "WSL_VHDX_LOCKED";
   }
@@ -265,7 +305,13 @@ function runDockerCheckCommand(
               `${error.message}\n${stdout || ""}`,
               stderr,
             );
-            if (errorCode !== "DOCKER_CLI_NOT_FOUND") {
+            if (errorCode === "WSL_VHDX_LOCKED") {
+              emitWslVhdxLocked({
+                wslDistro,
+                source: "docker-check",
+                command: cmd,
+              });
+            } else if (errorCode !== "DOCKER_CLI_NOT_FOUND") {
               console.log(`Check command '${cmd}' failed: ${error.message}`);
               console.log(`WSL Stdout: ${stdout}`);
               console.log(`WSL Stderr: ${stderr}`);
@@ -549,6 +595,12 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       ) ||
       undefined;
     if (errorCode === "WSL_VHDX_LOCKED") {
+      emitWslVhdxLocked({
+        wslDistro,
+        source: "docker-version",
+        installDrive,
+        storagePath,
+      });
       // The VHDX is held by another host process. During auto-compaction this
       // is expected while DiskPart has the virtual disk attached; do not fold it
       // into the generic Docker API error or recovery will fight compaction.
@@ -628,8 +680,19 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
     // the recovery flow even when docker info exits silently (empty stdout/stderr).
     const infoErrorCode =
       infoResult.code ||
-      classifyDockerCheckError(infoResult.error, infoResult.stderr) ||
+      classifyDockerCheckError(
+        `${infoResult.error}\n${infoResult.stdout || ""}`,
+        infoResult.stderr,
+      ) ||
       "DOCKER_API_UNREACHABLE";
+    if (infoErrorCode === "WSL_VHDX_LOCKED") {
+      emitWslVhdxLocked({
+        wslDistro,
+        source: "docker-info",
+        installDrive,
+        storagePath,
+      });
+    }
     console.log(
       `Docker is installed in WSL distro '${wslDistro}' but not ready (${infoErrorCode}):`,
       infoResult.error,

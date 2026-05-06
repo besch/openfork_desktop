@@ -103,7 +103,10 @@ function register(ipcMain) {
   ipcMain.handle("docker:list-images", async () => {
     try {
       const routingStatus = await dockerMonitor.ensureDockerRouting();
-      if (routingStatus?.error === "WSL_COMPACTING") {
+      if (
+        routingStatus?.error === "WSL_COMPACTING" ||
+        routingStatus?.error === "WSL_VHDX_LOCKED"
+      ) {
         return { success: true, data: [] };
       }
       const output = await dockerEngine.execDockerCommand(
@@ -137,7 +140,10 @@ function register(ipcMain) {
   ipcMain.handle("docker:list-containers", async () => {
     try {
       const routingStatus = await dockerMonitor.ensureDockerRouting();
-      if (routingStatus?.error === "WSL_COMPACTING") {
+      if (
+        routingStatus?.error === "WSL_COMPACTING" ||
+        routingStatus?.error === "WSL_VHDX_LOCKED"
+      ) {
         return { success: true, data: [] };
       }
       const output = await dockerEngine.execDockerCommand(

@@ -104,6 +104,9 @@ function describeCompactionPhase(phase?: string) {
   if (phase === "starting") return "Preparing to reclaim disk space";
   if (phase === "stopping_client") return "Pausing the DGN client";
   if (phase === "compacting") return "Shrinking the OpenFork Ubuntu disk";
+  if (phase === "external_compacting") {
+    return "OpenFork Ubuntu disk is locked while compaction finishes";
+  }
   if (phase === "recovering_wsl") return "Recovering the WSL engine";
   if (phase?.startsWith("recovering_")) return "Recovering the WSL engine";
   if (phase === "restarting_client") return "Restarting the DGN client";

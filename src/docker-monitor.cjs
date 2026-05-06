@@ -214,6 +214,19 @@ async function ensureDockerRouting() {
     allowNativeStart: false,
     wslHostTimeoutMs: 5000,
   });
+  if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+    resetDockerRoutingCache();
+    return {
+      installed: true,
+      running: false,
+      isNative: false,
+      error: "WSL_COMPACTING",
+    };
+  }
+  if (status.error === "WSL_VHDX_LOCKED") {
+    resetDockerRoutingCache();
+    return status;
+  }
   _cachedRoutingResult = status;
   _cachedRoutingTimestamp = now;
   return status;
@@ -235,6 +248,19 @@ async function checkDockerUpdates() {
       allowNativeStart: false,
       wslHostTimeoutMs: 5000,
     });
+
+    if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+      dockerMonitorConsecutiveFailures = 0;
+      dockerApiUnreachableFailures = 0;
+      resetDockerRoutingCache();
+      return;
+    }
+    if (dockerStatus.error === "WSL_VHDX_LOCKED") {
+      dockerMonitorConsecutiveFailures = 0;
+      dockerApiUnreachableFailures = 0;
+      resetDockerRoutingCache();
+      return;
+    }
 
     // Also update the routing cache so list handlers stay in sync
     _cachedRoutingResult = dockerStatus;
