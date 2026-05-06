@@ -27,6 +27,7 @@ class AutoCompactManager {
   static DEFAULT_THRESHOLD_BYTES = 20 * 1024 ** 3; // 20 GB
   static IDLE_CHECK_INTERVAL_MS = 30 * 1000; // 30 seconds
   static MIN_COMPACT_GAP_MS = 60 * 60 * 1000; // 1 hour minimum between auto-compactions
+  static RECOVERY_POLL_INTERVAL_MS = 5000;
 
   constructor({
     app,
@@ -58,19 +59,29 @@ class AutoCompactManager {
       AutoCompactManager.DEFAULT_THRESHOLD_BYTES;
 
     this._idleTimer = null;
-    this._compactInProgress = false;
+    this._recoveryTimer = null;
+    this._recoveryProbeInFlight = false;
+    this._ownedCompactionFlow = false;
+    this._compactInProgress =
+      process.platform === "win32" && saved.compactInProgress === true;
+    this._phase = this._compactInProgress
+      ? saved.phase || "waiting_for_compaction"
+      : saved.phase || undefined;
+    this._lastError = saved.error || undefined;
+    this._compactPid = Number(saved.compactPid || 0) || null;
+    this._compactStartedTs = Number(saved.compactStartedTs || 0) || 0;
+    this._restartAfterCompact = !!saved.restartAfterCompact;
+    this._lastServiceForRestart = saved.lastService || null;
+    this._lastRoutingConfigForRestart = saved.lastRoutingConfig || null;
+    this._pausedProviderId = saved.pausedProviderId || null;
     this._currentProviderId = null;
 
-    // Detect interrupted compaction: if the app was force-quit during a compaction
-    // the stored flag will be true while nothing is actually running.
-    this._interruptedCompaction = saved.compactInProgress === true;
-    if (this._interruptedCompaction) {
-      // Clear the stale flag immediately so it only shows once per launch.
-      const current = this.store.get("autoCompactState") || {};
-      this.store.set("autoCompactState", {
-        ...current,
-        compactInProgress: false,
-      });
+    // If the app restarts while compact-wsl.ps1 or DiskPart is still holding
+    // the VHDX, keep the state active until a host-side probe proves otherwise.
+    this._interruptedCompaction = false;
+    if (this._compactInProgress) {
+      this._persistState();
+      setTimeout(() => this._startRecoveryWatch(), 0);
     }
   }
 
@@ -124,11 +135,36 @@ class AutoCompactManager {
       compactInProgress: this._compactInProgress,
       platformSupported: process.platform === "win32",
       interruptedCompaction: this._interruptedCompaction,
+      phase: this._phase,
+      error: this._lastError,
+      restartAfterCompact: this._restartAfterCompact,
     };
   }
 
   clearInterruptedCompaction() {
     this._interruptedCompaction = false;
+    this._persistState();
+  }
+
+  isCompactionInProgress() {
+    return this._compactInProgress;
+  }
+
+  async refreshCompactionStatus() {
+    if (!this._compactInProgress) return this.getStatus();
+    if (this._ownedCompactionFlow) return this.getStatus();
+    if (process.platform !== "win32") {
+      this._compactInProgress = false;
+      this._phase = undefined;
+      this._persistState();
+      return this.getStatus();
+    }
+
+    const active = await this._isHostCompactionActive();
+    if (!active) {
+      await this._completeRecoveredCompaction();
+    }
+    return this.getStatus();
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -140,6 +176,206 @@ class AutoCompactManager {
       enabled: this._enabled,
       thresholdBytes: this._thresholdBytes,
       compactInProgress: this._compactInProgress,
+      phase: this._phase,
+      error: this._lastError,
+      compactPid: this._compactPid,
+      compactStartedTs: this._compactStartedTs,
+      restartAfterCompact: this._restartAfterCompact,
+      lastService: this._lastServiceForRestart,
+      lastRoutingConfig: this._lastRoutingConfigForRestart,
+      pausedProviderId: this._pausedProviderId,
+    });
+  }
+
+  _setPhase(phase, extra = {}) {
+    this._phase = phase;
+    if (extra.error !== undefined) {
+      this._lastError = extra.error;
+    }
+    this._persistState();
+    this._notify("auto-compact:status", extra);
+  }
+
+  _startRecoveryWatch() {
+    if (!this._compactInProgress || this._recoveryTimer) return;
+    this._notify("auto-compact:status", { phase: this._phase });
+    this._recoveryTimer = setInterval(
+      () => this._tickRecoveryWatch(),
+      AutoCompactManager.RECOVERY_POLL_INTERVAL_MS,
+    );
+    this._tickRecoveryWatch();
+  }
+
+  _stopRecoveryWatch() {
+    if (this._recoveryTimer) {
+      clearInterval(this._recoveryTimer);
+      this._recoveryTimer = null;
+    }
+  }
+
+  async _tickRecoveryWatch() {
+    if (this._recoveryProbeInFlight) return;
+    this._recoveryProbeInFlight = true;
+    try {
+      await this.refreshCompactionStatus();
+    } catch (err) {
+      console.warn(
+        "AutoCompactManager: recovery compaction probe failed:",
+        err?.message || err,
+      );
+    } finally {
+      this._recoveryProbeInFlight = false;
+    }
+  }
+
+  async _completeRecoveredCompaction() {
+    this._stopRecoveryWatch();
+    this._compactInProgress = false;
+    this._ownedCompactionFlow = false;
+    this._compactPid = null;
+    this._compactStartedTs = 0;
+    this._freedSinceLastCompact = 0;
+    this._lastCompactTs = Date.now();
+    this._lastError = undefined;
+
+    const service = this._lastServiceForRestart;
+    const routingConfig = this._lastRoutingConfigForRestart;
+    const providerId = this._pausedProviderId;
+    const shouldRestart = this._restartAfterCompact && !!service;
+
+    this._phase = "completed";
+    this._persistState();
+    this._notify("auto-compact:status", {
+      phase: "completed",
+      recoveredAfterRestart: true,
+    });
+
+    if (providerId) {
+      try {
+        const resumeResult = await this.setProviderPausedForCompaction(
+          providerId,
+          false,
+        );
+        if (!resumeResult?.success) {
+          console.warn(
+            "AutoCompactManager: recovered provider pause flag is still set:",
+            resumeResult?.error || "unknown error",
+          );
+        }
+      } catch (err) {
+        console.warn(
+          "AutoCompactManager: could not clear recovered provider pause flag:",
+          err?.message || err,
+        );
+      }
+    }
+
+    if (shouldRestart && this.pythonManager && !this.pythonManager.isRunning()) {
+      try {
+        this._setPhase("restarting_client");
+        await this.pythonManager.start(service, routingConfig);
+        this._phase = "completed";
+        this._lastError = undefined;
+        this._persistState();
+        this._notify("auto-compact:status", {
+          phase: "completed",
+          recoveredAfterRestart: true,
+        });
+      } catch (err) {
+        this._phase = "failed";
+        this._lastError = `Failed to restart DGN client after compaction: ${
+          err?.message || err
+        }`;
+        this._persistState();
+        this._notify("auto-compact:status", {
+          phase: "failed",
+          error: this._lastError,
+        });
+      }
+    }
+
+    this._restartAfterCompact = false;
+    this._lastServiceForRestart = null;
+    this._lastRoutingConfigForRestart = null;
+    this._pausedProviderId = null;
+    this._persistState();
+  }
+
+  async _isHostCompactionActive() {
+    if (this._compactPid && (await this._isProcessRunning(this._compactPid))) {
+      return true;
+    }
+    if (await this._hasCompactPowerShellProcess()) {
+      return true;
+    }
+    const wslDistro = await this.wslUtils?.getWslDistroName?.();
+    if (!wslDistro) return false;
+    return await this._isWslAttachBlockedBySharingViolation(wslDistro);
+  }
+
+  _isProcessRunning(pid) {
+    return new Promise((resolve) => {
+      execFile(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          `if (Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue) { '1' }`,
+        ],
+        { windowsHide: true, timeout: 5000 },
+        (error, stdout) => {
+          resolve(!error && stdout.toString().trim() === "1");
+        },
+      );
+    });
+  }
+
+  _hasCompactPowerShellProcess() {
+    return new Promise((resolve) => {
+      const command = [
+        "$needle = 'compact' + '-wsl.ps1';",
+        "$optimize = 'Optimize' + '-VHD';",
+        "Get-CimInstance Win32_Process |",
+        "Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (",
+        "$_.CommandLine -like \"*$needle*\" -or",
+        "$_.CommandLine -like \"*$optimize*\"",
+        ") } | Select-Object -First 1 -ExpandProperty ProcessId",
+      ].join(" ");
+
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", command],
+        { windowsHide: true, timeout: 8000 },
+        (error, stdout) => {
+          resolve(!error && stdout.toString().trim().length > 0);
+        },
+      );
+    });
+  }
+
+  _isWslAttachBlockedBySharingViolation(wslDistro) {
+    return new Promise((resolve) => {
+      execFile(
+        "wsl.exe",
+        ["-d", wslDistro, "--", "true"],
+        { windowsHide: true, timeout: 6000, encoding: "utf8" },
+        (error, stdout, stderr) => {
+          if (!error) {
+            resolve(false);
+            return;
+          }
+          const combined = `${error.message}\n${stdout || ""}\n${
+            stderr || ""
+          }`.toLowerCase();
+          resolve(
+            combined.includes("sharing_violation") ||
+              combined.includes("error_sharing_violation") ||
+              combined.includes("attach disk") ||
+              combined.includes("hcs/error_sharing_violation"),
+          );
+        },
+      );
     });
   }
 
@@ -200,11 +436,6 @@ class AutoCompactManager {
   }
 
   async _runCompactionFlow() {
-    this._compactInProgress = true;
-    this._interruptedCompaction = false;
-    this._persistState();
-    this._notify("auto-compact:status", { phase: "starting" });
-
     const providerId = this._currentProviderId;
     const lastService = this.pythonManager.getLastService?.();
     const lastRoutingConfig = this.pythonManager.getLastRoutingConfig?.();
@@ -212,6 +443,19 @@ class AutoCompactManager {
       this.dockerMonitor?.isDockerMonitoringActive?.() ?? false;
 
     let pausedSet = false;
+    let flowFailed = false;
+
+    this._ownedCompactionFlow = true;
+    this._compactInProgress = true;
+    this._interruptedCompaction = false;
+    this._lastError = undefined;
+    this._compactStartedTs = Date.now();
+    this._restartAfterCompact = !!lastService;
+    this._lastServiceForRestart = lastService || null;
+    this._lastRoutingConfigForRestart = lastRoutingConfig || null;
+    this._pausedProviderId = providerId || null;
+    this._setPhase("starting");
+
     try {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send("openfork_client:log", {
@@ -239,11 +483,11 @@ class AutoCompactManager {
       }
 
       // 2. Stop Python so the VHDX is released.
-      this._notify("auto-compact:status", { phase: "stopping_client" });
+      this._setPhase("stopping_client");
       await this.pythonManager.stop();
 
       // 3. Run the existing compaction script. Reuses the manual flow.
-      this._notify("auto-compact:status", { phase: "compacting" });
+      this._setPhase("compacting");
       this.dockerMonitor?.stopDockerMonitoring?.();
       this.dockerMonitor?.resetDockerRoutingCache?.();
 
@@ -265,13 +509,11 @@ class AutoCompactManager {
           wslHostTimeoutMs: 10000,
         });
         if (!dockerStatus.running) {
-          this._notify("auto-compact:status", { phase: "recovering_wsl" });
+          this._setPhase("recovering_wsl");
           await this.dockerEngine.restartWslDockerEngine({
             wslDistro,
             onPhase: (phase) => {
-              this._notify("auto-compact:status", {
-                phase: `recovering_${phase}`,
-              });
+              this._setPhase(`recovering_${phase}`);
             },
           });
         }
@@ -285,14 +527,14 @@ class AutoCompactManager {
       // 4. Reset counters.
       this._freedSinceLastCompact = 0;
       this._lastCompactTs = Date.now();
+      this._phase = "completed";
       this._persistState();
-      this._notify("auto-compact:status", { phase: "completed" });
     } catch (err) {
+      flowFailed = true;
+      this._phase = "failed";
+      this._lastError = err?.message || String(err);
       console.error("AutoCompactManager: compaction failed:", err);
-      this._notify("auto-compact:status", {
-        phase: "failed",
-        error: err?.message || String(err),
-      });
+      this._persistState();
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send("openfork_client:log", {
           type: "stderr",
@@ -316,7 +558,7 @@ class AutoCompactManager {
       // 5. Restart Python with the previous service/routing config.
       try {
         if (lastService && !this.pythonManager.isRunning()) {
-          this._notify("auto-compact:status", { phase: "restarting_client" });
+          this._setPhase("restarting_client");
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             this.mainWindow.webContents.send("openfork_client:log", {
               type: "stdout",
@@ -326,6 +568,11 @@ class AutoCompactManager {
           await this.pythonManager.start(lastService, lastRoutingConfig);
         }
       } catch (err) {
+        flowFailed = true;
+        this._phase = "failed";
+        this._lastError = `Failed to restart DGN client after compaction: ${
+          err?.message || err
+        }`;
         console.error("AutoCompactManager: failed to restart client:", err);
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
           this.mainWindow.webContents.send("openfork_client:log", {
@@ -337,7 +584,16 @@ class AutoCompactManager {
       // 6. Clear the orchestrator pause flag (best-effort).
       if (pausedSet) {
         try {
-          await this.setProviderPausedForCompaction(providerId, false);
+          const resumeResult = await this.setProviderPausedForCompaction(
+            providerId,
+            false,
+          );
+          if (!resumeResult?.success) {
+            console.warn(
+              "AutoCompactManager: provider pause flag is still set:",
+              resumeResult?.error || "unknown error",
+            );
+          }
         } catch (err) {
           console.warn(
             "AutoCompactManager: could not clear provider pause flag:",
@@ -351,13 +607,28 @@ class AutoCompactManager {
         this.dockerMonitor?.startDockerMonitoring?.();
       }
       this._compactInProgress = false;
+      this._ownedCompactionFlow = false;
+      this._compactPid = null;
+      this._compactStartedTs = 0;
+      this._restartAfterCompact = false;
+      this._lastServiceForRestart = null;
+      this._lastRoutingConfigForRestart = null;
+      this._pausedProviderId = null;
+      if (!flowFailed) {
+        this._phase = "completed";
+        this._lastError = undefined;
+      }
       this._persistState();
+      this._notify("auto-compact:status", {
+        phase: this._phase,
+        error: this._lastError,
+      });
     }
   }
 
   _runPowerShell(scriptPath, wslDistro) {
     return new Promise((resolve, reject) => {
-      execFile(
+      const child = execFile(
         "powershell.exe",
         [
           "-NoProfile",
@@ -380,14 +651,16 @@ class AutoCompactManager {
           }
         },
       );
+      this._compactPid = child.pid || null;
+      this._persistState();
     });
   }
 
   _notify(channel, payload) {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send(channel, {
-        ...payload,
         ...this.getStatus(),
+        ...payload,
       });
     }
   }

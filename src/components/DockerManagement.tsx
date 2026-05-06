@@ -26,19 +26,6 @@ interface ConfirmDialogState {
   onConfirm: () => void;
 }
 
-interface WslRecoveryStatus {
-  phase:
-    | "stopping_client"
-    | "restarting_wsl"
-    | "reconnecting"
-    | "restarting_client"
-    | "completed"
-    | "failed";
-  recoveryInProgress: boolean;
-  platformSupported: boolean;
-  error?: string;
-}
-
 export const DockerManagement = memo(() => {
   const [platform, setPlatform] = useState<"win32" | "linux" | "darwin">(
     "win32",
@@ -54,12 +41,6 @@ export const DockerManagement = memo(() => {
     description: "",
     onConfirm: () => {},
   });
-  const [diskSpaceError, setDiskSpaceError] = useState<{
-    image_name: string;
-    required_gb: number;
-    available_gb: number;
-    message: string;
-  } | null>(null);
   const [diskSpace, setDiskSpace] = useState<{
     total_gb: string;
     used_gb: string;
@@ -68,32 +49,17 @@ export const DockerManagement = memo(() => {
     engine_file_gb: string | null;
     engine_file_path: string | null;
   } | null>(null);
-  const [engineSwitchNotice, setEngineSwitchNotice] = useState<{
-    from: string;
-    to: string;
-  } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [autoCompactStatus, setAutoCompactStatus] = useState<{
-    phase?: string;
-    compactInProgress: boolean;
-    platformSupported: boolean;
-    error?: string;
-  } | null>(null);
-  const [interruptedCompaction, setInterruptedCompaction] = useState(false);
-
-  const [imageEvictedNotification, setImageEvictedNotification] = useState<{
-    service_type: string;
-    image: string;
-    freed_bytes: number;
-    reason: string;
-  } | null>(null);
-  const [wslRecoveryStatus, setWslRecoveryStatus] =
-    useState<WslRecoveryStatus | null>(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
   );
   const status = useClientStore((state) => state.status);
+  const diskSpaceError = useClientStore((state) => state.diskSpaceError);
+  const setDiskSpaceError = useClientStore((state) => state.setDiskSpaceError);
+  const setAutoCompactStatus = useClientStore(
+    (state) => state.setAutoCompactStatus,
+  );
 
   const formatCreatedDate = (dateStr: string): string => {
     const normalized = dateStr
@@ -127,6 +93,10 @@ export const DockerManagement = memo(() => {
       return "OpenFork detected the Docker daemon inside its Ubuntu distro, but the API is not reachable from Windows yet.";
     }
 
+    if (nextStatus.error === "WSL_VHDX_LOCKED") {
+      return "OpenFork Ubuntu disk is locked by Windows. Disk compaction may still be finishing.";
+    }
+
     if (nextStatus.error === "WSL_DISTRO_MISSING") {
       return "The OpenFork Ubuntu distro is missing. Reinstall the local engine to restore Docker access.";
     }
@@ -138,18 +108,28 @@ export const DockerManagement = memo(() => {
     setLoading(true);
     setError(null);
     setDiskSpaceError(null);
-    setEngineSwitchNotice(null);
     try {
+      const compactStatus = await window.electronAPI.getAutoCompactStatus();
+      setAutoCompactStatus(compactStatus);
+
+      if (compactStatus?.compactInProgress) {
+        const diskResult = await window.electronAPI.getDiskSpace();
+        if (diskResult.success) setDiskSpace(diskResult.data);
+        setImages([]);
+        setContainers([]);
+        useClientStore.getState().setDockerContainers([]);
+        return;
+      }
+
       const nextDockerStatus = await window.electronAPI.checkDocker();
 
       // Always attempt to list containers — the listing command runs inside WSL
       // where Docker is reachable even when the Windows→WSL TCP API (port 2375)
-      // is flaky.  Only skip image listing when the status check says Docker is
+      // is flaky. Only skip image listing when the status check says Docker is
       // down because image listing depends on the same routing.
-      const [containersResult, diskResult, compactStatus] = await Promise.all([
+      const [containersResult, diskResult] = await Promise.all([
         window.electronAPI.listDockerContainers(),
         window.electronAPI.getDiskSpace(),
-        window.electronAPI.getAutoCompactStatus?.() ?? Promise.resolve(null),
       ]);
 
       const hasRunningContainers =
@@ -162,10 +142,7 @@ export const DockerManagement = memo(() => {
         setContainers([]);
         useClientStore.getState().setDockerContainers([]);
         if (diskResult.success) setDiskSpace(diskResult.data);
-        // Suppress Docker error while compaction has WSL intentionally offline.
-        if (!compactStatus?.compactInProgress) {
-          setError(describeDockerState(nextDockerStatus));
-        }
+        setError(describeDockerState(nextDockerStatus));
         return;
       }
 
@@ -196,18 +173,11 @@ export const DockerManagement = memo(() => {
     } finally {
       setLoading(false);
     }
-  }, [describeDockerState]);
+  }, [describeDockerState, setAutoCompactStatus, setDiskSpaceError]);
 
   useEffect(() => {
     window.electronAPI.getProcessInfo().then((info) => {
       setPlatform(info.platform as "win32" | "linux" | "darwin");
-    });
-    window.electronAPI.getAutoCompactStatus?.().then((status) => {
-      if (status?.compactInProgress) {
-        setAutoCompactStatus(status);
-      } else if (status?.interruptedCompaction) {
-        setInterruptedCompaction(true);
-      }
     });
     fetchData();
   }, [fetchData]);
@@ -234,32 +204,9 @@ export const DockerManagement = memo(() => {
     }
   }, [status]);
 
-  // Handle disk space errors
-  useEffect(() => {
-    const cleanup = window.electronAPI.onDiskSpaceError((data) => {
-      setDiskSpaceError(data);
-    });
-    return cleanup;
-  }, []);
-
-  // Auto-refresh when the active Docker engine changes.
-  useEffect(() => {
-    const cleanup = window.electronAPI.onEngineSwitch((data) => {
-      setEngineSwitchNotice(data);
-      fetchData();
-    });
-    return cleanup;
-  }, [fetchData]);
-
-  // Listen for auto-compact status updates (Windows only).
+  // Refresh the Docker tab when app-wide compaction completes.
   useEffect(() => {
     const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
-      setAutoCompactStatus(() => {
-        if (status.phase === "completed" || status.phase === "failed") {
-          setTimeout(() => setAutoCompactStatus(null), 8000);
-        }
-        return status;
-      });
       if (status.phase === "completed") {
         fetchData();
       }
@@ -267,25 +214,17 @@ export const DockerManagement = memo(() => {
     return cleanup;
   }, [fetchData]);
 
-  // Listen for image eviction events from Python (disk space reclamation).
+  // Auto-refresh when the active Docker engine changes.
   useEffect(() => {
-    const cleanup = window.electronAPI.onImageEvicted((payload) => {
-      setImageEvictedNotification(payload);
-      // Auto-hide after 6 seconds
-      setTimeout(() => setImageEvictedNotification(null), 6000);
+    const cleanup = window.electronAPI.onEngineSwitch(() => {
+      fetchData();
     });
     return cleanup;
-  }, []);
+  }, [fetchData]);
 
-  // Listen for automatic WSL recovery when the Windows -> WSL Docker API drops.
+  // Refresh after automatic WSL recovery when the Windows -> WSL Docker API drops.
   useEffect(() => {
     const cleanup = window.electronAPI.onWslRecoveryStatus((status) => {
-      setWslRecoveryStatus(() => {
-        if (status.phase === "completed" || status.phase === "failed") {
-          setTimeout(() => setWslRecoveryStatus(null), 8000);
-        }
-        return status;
-      });
       if (status.phase === "completed") {
         fetchData();
       }
@@ -441,23 +380,6 @@ export const DockerManagement = memo(() => {
     dockerPullProgress !== null &&
     (status === "starting" || status === "running");
   const engineLabel = platform === "linux" ? "Linux Docker" : "OpenFork Ubuntu";
-  const wslRecoveryLabel = (() => {
-    if (!wslRecoveryStatus) return "";
-    switch (wslRecoveryStatus.phase) {
-      case "stopping_client":
-        return "Stopping DGN client...";
-      case "restarting_wsl":
-        return "Restarting OpenFork Ubuntu...";
-      case "reconnecting":
-        return "Reconnecting Docker API...";
-      case "restarting_client":
-        return "Starting DGN client...";
-      case "completed":
-        return "Recovery complete";
-      case "failed":
-        return `Recovery failed: ${wslRecoveryStatus.error || "Unknown error"}`;
-    }
-  })();
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -470,222 +392,6 @@ export const DockerManagement = memo(() => {
         confirmButtonText="Confirm"
         cancelButtonText="Cancel"
       />
-
-      {engineSwitchNotice && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-blue-500/10 border border-blue-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-        >
-          <div className="flex items-center gap-3">
-            <RefreshCw className="h-4 w-4 text-blue-400 shrink-0" />
-            <span className="text-xs font-bold uppercase tracking-widest text-blue-300">
-              Docker engine auto-switched:{" "}
-              <span className="text-white">
-                {engineSwitchNotice.from === "wsl"
-                  ? "OpenFork Ubuntu"
-                  : "Unavailable"}
-              </span>{" "}
-              →{" "}
-              <span className="text-white">
-                {engineSwitchNotice.to === "wsl"
-                  ? "OpenFork Ubuntu"
-                  : "Unavailable"}
-              </span>
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setEngineSwitchNotice(null)}
-            className="text-blue-300 hover:bg-blue-500/20 h-8 w-8 p-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </motion.div>
-      )}
-
-      {wslRecoveryStatus && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`border text-white rounded-lg p-4 flex items-center justify-between gap-3 shadow-lg ${
-            wslRecoveryStatus.phase === "failed"
-              ? "bg-destructive/10 border-destructive/30"
-              : wslRecoveryStatus.phase === "completed"
-                ? "bg-emerald-500/10 border-emerald-500/30"
-                : "bg-amber-500/10 border-amber-500/30"
-          }`}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            {wslRecoveryStatus.phase === "failed" ? (
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-            ) : wslRecoveryStatus.phase === "completed" ? (
-              <RefreshCw className="h-4 w-4 text-emerald-400 shrink-0" />
-            ) : (
-              <Loader size="sm" variant="primary" className="shrink-0" />
-            )}
-            <span
-              className={`text-xs font-bold uppercase tracking-widest truncate ${
-                wslRecoveryStatus.phase === "failed"
-                  ? "text-destructive"
-                  : wslRecoveryStatus.phase === "completed"
-                    ? "text-emerald-300"
-                    : "text-amber-300"
-              }`}
-            >
-              WSL Recovery:{" "}
-              <span className="text-white">{wslRecoveryLabel}</span>
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setWslRecoveryStatus(null)}
-            className="text-white/70 hover:bg-white/10 h-8 w-8 p-0 shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </motion.div>
-      )}
-
-      {autoCompactStatus?.compactInProgress && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-amber-500/10 border border-amber-500/30 text-white rounded-lg p-4 flex items-center gap-3 shadow-lg"
-        >
-          <Loader size="sm" variant="primary" className="shrink-0" />
-          <div className="flex-1 min-w-0">
-            <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
-              Auto-Compact:{" "}
-              <span className="text-white">
-                {autoCompactStatus.phase === "stopping_client"
-                  ? "Pausing client..."
-                  : autoCompactStatus.phase === "compacting"
-                    ? "Shrinking VHDX..."
-                    : autoCompactStatus.phase?.startsWith("recovering_")
-                      ? "Recovering WSL engine..."
-                      : autoCompactStatus.phase === "restarting_client"
-                        ? "Restarting client..."
-                        : "In progress..."}
-              </span>
-            </span>
-          </div>
-        </motion.div>
-      )}
-
-      {autoCompactStatus?.phase === "completed" &&
-        !autoCompactStatus.compactInProgress && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-emerald-500/10 border border-emerald-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-          >
-            <div className="flex items-center gap-3">
-              <HardDrive className="h-4 w-4 text-emerald-400 shrink-0" />
-              <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
-                Auto-Compact complete — disk space reclaimed
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setAutoCompactStatus(null)}
-              className="text-emerald-300 hover:bg-emerald-500/20 h-8 w-8 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </motion.div>
-        )}
-
-      {autoCompactStatus?.phase === "failed" &&
-        !autoCompactStatus.compactInProgress && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-destructive/10 border border-destructive/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-          >
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-              <span className="text-xs font-bold uppercase tracking-widest text-destructive">
-                Auto-Compact failed:{" "}
-                {autoCompactStatus.error || "Unknown error"}
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setAutoCompactStatus(null)}
-              className="text-destructive hover:bg-destructive/20 h-8 w-8 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </motion.div>
-        )}
-
-      {interruptedCompaction && platform === "win32" && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-amber-500/10 border border-amber-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-        >
-          <div className="flex items-center gap-3">
-            <HardDrive className="h-4 w-4 text-amber-400 shrink-0" />
-            <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
-              Previous compaction interrupted —{" "}
-              <span className="text-white/80 normal-case font-medium">
-                DGN client will start normally
-              </span>
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setInterruptedCompaction(false);
-              window.electronAPI.clearAutoCompactInterrupted?.();
-            }}
-            className="text-amber-300 hover:bg-amber-500/20 h-8 w-8 p-0 shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </motion.div>
-      )}
-
-      {imageEvictedNotification && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-blue-500/10 border border-blue-500/30 text-white rounded-lg p-4 flex items-center justify-between shadow-lg"
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <HardDrive className="h-4 w-4 text-blue-400 shrink-0" />
-            <div className="min-w-0">
-              <span className="text-xs font-bold uppercase tracking-widest text-blue-300">
-                Reclaimed{" "}
-                {imageEvictedNotification.freed_bytes > 0
-                  ? `${(imageEvictedNotification.freed_bytes / 1024 ** 3).toFixed(1)} GB`
-                  : "disk space"}{" "}
-                from{" "}
-                <span className="text-white">
-                  {imageEvictedNotification.service_type ||
-                    imageEvictedNotification.image ||
-                    "image"}
-                </span>
-              </span>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setImageEvictedNotification(null)}
-            className="text-blue-300 hover:bg-blue-500/20 h-8 w-8 p-0 shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </motion.div>
-      )}
 
       {error && (
         <motion.div
@@ -703,46 +409,6 @@ export const DockerManagement = memo(() => {
             size="sm"
             onClick={() => setError(null)}
             className="text-white hover:bg-white/20 h-8 w-8 p-0 transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </motion.div>
-      )}
-
-      {/* Disk Space Error Alert */}
-      {diskSpaceError && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="bg-destructive text-white rounded-lg p-4 flex items-start justify-between shadow-lg border border-white/10"
-        >
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <span className="text-sm font-bold uppercase block">
-                Insufficient Disk Space: {diskSpaceError.image_name}
-              </span>
-              <p className="text-xs opacity-90">
-                Need:{" "}
-                <span className="font-black">
-                  {diskSpaceError.required_gb} GB
-                </span>{" "}
-                (including 5 GB buffer) · Available:{" "}
-                <span className="font-black">
-                  {diskSpaceError.available_gb} GB
-                </span>
-              </p>
-              <p className="text-[10px] font-bold uppercase tracking-wide opacity-70 pt-1">
-                Please free up disk space and try again.
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setDiskSpaceError(null)}
-            className="text-white hover:bg-white/20 h-8 w-8 p-0 transition-colors shrink-0"
           >
             <X className="h-4 w-4" />
           </Button>

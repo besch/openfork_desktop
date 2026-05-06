@@ -5,10 +5,12 @@ const wslUtils = require("./wsl-utils.cjs");
 
 let _getMainWindow;
 let _getPythonManager;
+let _getAutoCompactManager;
 
-function init({ getMainWindow, getPythonManager }) {
+function init({ getMainWindow, getPythonManager, getAutoCompactManager }) {
   _getMainWindow = getMainWindow;
   _getPythonManager = getPythonManager;
+  _getAutoCompactManager = getAutoCompactManager;
 }
 
 let dockerMonitorInterval = null;
@@ -192,6 +194,15 @@ async function runWslRecoveryFlow(dockerStatus) {
  * Returns the resolved Docker status.
  */
 async function ensureDockerRouting() {
+  if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+    return {
+      installed: true,
+      running: false,
+      isNative: false,
+      error: "WSL_COMPACTING",
+    };
+  }
+
   const now = Date.now();
   if (
     _cachedRoutingResult &&
@@ -213,6 +224,13 @@ async function checkDockerUpdates() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   try {
+    if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+      dockerMonitorConsecutiveFailures = 0;
+      dockerApiUnreachableFailures = 0;
+      resetDockerRoutingCache();
+      return;
+    }
+
     const dockerStatus = await dockerEngine.resolveDockerStatus({
       allowNativeStart: false,
       wslHostTimeoutMs: 5000,

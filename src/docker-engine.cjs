@@ -549,11 +549,12 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       ) ||
       undefined;
     if (errorCode === "WSL_VHDX_LOCKED") {
-      // The VHDX is held by a zombie WSL instance, or the WSL service crashed
-      // (Wsl/Service/E_UNEXPECTED). Either way, a WSL restart is required.
+      // The VHDX is held by another host process. During auto-compaction this
+      // is expected while DiskPart has the virtual disk attached; do not fold it
+      // into the generic Docker API error or recovery will fight compaction.
       console.warn(
         `WSL distro '${wslDistro}' is unreachable (VHDX lock or service crash). ` +
-          "Docker will be unreachable until WSL is terminated and restarted.",
+          "Docker will be unreachable until the disk is released.",
       );
       return {
         installed: true,
@@ -561,7 +562,7 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
         isNative: false,
         installDrive,
         storagePath,
-        error: "DOCKER_API_UNREACHABLE",
+        error: "WSL_VHDX_LOCKED",
         wslDistro,
       };
     }

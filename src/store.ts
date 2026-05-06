@@ -10,11 +10,18 @@ import type {
   DockerContainer,
   DependencyStatus,
   MonetizeWallet,
+  AutoCompactStatus,
+  DiskSpaceError,
+  EngineSwitchNotice,
+  ImageEvictedNotification,
+  WslRecoveryStatus,
 } from "./types";
 import { DEFAULT_ROUTING_CONFIG } from "./types";
 import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
+const SYSTEM_NOTICE_TTL_MS = 8000;
+const IMAGE_NOTICE_TTL_MS = 6000;
 
 // Simplified project type for search results
 interface SearchProject {
@@ -37,6 +44,11 @@ interface DGNClientState {
   dockerPullProgress: DockerPullProgress | null;
   dependencyStatus: DependencyStatus | null;
   dockerContainers: DockerContainer[];
+  autoCompactStatus: AutoCompactStatus | null;
+  wslRecoveryStatus: WslRecoveryStatus | null;
+  diskSpaceError: DiskSpaceError | null;
+  engineSwitchNotice: EngineSwitchNotice | null;
+  imageEvictedNotification: ImageEvictedNotification | null;
   jobState: {
     status: "idle" | "processing";
     jobId: string | null;
@@ -45,6 +57,13 @@ interface DGNClientState {
   setDockerPullProgress: (progress: DockerPullProgress | null) => void;
   setDockerContainers: (containers: DockerContainer[]) => void;
   setDependencyStatus: (status: DependencyStatus | null) => void;
+  setAutoCompactStatus: (status: AutoCompactStatus | null) => void;
+  setWslRecoveryStatus: (status: WslRecoveryStatus | null) => void;
+  setDiskSpaceError: (error: DiskSpaceError | null) => void;
+  setEngineSwitchNotice: (notice: EngineSwitchNotice | null) => void;
+  setImageEvictedNotification: (
+    notification: ImageEvictedNotification | null,
+  ) => void;
   setStatus: (status: DGNClientStatus) => void;
   addLog: (log: Omit<LogEntry, "timestamp">) => void;
   setStats: (stats: JobStats) => void;
@@ -90,6 +109,15 @@ interface JobStatusPayload {
   status?: string | null;
 }
 
+type MonetizeWalletRpcRow = Partial<MonetizeWallet> & {
+  pending_earnings_cents?: number;
+  available_to_withdraw_cents?: number;
+  total_earned_lifetime_cents?: number;
+  total_withdrawn_cents?: number;
+  prepaid_balance_cents?: number;
+  total_purchased_cents?: number;
+};
+
 const createIdleJobState = (): DGNClientState["jobState"] => ({
   status: "idle",
   jobId: null,
@@ -127,12 +155,23 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   dockerPullProgress: null,
   dependencyStatus: null,
   dockerContainers: [],
+  autoCompactStatus: null,
+  wslRecoveryStatus: null,
+  diskSpaceError: null,
+  engineSwitchNotice: null,
+  imageEvictedNotification: null,
   jobState: createIdleJobState(),
   monetizeWallet: null,
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
   setDockerContainers: (containers: DockerContainer[]) =>
     set({ dockerContainers: containers }),
   setDependencyStatus: (status) => set({ dependencyStatus: status }),
+  setAutoCompactStatus: (status) => set({ autoCompactStatus: status }),
+  setWslRecoveryStatus: (status) => set({ wslRecoveryStatus: status }),
+  setDiskSpaceError: (error) => set({ diskSpaceError: error }),
+  setEngineSwitchNotice: (notice) => set({ engineSwitchNotice: notice }),
+  setImageEvictedNotification: (notification) =>
+    set({ imageEvictedNotification: notification }),
   setJobState: (state) => set({ jobState: state }),
   fetchMonetizeWallet: async () => {
     const { session } = get();
@@ -142,15 +181,34 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
         .rpc("get_monetize_wallet_summary", { p_user_id: session.user.id })
         .single();
       if (!error && data) {
+        const walletRow = data as MonetizeWalletRpcRow;
         // Map RPC response (may use old _cents names) to new _millicents names
         const wallet = {
-          ...data,
-          pending_earnings_millicents: data.pending_earnings_millicents ?? data.pending_earnings_cents ?? 0,
-          available_to_withdraw_millicents: data.available_to_withdraw_millicents ?? data.available_to_withdraw_cents ?? 0,
-          total_earned_lifetime_millicents: data.total_earned_lifetime_millicents ?? data.total_earned_lifetime_cents ?? 0,
-          total_withdrawn_millicents: data.total_withdrawn_millicents ?? data.total_withdrawn_cents ?? 0,
-          prepaid_balance_millicents: data.prepaid_balance_millicents ?? data.prepaid_balance_cents ?? 0,
-          total_purchased_millicents: data.total_purchased_millicents ?? data.total_purchased_cents ?? 0,
+          ...walletRow,
+          pending_earnings_millicents:
+            walletRow.pending_earnings_millicents ??
+            walletRow.pending_earnings_cents ??
+            0,
+          available_to_withdraw_millicents:
+            walletRow.available_to_withdraw_millicents ??
+            walletRow.available_to_withdraw_cents ??
+            0,
+          total_earned_lifetime_millicents:
+            walletRow.total_earned_lifetime_millicents ??
+            walletRow.total_earned_lifetime_cents ??
+            0,
+          total_withdrawn_millicents:
+            walletRow.total_withdrawn_millicents ??
+            walletRow.total_withdrawn_cents ??
+            0,
+          prepaid_balance_millicents:
+            walletRow.prepaid_balance_millicents ??
+            walletRow.prepaid_balance_cents ??
+            0,
+          total_purchased_millicents:
+            walletRow.total_purchased_millicents ??
+            walletRow.total_purchased_cents ??
+            0,
         };
         set({ monetizeWallet: wallet as MonetizeWallet });
       }
@@ -471,10 +529,21 @@ function initializeIpcListeners() {
     setDockerContainers,
     setJobState,
     setProviderId,
+    setAutoCompactStatus,
+    setWslRecoveryStatus,
+    setDiskSpaceError,
+    setEngineSwitchNotice,
+    setImageEvictedNotification,
   } = useClientStore.getState();
 
   // Store cleanup functions from listener registrations
   const cleanupFns: (() => void)[] = [];
+  const timeoutIds: number[] = [];
+
+  const scheduleNoticeClear = (callback: () => void, delayMs: number) => {
+    const timeoutId = window.setTimeout(callback, delayMs);
+    timeoutIds.push(timeoutId);
+  };
 
   cleanupFns.push(
     window.electronAPI.onStatusChange((status) => {
@@ -502,6 +571,75 @@ function initializeIpcListeners() {
   cleanupFns.push(
     window.electronAPI.onDockerContainersUpdate((containers) => {
       setDockerContainers(containers);
+    }),
+  );
+
+  window.electronAPI
+    .getAutoCompactStatus()
+    .then((status) => {
+      setAutoCompactStatus(status);
+    })
+    .catch((error) => {
+      console.error("Failed to hydrate auto-compact status:", error);
+    });
+
+  cleanupFns.push(
+    window.electronAPI.onAutoCompactStatus((status) => {
+      setAutoCompactStatus(status);
+      if (
+        (status.phase === "completed" || status.phase === "failed") &&
+        !status.compactInProgress
+      ) {
+        scheduleNoticeClear(() => {
+          const current = useClientStore.getState().autoCompactStatus;
+          if (
+            current &&
+            current.phase === status.phase &&
+            !current.compactInProgress
+          ) {
+            setAutoCompactStatus({
+              ...current,
+              phase: undefined,
+              error: undefined,
+              recoveredAfterRestart: undefined,
+            });
+          }
+        }, SYSTEM_NOTICE_TTL_MS);
+      }
+    }),
+  );
+
+  cleanupFns.push(
+    window.electronAPI.onWslRecoveryStatus((status) => {
+      setWslRecoveryStatus(status);
+      if (status.phase === "completed" || status.phase === "failed") {
+        scheduleNoticeClear(() => {
+          const current = useClientStore.getState().wslRecoveryStatus;
+          if (current?.phase === status.phase) {
+            setWslRecoveryStatus(null);
+          }
+        }, SYSTEM_NOTICE_TTL_MS);
+      }
+    }),
+  );
+
+  cleanupFns.push(window.electronAPI.onDiskSpaceError(setDiskSpaceError));
+
+  cleanupFns.push(
+    window.electronAPI.onEngineSwitch((notice) => {
+      setEngineSwitchNotice(notice);
+    }),
+  );
+
+  cleanupFns.push(
+    window.electronAPI.onImageEvicted((payload) => {
+      setImageEvictedNotification(payload);
+      scheduleNoticeClear(() => {
+        const current = useClientStore.getState().imageEvictedNotification;
+        if (current === payload) {
+          setImageEvictedNotification(null);
+        }
+      }, IMAGE_NOTICE_TTL_MS);
     }),
   );
 
@@ -593,6 +731,7 @@ function initializeIpcListeners() {
   // Return cleanup function for all listeners
   return () => {
     cleanupFns.forEach((cleanup) => cleanup());
+    timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
   };
 }
 

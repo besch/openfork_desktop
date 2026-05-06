@@ -22,6 +22,7 @@ import { UpdateNotification } from "@/components/UpdateNotification";
 import { CudaUpdateNotification } from "@/components/CudaUpdateNotification";
 import { JobHistory } from "@/components/JobHistory";
 import { Monetize } from "@/components/Monetize";
+import { SystemNotifications } from "@/components/SystemNotifications";
 import { Loader } from "@/components/ui/loader";
 import {
   LayoutDashboard,
@@ -32,6 +33,7 @@ import {
   Download,
   History,
   DollarSign,
+  HardDrive,
 } from "lucide-react";
 import {
   Popover,
@@ -53,29 +55,35 @@ const TabTrigger = memo(
     label?: string;
     children?: ReactNode;
   }) => {
-  const dockerPullProgress = useClientStore(
-    (state) => state.dockerPullProgress,
-  );
-  const dockerContainers = useClientStore(
-    (state) => state.dockerContainers,
-  );
-  const status = useClientStore((state) => state.status);
+    const dockerPullProgress = useClientStore(
+      (state) => state.dockerPullProgress,
+    );
+    const dockerContainers = useClientStore(
+      (state) => state.dockerContainers,
+    );
+    const status = useClientStore((state) => state.status);
+    const autoCompactStatus = useClientStore(
+      (state) => state.autoCompactStatus,
+    );
 
     const isDocker = value === "docker";
+    const isCompacting = isDocker && !!autoCompactStatus?.compactInProgress;
     const isDownloading =
       isDocker &&
       dockerPullProgress !== null &&
       (status === "starting" || status === "running");
     const isProcessing =
       isDocker && status === "running" && dockerContainers.length > 0;
-    const hasActivity = isDownloading || isProcessing;
+    const hasActivity = isCompacting || isDownloading || isProcessing;
 
     return (
       <TabsTrigger
         value={value}
         className="relative h-9 px-4 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5 cursor-pointer"
       >
-        {isDownloading ? (
+        {isCompacting ? (
+          <HardDrive className="mr-2 animate-pulse text-inherit" size={14} />
+        ) : isDownloading ? (
           <Download className="mr-2 animate-bounce text-inherit" size={14} />
         ) : isProcessing ? (
           <Container className="mr-2 animate-pulse text-inherit" size={14} />
@@ -89,10 +97,10 @@ const TabTrigger = memo(
         {hasActivity && (
           <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
             <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isDownloading ? "bg-yellow-400" : "bg-primary group-data-[state=active]:bg-white/80"}`}
+              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isCompacting || isDownloading ? "bg-yellow-400" : "bg-primary group-data-[state=active]:bg-white/80"}`}
             />
             <span
-              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isDownloading ? "bg-yellow-500" : "bg-primary border border-white/20 group-data-[state=active]:bg-white group-data-[state=active]:border-primary/20"}`}
+              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isCompacting || isDownloading ? "bg-yellow-500" : "bg-primary border border-white/20 group-data-[state=active]:bg-white group-data-[state=active]:border-primary/20"}`}
             />
           </span>
         )}
@@ -109,6 +117,8 @@ function App() {
     setSession,
     dependencyStatus,
     setDependencyStatus,
+    setAutoCompactStatus,
+    autoCompactStatus,
   } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [, setForceRefreshKey] = useState(0);
@@ -127,7 +137,20 @@ function App() {
     const checkDependencies = async () => {
       try {
         const [dockerResult, nvidiaResult] = await Promise.all([
-          window.electronAPI.checkDocker(),
+          window.electronAPI
+            .getAutoCompactStatus()
+            .then(async (compactStatus) => {
+              setAutoCompactStatus(compactStatus);
+              if (compactStatus?.compactInProgress) {
+                return {
+                  installed: true,
+                  running: false,
+                  error: "WSL_COMPACTING",
+                };
+              }
+              return window.electronAPI.checkDocker();
+            })
+            .catch(() => window.electronAPI.checkDocker()),
           window.electronAPI.checkNvidia(),
         ]);
 
@@ -152,7 +175,7 @@ function App() {
     };
 
     checkDependencies();
-  }, [setDependencyStatus]);
+  }, [setAutoCompactStatus, setDependencyStatus]);
 
   // Handle force refresh from main process
   useEffect(() => {
@@ -213,7 +236,11 @@ function App() {
   }, [setDependencyStatus]);
 
   useEffect(() => {
-    if (checkingDeps || !dependencyStatus?.allReady) {
+    if (
+      checkingDeps ||
+      !dependencyStatus?.allReady ||
+      autoCompactStatus?.compactInProgress
+    ) {
       return;
     }
 
@@ -222,7 +249,7 @@ function App() {
     return () => {
       window.electronAPI.stopDockerMonitoring();
     };
-  }, [checkingDeps, dependencyStatus?.allReady]);
+  }, [autoCompactStatus?.compactInProgress, checkingDeps, dependencyStatus?.allReady]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -390,6 +417,8 @@ function App() {
               </Popover>
             </div>
           </header>
+
+          <SystemNotifications />
 
           <Tabs
             value={activeTab}

@@ -10,6 +10,7 @@ import {
   Play,
   Pause,
   RefreshCw,
+  HardDrive,
 } from "lucide-react";
 
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,6 +52,18 @@ const StatCard = memo(
 
 export const StatusIndicator = memo(() => {
   const status = useClientStore((state) => state.status);
+  const compactInProgress = useClientStore(
+    (state) => state.autoCompactStatus?.compactInProgress ?? false,
+  );
+
+  if (compactInProgress) {
+    return (
+      <div className="flex items-center space-x-2.5 px-4 py-2 rounded-lg text-[10px] font-black tracking-widest border transition-all duration-500 backdrop-blur-md text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_15px_rgba(251,191,36,0.1)]">
+        <HardDrive size={14} className="animate-pulse" />
+        <span>COMPACTING</span>
+      </div>
+    );
+  }
 
   const statusConfig = {
     running: {
@@ -175,13 +188,17 @@ export const Dashboard = memo(() => {
     providerId,
   } = useClientStore();
   const jobState = useClientStore((state) => state.jobState);
+  const compactInProgress = useClientStore(
+    (state) => state.autoCompactStatus?.compactInProgress ?? false,
+  );
 
   useEffect(() => {
     loadPersistentSettings();
   }, [loadPersistentSettings]);
 
   const isRunning = status === "running" || status === "starting";
-  const isDisabled = status === "starting" || status === "stopping";
+  const isDisabled =
+    status === "starting" || status === "stopping" || compactInProgress;
 
   const handleToggle = useCallback(
     (checked: boolean) => {
@@ -228,7 +245,7 @@ export const Dashboard = memo(() => {
               isRunning={isRunning}
               isDisabled={isDisabled}
               onToggle={handleToggle}
-              status={status}
+              status={compactInProgress ? "starting" : status}
             />
             <div className="ml-1">
               <StatusIndicator />

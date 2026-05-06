@@ -10,6 +10,11 @@ import type {
   ScheduleConfig,
   ScheduleStatus,
   ProviderRoutingConfig,
+  AutoCompactStatus,
+  DiskSpaceError,
+  EngineSwitchNotice,
+  ImageEvictedNotification,
+  WslRecoveryStatus,
 } from "./types";
 
 // Type for cleanup function returned by listeners
@@ -86,19 +91,6 @@ interface InstallProgressEvent {
   percent: number;
 }
 
-interface WslRecoveryStatus {
-  phase:
-    | "stopping_client"
-    | "restarting_wsl"
-    | "reconnecting"
-    | "restarting_client"
-    | "completed"
-    | "failed";
-  recoveryInProgress: boolean;
-  platformSupported: boolean;
-  error?: string;
-}
-
 interface PythonConfigData {
   POLICY_MAX_CACHED_IMAGES: Record<string, number | null>;
   POLICY_IDLE_TIMEOUT_MINUTES: Record<string, number | null>;
@@ -152,20 +144,10 @@ interface ElectronAPI {
     callback: (progress: DockerPullProgress | null) => void,
   ) => CleanupFn;
   onDiskSpaceError: (
-    callback: (data: {
-      image_name: string;
-      required_gb: number;
-      available_gb: number;
-      message: string;
-    }) => void,
+    callback: (data: DiskSpaceError) => void,
   ) => CleanupFn;
   onImageEvicted: (
-    callback: (payload: {
-      service_type: string;
-      image: string;
-      freed_bytes: number;
-      reason: string;
-    }) => void,
+    callback: (payload: ImageEvictedNotification) => void,
   ) => CleanupFn;
 
   // Authentication
@@ -254,7 +236,7 @@ interface ElectronAPI {
   fixLinuxDockerPermissions: () => Promise<{ success: boolean; error?: string }>;
   onWslDistroMissing: (callback: () => void) => CleanupFn;
   onEngineSwitch: (
-    callback: (data: { from: string; to: string }) => void,
+    callback: (data: EngineSwitchNotice) => void,
   ) => CleanupFn;
   onWslRecoveryStatus: (
     callback: (status: WslRecoveryStatus) => void,
@@ -269,30 +251,13 @@ interface ElectronAPI {
   ) => Promise<{ success: boolean; error?: string }>;
 
   // Auto-compact (Windows only)
-  getAutoCompactStatus: () => Promise<{
-    enabled: boolean;
-    freedBytes: number;
-    thresholdBytes: number;
-    lastCompactTs: number;
-    compactInProgress: boolean;
-    platformSupported: boolean;
-    interruptedCompaction: boolean;
-  }>;
+  getAutoCompactStatus: () => Promise<AutoCompactStatus>;
   setAutoCompactEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
   setAutoCompactThresholdGB: (gb: number) => Promise<{ success: boolean }>;
   notifyManualCompactCompleted: () => void;
   clearAutoCompactInterrupted: () => Promise<{ success: boolean }>;
   onAutoCompactStatus: (
-    callback: (status: {
-      phase: string;
-      enabled: boolean;
-      freedBytes: number;
-      thresholdBytes: number;
-      lastCompactTs: number;
-      compactInProgress: boolean;
-      platformSupported: boolean;
-      error?: string;
-    }) => void,
+    callback: (status: AutoCompactStatus) => void,
   ) => CleanupFn;
 
   // Auto Updater - return cleanup functions

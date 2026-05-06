@@ -123,6 +123,52 @@ export interface DockerContainer {
   created: string;
 }
 
+export interface AutoCompactStatus {
+  enabled: boolean;
+  freedBytes: number;
+  thresholdBytes: number;
+  lastCompactTs: number;
+  compactInProgress: boolean;
+  platformSupported: boolean;
+  interruptedCompaction: boolean;
+  phase?: string;
+  error?: string;
+  restartAfterCompact?: boolean;
+  recoveredAfterRestart?: boolean;
+}
+
+export interface WslRecoveryStatus {
+  phase:
+    | "stopping_client"
+    | "restarting_wsl"
+    | "reconnecting"
+    | "restarting_client"
+    | "completed"
+    | "failed";
+  recoveryInProgress: boolean;
+  platformSupported: boolean;
+  error?: string;
+}
+
+export interface DiskSpaceError {
+  image_name: string;
+  required_gb: number;
+  available_gb: number;
+  message: string;
+}
+
+export interface EngineSwitchNotice {
+  from: string;
+  to: string;
+}
+
+export interface ImageEvictedNotification {
+  service_type: string;
+  image: string;
+  freed_bytes: number;
+  reason: string;
+}
+
 export interface DockerStatus {
   installed: boolean;
   running: boolean;

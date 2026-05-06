@@ -102,7 +102,10 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:list-images", async () => {
     try {
-      await dockerMonitor.ensureDockerRouting();
+      const routingStatus = await dockerMonitor.ensureDockerRouting();
+      if (routingStatus?.error === "WSL_COMPACTING") {
+        return { success: true, data: [] };
+      }
       const output = await dockerEngine.execDockerCommand(
         'docker images --format "{{json .}}"',
       );
@@ -133,7 +136,10 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:list-containers", async () => {
     try {
-      await dockerMonitor.ensureDockerRouting();
+      const routingStatus = await dockerMonitor.ensureDockerRouting();
+      if (routingStatus?.error === "WSL_COMPACTING") {
+        return { success: true, data: [] };
+      }
       const output = await dockerEngine.execDockerCommand(
         'docker ps -a --format "{{json .}}" --filter "name=dgn-client"',
       );

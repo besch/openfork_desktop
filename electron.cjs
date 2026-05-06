@@ -287,6 +287,7 @@ dockerEngine.init({ getMainWindow: () => mainWindow });
 dockerMonitor.init({
   getMainWindow: () => mainWindow,
   getPythonManager: () => pythonManager,
+  getAutoCompactManager: () => autoCompactManager,
 });
 
 let mainWindow;
@@ -689,14 +690,21 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
     return;
   }
 
-  if (autoCompactManager && autoCompactManager.getStatus().compactInProgress) {
+  const compactStatus = autoCompactManager
+    ? await autoCompactManager.refreshCompactionStatus()
+    : null;
+  if (compactStatus?.compactInProgress) {
     if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("auto-compact:status", compactStatus);
       mainWindow.webContents.send("openfork_client:log", {
         type: "stderr",
         message: "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
       });
       mainWindow.webContents.send("openfork_client:status", "stopped");
     }
+    return;
+  }
+  if (pythonManager.isRunning()) {
     return;
   }
 
@@ -732,8 +740,7 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
 
       if (
         !dockerStatus.running &&
-        (dockerStatus.error === "DOCKER_API_UNREACHABLE" ||
-          dockerStatus.error === "WSL_VHDX_LOCKED")
+        dockerStatus.error === "DOCKER_API_UNREACHABLE"
       ) {
         const recoveryMessage =
           "OpenFork Ubuntu is running, but its Docker API is unreachable. Restarting WSL before starting the DGN client...";
@@ -770,7 +777,9 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
 
       if (!dockerStatus.running) {
         const message =
-          dockerStatus.error === "DOCKER_API_UNREACHABLE"
+          dockerStatus.error === "WSL_VHDX_LOCKED"
+            ? "OpenFork Ubuntu disk is locked by another Windows process. Disk compaction is probably still finishing; please wait and retry."
+            : dockerStatus.error === "DOCKER_API_UNREACHABLE"
             ? "OpenFork Ubuntu is running, but its Docker API is not reachable from Windows yet."
             : dockerStatus.error === "WSL_DISTRO_MISSING"
               ? "OpenFork Ubuntu is missing. Reinstall the local AI engine before starting OpenFork."
