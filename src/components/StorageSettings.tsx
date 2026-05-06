@@ -313,8 +313,8 @@ export function StorageSettings({
                 {(diskInfo?.engine_file_gb || loading) && (
                   <div className={accentChipClassName}>
                     {diskInfo?.engine_file_gb
-                      ? `VHDX ${diskInfo.engine_file_gb} GB`
-                      : "VHDX --"}
+                      ? `Openfork VHDX ${diskInfo.engine_file_gb} GB`
+                      : "Openfork VHDX --"}
                   </div>
                 )}
               </div>
