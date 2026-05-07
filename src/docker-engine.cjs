@@ -494,14 +494,18 @@ async function restartWslDockerEngine({
   await sleep(2000);
 
   notifyPhase("reconnecting");
+  // Join with spaces (not newlines): Windows CommandLineToArgvW splits on \n
+  // even inside double-quoted arguments, so multiline scripts passed to
+  // wsl.exe via execFile arrive as separate argv entries and bash misparses them.
+  // set -e is intentionally omitted: docker info fails until the daemon is up,
+  // and set -e would abort the poll loop on the first non-zero exit.
   const startDockerCommand = [
-    "set -e",
     "if ! docker info >/dev/null 2>&1; then",
-    "  (systemctl restart docker || service docker restart || (mkdir -p /var/log/openfork && nohup /usr/bin/dockerd >/var/log/openfork/dockerd.log 2>&1 &)) >/dev/null 2>&1 || true",
-    "fi",
-    "for i in $(seq 1 60); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done",
+    "(systemctl restart docker || service docker restart || (mkdir -p /var/log/openfork && nohup /usr/bin/dockerd >/var/log/openfork/dockerd.log 2>&1 &)) >/dev/null 2>&1 || true;",
+    "fi;",
+    "i=0; while [ $i -lt 60 ]; do docker info >/dev/null 2>&1 && exit 0; sleep 2; i=$((i+1)); done;",
     "exit 1",
-  ].join("\n");
+  ].join(" ");
 
   const startResult = await runDockerCheckCommand(startDockerCommand, {
     useWsl: true,
