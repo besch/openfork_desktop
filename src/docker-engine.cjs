@@ -359,6 +359,33 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function hardenWslDockerDaemonBinding(wslDistro) {
+  if (process.platform !== "win32" || !wslDistro) return;
+
+  const hardenCommand = [
+    "if [ -f /etc/openfork-managed ] && grep -q 'tcp://0.0.0.0:2375' /etc/docker/daemon.json 2>/dev/null; then",
+    "mkdir -p /etc/docker;",
+    "printf '%s\\n' '{\"hosts\": [\"tcp://127.0.0.1:2375\", \"unix:///var/run/docker.sock\"], \"tls\": false}' > /etc/docker/daemon.json;",
+    "(systemctl restart docker || service docker restart || true) >/dev/null 2>&1;",
+    "echo hardened;",
+    "fi",
+  ].join(" ");
+
+  const result = await runDockerCheckCommand(hardenCommand, {
+    useWsl: true,
+    wslDistro,
+    wslUser: "root",
+    timeoutMs: 30000,
+  });
+
+  if (result.success && result.output.includes("hardened")) {
+    console.warn(
+      `Rewrote OpenFork WSL Docker daemon binding for '${wslDistro}' to localhost-only TCP.`,
+    );
+    await sleep(1000);
+  }
+}
+
 function execFileWithOutput(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (error, stdout, stderr) => {
@@ -652,6 +679,8 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       wslDistro,
     };
   }
+
+  await hardenWslDockerDaemonBinding(wslDistro);
 
   const infoResult = await runDockerCheckCommand("docker info", {
     useWsl: true,

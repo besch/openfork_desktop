@@ -1,6 +1,7 @@
 "use strict";
 
 const { execFile } = require("child_process");
+const { BrowserWindow, dialog } = require("electron");
 const os = require("os");
 
 const dockerEngine = require("./docker-engine.cjs");
@@ -13,6 +14,35 @@ let _openExternal;
 function init({ autoUpdater, openExternal }) {
   _autoUpdater = autoUpdater;
   _openExternal = openExternal;
+}
+
+async function confirmSensitiveAction(event, { title, message, detail }) {
+  const window = event?.sender
+    ? BrowserWindow.fromWebContents(event.sender)
+    : null;
+  const options = {
+    type: "warning",
+    buttons: ["Continue", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+    title,
+    message,
+    detail,
+  };
+  const result =
+    window && !window.isDestroyed()
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options);
+  return result.response === 0;
+}
+
+function cancelledSensitiveAction() {
+  return {
+    success: false,
+    error: "ACTION_CANCELLED",
+    message: "Action cancelled.",
+  };
 }
 
 function register(ipcMain) {
@@ -44,6 +74,13 @@ function register(ipcMain) {
   // --- ENGINE INSTALL ---
 
   ipcMain.handle("deps:install-engine", async (event, installPath) => {
+    const confirmed = await confirmSensitiveAction(event, {
+      title: "Install OpenFork Engine",
+      message: "Install the OpenFork WSL engine?",
+      detail:
+        "This runs the OpenFork engine installer and may request elevated system permissions.",
+    });
+    if (!confirmed) return cancelledSensitiveAction();
     return engineInstall.handleInstallEngine(installPath);
   });
 
@@ -326,8 +363,15 @@ function register(ipcMain) {
     _autoUpdater.downloadUpdate();
   });
 
-  ipcMain.handle("update:install", () => {
+  ipcMain.handle("update:install", async (event) => {
+    const confirmed = await confirmSensitiveAction(event, {
+      title: "Install Update",
+      message: "Install the downloaded OpenFork update now?",
+      detail: "The app will quit and restart to finish the update.",
+    });
+    if (!confirmed) return cancelledSensitiveAction();
     _autoUpdater.quitAndInstall();
+    return { success: true };
   });
 }
 

@@ -114,8 +114,10 @@ function getWslIpAddress() {
 
 async function getWindowsDockerApiHosts() {
   const hosts = ["127.0.0.1", "localhost"];
-  const wslIp = await getWslIpAddress();
-  if (wslIp) hosts.push(wslIp);
+  if (process.env.OPENFORK_ALLOW_WSL_DOCKER_IP_FALLBACK === "1") {
+    const wslIp = await getWslIpAddress();
+    if (wslIp) hosts.push(wslIp);
+  }
   return [...new Set(hosts)];
 }
 

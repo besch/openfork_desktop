@@ -72,7 +72,7 @@ if [ -f /etc/openfork-managed ]; then
 elif id -u openfork >/dev/null 2>&1 \
   && [ -f /etc/sudoers.d/openfork ] \
   && grep -q "default=openfork" /etc/wsl.conf 2>/dev/null \
-  && grep -q "tcp://0.0.0.0:2375" /etc/docker/daemon.json 2>/dev/null; then
+  && grep -Eq "tcp://(0\.0\.0\.0|127\.0\.0\.1):2375" /etc/docker/daemon.json 2>/dev/null; then
   echo legacy-managed
 else
   echo unmanaged

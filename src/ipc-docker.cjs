@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const { exec, execFile } = require("child_process");
+const { dialog } = require("electron");
 
 const dockerEngine = require("./docker-engine.cjs");
 const dockerMonitor = require("./docker-monitor.cjs");
@@ -301,6 +302,33 @@ async function isOpenForkContainerId(containerId) {
     });
 }
 
+async function confirmSensitiveDockerAction({ title, message, detail }) {
+  const mainWindow = _getMainWindow?.();
+  const options = {
+    type: "warning",
+    buttons: ["Continue", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+    title,
+    message,
+    detail,
+  };
+  const result =
+    mainWindow && !mainWindow.isDestroyed()
+      ? await dialog.showMessageBox(mainWindow, options)
+      : await dialog.showMessageBox(options);
+  return result.response === 0;
+}
+
+function cancelledSensitiveAction() {
+  return {
+    success: false,
+    error: "ACTION_CANCELLED",
+    message: "Action cancelled.",
+  };
+}
+
 function register(ipcMain) {
   // --- MONITORING ---
 
@@ -411,6 +439,15 @@ function register(ipcMain) {
         return { success: false, error: "Only OpenFork images can be removed" };
       }
 
+      const confirmed = await confirmSensitiveDockerAction({
+        title: "Remove Docker Image",
+        message: "Remove this OpenFork Docker image?",
+        detail:
+          imageMeta?.fullName ||
+          "The image and any dependent OpenFork containers will be removed.",
+      });
+      if (!confirmed) return cancelledSensitiveAction();
+
       // WSL2 ROBUSTNESS: Find and remove ANY containers using this image (running or stopped)
       try {
         const containerIds = await dockerEngine.execDockerCommand(
@@ -468,6 +505,14 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:remove-all-images", async () => {
     try {
+      const confirmed = await confirmSensitiveDockerAction({
+        title: "Remove OpenFork Images",
+        message: "Remove all OpenFork Docker images?",
+        detail:
+          "This deletes local OpenFork model images and may require downloading them again before jobs can run.",
+      });
+      if (!confirmed) return cancelledSensitiveAction();
+
       const listOutput = await dockerEngine.execDockerCommand(
         'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
       );
@@ -533,6 +578,13 @@ function register(ipcMain) {
           error: "Only OpenFork DGN containers can be stopped",
         };
       }
+      const confirmed = await confirmSensitiveDockerAction({
+        title: "Stop OpenFork Container",
+        message: "Stop and remove this OpenFork container?",
+        detail:
+          "Any job currently running in this container will be interrupted.",
+      });
+      if (!confirmed) return cancelledSensitiveAction();
       await dockerEngine.execDockerCommand(
         `docker stop ${dockerEngine.escapeShellArg(containerId)}`,
       );
@@ -548,6 +600,13 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:stop-all-containers", async () => {
     try {
+      const confirmed = await confirmSensitiveDockerAction({
+        title: "Stop OpenFork Containers",
+        message: "Stop and remove all OpenFork containers?",
+        detail: "Any currently running OpenFork DGN jobs will be interrupted.",
+      });
+      if (!confirmed) return cancelledSensitiveAction();
+
       const listOutput = await dockerEngine.execDockerCommand(
         'docker ps -a --format "{{.ID}}" --filter "name=dgn-client"',
       );
@@ -579,6 +638,14 @@ function register(ipcMain) {
   // Robust Surgical Clean: Stop/Remove OpenFork containers, images, and volumes
   ipcMain.handle("docker:clean-openfork", async () => {
     try {
+      const confirmed = await confirmSensitiveDockerAction({
+        title: "Purge OpenFork Docker Data",
+        message: "Purge OpenFork Docker containers and images?",
+        detail:
+          "This removes local OpenFork containers, model images, and dangling image layers. Other Docker data is left alone.",
+      });
+      if (!confirmed) return cancelledSensitiveAction();
+
       console.log("Starting targeted OpenFork cleanup...");
       let stoppedCount = 0;
       let removedCount = 0;
@@ -1058,6 +1125,14 @@ function register(ipcMain) {
       };
     }
 
+    const confirmed = await confirmSensitiveDockerAction({
+      title: "Reset OpenFork Engine",
+      message: "Reset the OpenFork WSL engine?",
+      detail:
+        "This unregisters the OpenFork Ubuntu distro and deletes its local Docker images before reinstalling it.",
+    });
+    if (!confirmed) return cancelledSensitiveAction();
+
     try {
       const wslDistro = await wslUtils.getWslDistroName();
       if (!wslDistro) {
@@ -1168,6 +1243,14 @@ function register(ipcMain) {
           error: "A target OpenFork WSL path is required.",
         };
       }
+
+      const confirmed = await confirmSensitiveDockerAction({
+        title: "Relocate OpenFork Engine",
+        message: "Move the OpenFork WSL engine to a new location?",
+        detail:
+          "This deletes the current OpenFork Ubuntu distro and reinstalls it at the selected path.",
+      });
+      if (!confirmed) return cancelledSensitiveAction();
 
       const relocateScriptPath = _app.isPackaged
         ? path.join(process.resourcesPath, "scripts", "relocate-wsl.ps1")
