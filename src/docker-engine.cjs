@@ -290,7 +290,7 @@ function runDockerCheckCommand(
         "env",
         `PATH=${WSL_LINUX_PATH}`,
         "bash",
-        "-lc",
+        "-c",
         cmd,
       ];
       execFile(
