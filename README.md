@@ -1,44 +1,153 @@
 # OpenFork Desktop
 
-**Your Personal AI Video Studio.**
+OpenFork Desktop is the Electron app that connects a user's machine to
+OpenFork's Distributed GPU Network (DGN). It gives creators a friendly way to run
+their own GPU for private generations, share idle compute with the community,
+process trusted collaborators' work, or earn real money from paid monetize jobs.
 
-This app connects your computer to [openfork.video](https://openfork.video) — a GitHub-like platform for AI video collaboration and workflow automation.
+The app wraps the sibling Python client in `../client` during development and a
+bundled client executable in production builds.
 
-### What it does
+## What It Does
 
-*   **Generate Locally**: Use your own GPU to render your video scenes, images or audio. It costs nothing, respects your privacy, and gives you full control.
-*   **Trade Compute**: Rate limit? What rate limit? Share your idle GPU with the network to earn credits. Use those credits to rent *other* people's GPUs instantly—perfect for when you need to render 5 variations at once instead of waiting for your single card.
-*   **Support & Collaborate**: Point your idle compute at specific projects or friends to help them finish their movies faster.
+- Signs users in with the same Supabase/Google account used on `openfork.video`.
+- Installs and manages the local compute engine.
+- Starts/stops the Python DGN worker and streams logs back into the UI.
+- Lets users choose Private, Public, Trusted Group, or Monetize routing.
+- Shows job history, provider stats, running containers, downloaded model images,
+  and disk pressure warnings.
+- Manages Docker image storage budgets, WSL storage location, engine reset, and
+  Windows VHDX compaction.
+- Provides Stripe Connect onboarding, provider pricing, earnings history, and
+  withdrawals for monetize providers.
 
-**Zero Setup**: We distinguish ourselves by handling the complex AI models (Wan2.1, Hunyuan, etc) and Docker containers automatically behind the scenes. You just click "Start".
+## Platform Support
 
-The app wraps our open-source [Python Client](https://github.com/besch/openfork_client), ensuring you run the exact same verified code as the rest of the network.
+- Windows 10/11 with an NVIDIA GPU. The installer provisions an OpenFork Ubuntu
+  WSL2 engine, Docker, and NVIDIA Container Toolkit support.
+- Linux with an NVIDIA GPU, Docker Engine, and NVIDIA Container Toolkit already
+  installed.
+- AMD GPUs and Apple Silicon are not supported for DGN provider work.
 
----
+## Tech Stack
 
-## For Developers
+- Electron 37 main process and IPC bridge.
+- Vite 7, React 19, TypeScript, Tailwind CSS 4.
+- Supabase Auth/Realtime from the renderer.
+- `electron-store` for local settings.
+- `electron-builder` for Windows NSIS and Linux AppImage/deb releases.
+- Python DGN client launched as a subprocess.
 
-This directory contains the source code for the Electron-based desktop application.
+## Important Files
 
-### Tech Stack
-*   **Electron**: Application shell.
-*   **React**: UI.
-*   **Python**: Underlying logic (managed as a subprocess).
-*   **Docker**: Used to isolate and execute AI models.
+```text
+desktop/
+  electron.cjs                     Main process, auth, IPC, updater
+  preload.cjs                      Safe renderer API bridge
+  src/App.tsx                      Main renderer shell and tabs
+  src/python-process-manager.cjs   Python client lifecycle
+  src/ipc-docker.cjs               Docker/engine IPC handlers
+  src/auto-compact-manager.cjs     Windows WSL VHDX compaction
+  src/engine-install.cjs           Engine install/repair flows
+  src/components/                  Dashboard, Docker, Monetize, settings UI
+  scripts/                         Installer, setup, WSL, relocation scripts
+  public/                          Icons and installer artwork
+```
 
-### Setup (Developer Mode)
+## Development Setup
 
-**Prerequisites**: Node.js v18+, Python 3.10+, Git, Docker Desktop.
+Prerequisites:
 
-**One-Click Setup**:
-1.  Run the initialization script (installs deps & creates Python venv):
-    ```bash
-    cd openfork_desktop
-    npm run setup:dev
-    ```
-2.  Start the full stack (UI + Electron + Python Client from source):
-    ```bash
-    npm run dev:all
-    ```
+- Node.js 20+ recommended.
+- Python 3.10+.
+- Git.
+- NVIDIA GPU and Docker-capable environment if you want to run actual jobs.
 
-**Note**: This runs the Python client directly from source (`../client/dgn_client.py`), so you don't need to rebuild executables to test changes. The application will automatically detect the virtual environment created by `setup:dev`.
+Install the Python client dependencies in the sibling `client` project:
+
+```powershell
+cd ..\client
+python -m venv venv
+.\venv\Scripts\python -m pip install -r requirements.txt
+```
+
+Install desktop dependencies:
+
+```powershell
+cd ..\desktop
+npm install
+```
+
+Run the desktop app in development:
+
+```powershell
+npm run dev:all
+```
+
+This starts Vite and Electron together. In development, the main process looks
+for `../client/venv/Scripts/python.exe` on Windows or `../client/venv/bin/python`
+on Linux and runs the Python source directly.
+
+You can also run the two processes separately:
+
+```powershell
+npm run dev
+npm run start
+```
+
+## Packaging
+
+```powershell
+npm run build
+npm run pack
+```
+
+Publish a release through `electron-builder`:
+
+```powershell
+npm run release
+```
+
+The production build bundles:
+
+- `bin/client` or `bin/client.exe`
+- workflow files
+- WSL/Linux setup scripts
+- uninstall and compaction helpers
+
+## Runtime Routing
+
+Desktop stores provider routing as:
+
+```ts
+{
+  processOwnJobs: boolean;
+  communityMode: "none" | "trusted_users" | "trusted_projects" | "all";
+  trustedIds: string[];
+  monetizeMode: boolean;
+}
+```
+
+The UI presents this as:
+
+- Private: own jobs only, with optional Trusted Group.
+- Public: community credit network.
+- Monetize: paid jobs only, with Stripe onboarding and provider rate controls.
+
+The Python client receives the current routing via CLI arguments on startup and
+via IPC/heartbeat updates while running.
+
+## Storage Management
+
+OpenFork Docker images are large. The desktop app exposes a Docker image cache
+budget and forwards it to the Python client. On Windows, image eviction can leave
+the WSL VHDX file large on the host drive, so the auto-compact manager can pause
+the provider, stop Python, trim/compact the VHDX, and resume the client.
+
+The Docker tab also supports fast engine reset for cases where clearing all
+images and reinstalling the OpenFork Ubuntu engine is quicker than compaction.
+
+## Related Projects
+
+- `../website` - web app, DGN orchestrator, Supabase schema, payments, admin.
+- `../client` - Python DGN worker and Docker workflow processors.
