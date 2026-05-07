@@ -5,6 +5,8 @@ const { app } = require("electron");
 const http = require("http");
 const dockerMonitor = require("./docker-monitor.cjs");
 
+const PROCESS_MARKER = "openfork_dgn_client_v1_marker";
+
 function isInvalidSupabaseRefreshTokenError(error) {
   const code = error?.code || error?.error_code;
   const message = error?.message || String(error || "");
@@ -80,7 +82,7 @@ class PythonProcessManager {
 
     this._cleanupPromise = new Promise((resolve) => {
       const platform = process.platform;
-      const marker = "openfork_dgn_client_v1_marker";
+      const marker = PROCESS_MARKER;
 
       console.log("Cleaning up potential rogue client processes...");
 
@@ -111,7 +113,7 @@ class PythonProcessManager {
       }, HARD_TIMEOUT_MS);
 
       const cmd = platform === "win32"
-        ? `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*--process-marker=${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"`
+        ? `powershell -NoProfile -NonInteractive -Command "$self=$PID; Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.CommandLine -like '*${marker}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"`
         : `pgrep -af "${marker}" | awk '{print $1}' | xargs -r kill -9`;
 
       exec(cmd, (error) => {
@@ -507,8 +509,7 @@ class PythonProcessManager {
       this.userDataPath,
       "--community-mode",
       rc.communityMode || "none",
-      "--process-marker",
-      "openfork_dgn_client_v1_marker",
+      `--process-marker=${PROCESS_MARKER}`,
     ];
 
     if (rc.processOwnJobs) {
