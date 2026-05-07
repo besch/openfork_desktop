@@ -106,7 +106,7 @@ class DockerCleanupManager {
         service_type: service_type || null,
         image: image || null,
         action: "removed",
-        reason: reason || "image_cap",
+        reason: reason || "storage_limit",
         freed_bytes: freed_bytes || 0,
         timestamp: new Date().toISOString(),
       });
@@ -115,7 +115,11 @@ class DockerCleanupManager {
           ? "Critical disk pressure"
           : reason === "disk_pressure"
             ? "Disk pressure"
-            : "Image cap";
+            : reason === "manual_delete" ||
+                reason === "manual_delete_all" ||
+                reason === "manual_purge"
+              ? "Manual cleanup"
+              : "Storage limit";
       const sizeLabel = freedGB ? ` — ${freedGB} GB freed` : "";
       this.mainWindow.webContents.send("openfork_client:log", {
         type: "stdout",

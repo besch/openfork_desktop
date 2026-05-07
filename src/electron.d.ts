@@ -92,11 +92,10 @@ interface InstallProgressEvent {
 }
 
 interface PythonConfigData {
-  POLICY_MAX_CACHED_IMAGES: Record<string, number | null>;
   POLICY_IDLE_TIMEOUT_MINUTES: Record<string, number | null>;
+  DOCKER_IMAGE_CACHE_LIMIT_GB: number;
   DISK_PRESSURE_HEALTHY_GB: number;
   DISK_PRESSURE_CRITICAL_GB: number;
-  MINE_POLICY_PRESSURE_CAP: number;
 }
 
 interface PythonConfigResult {
@@ -208,6 +207,15 @@ interface ElectronAPI {
       path: string;
       engine_file_gb: string | null;
       engine_file_path: string | null;
+    };
+  }>;
+  getDockerImageCacheUsage: () => Promise<{
+    success: boolean;
+    error?: string;
+    data?: {
+      total_bytes: number;
+      total_gb: string;
+      image_count: number;
     };
   }>;
 

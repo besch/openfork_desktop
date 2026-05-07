@@ -316,6 +316,45 @@ class PythonProcessManager {
     }
   }
 
+  syncCachedImages() {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      return false;
+    }
+
+    try {
+      this.pythonProcess.stdin.write(
+        JSON.stringify({ type: "SYNC_CACHED_IMAGES" }) + "\n",
+      );
+      console.log("Requested Python cached image sync.");
+      return true;
+    } catch (error) {
+      console.error("Error writing cached image sync request to Python:", error);
+      return false;
+    }
+  }
+
+  updateStorageConfig({ dockerImageCacheLimitGb } = {}) {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      return false;
+    }
+
+    try {
+      this.pythonProcess.stdin.write(
+        JSON.stringify({
+          type: "UPDATE_STORAGE_CONFIG",
+          payload: {
+            docker_image_cache_limit_gb: dockerImageCacheLimitGb,
+          },
+        }) + "\n",
+      );
+      console.log("Sent storage config update command to Python process.");
+      return true;
+    } catch (error) {
+      console.error("Error writing storage config update to Python:", error);
+      return false;
+    }
+  }
+
   _requestStopFromPython() {
     if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
       console.warn(

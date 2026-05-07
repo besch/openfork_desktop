@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Select,
   SelectContent,
@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
 import { Loader } from "@/components/ui/loader";
 import type { DockerStatus } from "@/types";
@@ -17,10 +18,10 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Sparkles,
-  Settings,
   RotateCcw,
   Save,
   Info,
+  Gauge,
 } from "lucide-react";
 
 interface StorageSettingsProps {
@@ -49,6 +50,11 @@ export function StorageSettings({
   const [availableDrives, setAvailableDrives] = useState<
     { name: string; freeGB: number }[]
   >([]);
+  const [imageCacheUsage, setImageCacheUsage] = useState<{
+    total_bytes: number;
+    total_gb: string;
+    image_count: number;
+  } | null>(null);
   const [selectedDrive, setSelectedDrive] = useState<string>("");
   const [isReclaiming, setIsReclaiming] = useState(false);
   const [isRelocating, setIsRelocating] = useState(false);
@@ -65,11 +71,10 @@ export function StorageSettings({
 
   // Python advanced config overrides
   const [pythonConfig, setPythonConfig] = useState<{
-    POLICY_MAX_CACHED_IMAGES: Record<string, number | null>;
     POLICY_IDLE_TIMEOUT_MINUTES: Record<string, number | null>;
+    DOCKER_IMAGE_CACHE_LIMIT_GB: number;
     DISK_PRESSURE_HEALTHY_GB: number;
     DISK_PRESSURE_CRITICAL_GB: number;
-    MINE_POLICY_PRESSURE_CAP: number;
   } | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -104,13 +109,18 @@ export function StorageSettings({
     setConfigSuccess(false);
 
     const {
+      DOCKER_IMAGE_CACHE_LIMIT_GB,
       DISK_PRESSURE_HEALTHY_GB,
       DISK_PRESSURE_CRITICAL_GB,
-      MINE_POLICY_PRESSURE_CAP,
-      POLICY_MAX_CACHED_IMAGES,
-      POLICY_IDLE_TIMEOUT_MINUTES,
     } = pythonConfig;
 
+    if (
+      !Number.isFinite(DOCKER_IMAGE_CACHE_LIMIT_GB) ||
+      DOCKER_IMAGE_CACHE_LIMIT_GB < 50
+    ) {
+      setConfigError("Docker image storage limit must be at least 50 GB.");
+      return;
+    }
     if (DISK_PRESSURE_CRITICAL_GB >= DISK_PRESSURE_HEALTHY_GB) {
       setConfigError(
         "Critical Low Space must be lower than Minimum Free Space.",
@@ -124,28 +134,6 @@ export function StorageSettings({
     if (DISK_PRESSURE_CRITICAL_GB < 5) {
       setConfigError("Critical Low Space must be at least 5 GB.");
       return;
-    }
-    if (MINE_POLICY_PRESSURE_CAP < 1) {
-      setConfigError("Private Mode Job Limit must be at least 1.");
-      return;
-    }
-
-    for (const [policy, val] of Object.entries(POLICY_MAX_CACHED_IMAGES)) {
-      if (policy === "mine") continue;
-      if (val === null || (typeof val === "number" && val < 1)) {
-        setConfigError(`Max cached images for '${policy}' must be at least 1.`);
-        return;
-      }
-    }
-
-    for (const [policy, val] of Object.entries(POLICY_IDLE_TIMEOUT_MINUTES)) {
-      if (policy === "mine") continue;
-      if (val === null || (typeof val === "number" && val < 10)) {
-        setConfigError(
-          `Idle timeout for '${policy}' must be at least 10 minutes.`,
-        );
-        return;
-      }
     }
 
     try {
@@ -164,7 +152,7 @@ export function StorageSettings({
   const resetPythonConfig = async () => {
     if (
       !window.confirm(
-        "Reset all advanced client config values to their defaults? Changes take effect after restarting the DGN client.",
+        "Reset Docker storage settings to their defaults? Changes take effect after restarting the DGN client.",
       )
     ) {
       return;
@@ -190,14 +178,21 @@ export function StorageSettings({
   const refreshData = async () => {
     setLoading(true);
     try {
-      const status = await window.electronAPI.checkDocker();
+      const [status, info, drives, usage] = await Promise.all([
+        window.electronAPI.checkDocker(),
+        window.electronAPI.getDiskSpace(),
+        window.electronAPI.getAvailableDrives(),
+        window.electronAPI.getDockerImageCacheUsage(),
+      ]);
       setDockerStatus(status);
 
-      const info = await window.electronAPI.getDiskSpace();
       if (info.success) setDiskInfo(info.data);
 
-      const drives = await window.electronAPI.getAvailableDrives();
       setAvailableDrives(drives);
+
+      if (usage.success && usage.data) {
+        setImageCacheUsage(usage.data);
+      }
 
       if (status?.installDrive) {
         setSelectedDrive(status.installDrive);
@@ -278,6 +273,41 @@ export function StorageSettings({
     ? "px-5 h-9 text-[11px] font-bold tracking-tight"
     : "px-4 h-8 text-[10px] font-black uppercase tracking-widest";
   const sectionRadiusClassName = readableMode ? "rounded-2xl" : "rounded-xl";
+  const cacheLimitGb = pythonConfig?.DOCKER_IMAGE_CACHE_LIMIT_GB ?? 250;
+  const totalDiskGb = Number.parseFloat(diskInfo?.total_gb || "0");
+  const cacheSliderMaxGb = useMemo(() => {
+    if (!Number.isFinite(totalDiskGb) || totalDiskGb <= 0) {
+      return Math.max(1000, cacheLimitGb);
+    }
+    return Math.max(
+      120,
+      cacheLimitGb,
+      Math.min(2000, Math.floor(totalDiskGb * 0.85)),
+    );
+  }, [cacheLimitGb, totalDiskGb]);
+  const cacheSliderValue = Math.max(50, cacheLimitGb);
+  const imageCacheUsedGb = Number.parseFloat(imageCacheUsage?.total_gb || "0");
+  const cacheUsedPercent =
+    cacheLimitGb > 0
+      ? Math.min(100, Math.round((imageCacheUsedGb / cacheLimitGb) * 100))
+      : 0;
+  const cachePresetOptions = [
+    {
+      label: "Minimal",
+      value: 120,
+      description: "Saves disk, redownloads more often.",
+    },
+    {
+      label: "Recommended",
+      value: 250,
+      description: "Fits one large video image comfortably.",
+    },
+    {
+      label: "Generous",
+      value: 400,
+      description: "Keeps more models ready between jobs.",
+    },
+  ];
   const renderSectionLoadingOverlay = () => (
     <div
       className={`absolute inset-0 z-20 flex flex-col items-center justify-center ${sectionRadiusClassName} bg-black/38 backdrop-blur-[2px] animate-in fade-in duration-300`}
@@ -356,7 +386,8 @@ export function StorageSettings({
             <p className={copyMutedClassName}>
               The DGN client evicts least-recently-used Docker images
               automatically when free space drops below the disk-pressure
-              thresholds. Limits adapt to your active job policy.
+              thresholds or when cached OpenFork images exceed your storage
+              limit.
             </p>
           </div>
           {autoCompact && autoCompact.compactInProgress && (
@@ -525,33 +556,137 @@ export function StorageSettings({
         </div>
       )}
 
-      {/* Advanced Client Config */}
+      {/* Docker Image Storage Limit */}
       <div className={sectionClassName}>
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-0.5">
             <Label className={`${labelClassName} flex items-center gap-1.5`}>
-              <Settings className="h-3 w-3" />
-              Advanced Client Config
+              <Gauge className="h-3 w-3" />
+              Docker Image Storage Limit
             </Label>
             <p className={copyMutedClassName}>
-              Tune disk-pressure thresholds, cache caps, and idle timeouts.
+              OpenFork downloads Docker images for local AI models. These can
+              be tens or hundreds of GB because they include model runtimes and
+              dependencies. Set how much disk space OpenFork may use for those
+              images.
             </p>
           </div>
         </div>
 
         {pythonConfig && (
-          <div className="space-y-3 pt-1">
-            {/* Warning banner */}
+          <div className="space-y-4 pt-1">
             <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
               <Info className="h-3 w-3 text-amber-300 shrink-0" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-300">
-                Changes take effect after restarting the DGN client.
+              <span className="text-[11px] font-semibold leading-relaxed text-amber-200">
+                When the limit is crossed, OpenFork removes least-used images.
+                On Windows, the Ubuntu disk is compacted later when the client
+                is idle and compaction is safe. The storage limit updates the
+                current cache enforcement updates immediately; newly eligible
+                large models and free-space thresholds apply after restart.
               </span>
             </div>
 
-            {/* Scalar thresholds */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Limit
+                </p>
+                <p className="mt-1 text-xl font-black text-white tabular-nums">
+                  {cacheLimitGb} GB
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Used by Images
+                </p>
+                <p className="mt-1 text-xl font-black text-white tabular-nums">
+                  {imageCacheUsage ? `${imageCacheUsage.total_gb} GB` : "--"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Images
+                </p>
+                <p className="mt-1 text-xl font-black text-white tabular-nums">
+                  {imageCacheUsage ? imageCacheUsage.image_count : "--"}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label className={labelClassName}>Storage Budget</Label>
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/45">
+                  {cacheUsedPercent}% used
+                </span>
+              </div>
+              <Slider
+                min={50}
+                max={cacheSliderMaxGb}
+                step={10}
+                value={[cacheSliderValue]}
+                onValueChange={(value) => {
+                  const nextValue = value[0] ?? cacheLimitGb;
+                  setPythonConfig((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          DOCKER_IMAGE_CACHE_LIMIT_GB: nextValue,
+                        }
+                      : prev,
+                  );
+                }}
+                className="py-2"
+              />
+              <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                <div
+                  className="h-full rounded-full bg-amber-500 transition-all"
+                  style={{ width: `${cacheUsedPercent}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-white/35">
+                <span>50 GB</span>
+                <span>{cacheSliderMaxGb} GB</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {cachePresetOptions.map((preset) => {
+                const value = Math.min(preset.value, cacheSliderMaxGb);
+                const selected = cacheLimitGb === value;
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() =>
+                      setPythonConfig((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              DOCKER_IMAGE_CACHE_LIMIT_GB: value,
+                            }
+                          : prev,
+                      )
+                    }
+                    className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                      selected
+                        ? "border-amber-500/50 bg-amber-500/15 text-white"
+                        : "border-white/10 bg-black/25 text-white/70 hover:border-white/20 hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <span className="block text-[11px] font-black uppercase tracking-widest">
+                      {preset.label} - {value} GB
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-white/45">
+                      {preset.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div
-              className={`grid grid-cols-1 ${compact ? "xl:grid-cols-3" : "sm:grid-cols-3"} gap-4`}
+              className={`grid grid-cols-1 ${compact ? "xl:grid-cols-2" : "sm:grid-cols-2"} gap-4`}
             >
               {[
                 {
@@ -566,12 +701,6 @@ export function StorageSettings({
                   min: 5,
                   max: 500,
                 },
-                {
-                  label: "Private mode job limit",
-                  key: "MINE_POLICY_PRESSURE_CAP",
-                  min: 1,
-                  max: 50,
-                },
               ].map((field) => (
                 <div key={field.key} className="space-y-2">
                   <Label className={labelClassName}>{field.label}</Label>
@@ -581,16 +710,18 @@ export function StorageSettings({
                     max={field.max}
                     value={
                       pythonConfig[
-                        field.key as keyof typeof pythonConfig
-                      ] as number
+                        field.key as
+                          | "DISK_PRESSURE_HEALTHY_GB"
+                          | "DISK_PRESSURE_CRITICAL_GB"
+                      ]
                     }
                     onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
+                      const val = Number.parseInt(e.target.value, 10);
                       setPythonConfig((prev) =>
                         prev
                           ? {
                               ...prev,
-                              [field.key]: isNaN(val) ? field.min : val,
+                              [field.key]: Number.isNaN(val) ? field.min : val,
                             }
                           : prev,
                       );
@@ -601,110 +732,6 @@ export function StorageSettings({
               ))}
             </div>
 
-            {/* Policy grids */}
-            {[
-              {
-                title: "Max Cached Docker Images Per Policy",
-                key: "POLICY_MAX_CACHED_IMAGES",
-                mineLabel: "Unlimited",
-                min: 1,
-              },
-              {
-                title: "Idle Timeout (minutes)",
-                key: "POLICY_IDLE_TIMEOUT_MINUTES",
-                mineLabel: "Disabled",
-                min: 10,
-              },
-            ].map((group) => (
-              <div key={group.key} className="space-y-2">
-                <Label className={labelClassName}>{group.title}</Label>
-                <div
-                  className={`grid grid-cols-2 ${compact ? "xl:grid-cols-5" : "sm:grid-cols-5"} gap-2`}
-                >
-                  {Object.entries(
-                    pythonConfig[
-                      group.key as
-                        | "POLICY_MAX_CACHED_IMAGES"
-                        | "POLICY_IDLE_TIMEOUT_MINUTES"
-                    ],
-                  ).map(([policy, val]) => {
-                    const isMine = policy === "mine";
-                    const isNull = val === null || val === 0;
-                    return (
-                      <div key={policy} className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/70">
-                            {policy}
-                          </span>
-                          {isMine && (
-                            <label className="flex items-center gap-1 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={isNull}
-                                onChange={(e) => {
-                                  const checked = e.target.checked;
-                                  setPythonConfig((prev) => {
-                                    if (!prev) return prev;
-                                    const next = {
-                                      ...prev,
-                                      [group.key]: {
-                                        ...prev[
-                                          group.key as
-                                            | "POLICY_MAX_CACHED_IMAGES"
-                                            | "POLICY_IDLE_TIMEOUT_MINUTES"
-                                        ],
-                                        [policy]: checked ? null : group.min,
-                                      },
-                                    };
-                                    return next;
-                                  });
-                                }}
-                                className="accent-amber-500 h-3 w-3"
-                              />
-                              <span className="text-[9px] font-bold uppercase tracking-widest text-white/50">
-                                {group.mineLabel}
-                              </span>
-                            </label>
-                          )}
-                        </div>
-                        {!isMine || !isNull ? (
-                          <input
-                            type="number"
-                            min={group.min}
-                            max={10080}
-                            value={val ?? ""}
-                            onChange={(e) => {
-                              const num = parseInt(e.target.value, 10);
-                              setPythonConfig((prev) => {
-                                if (!prev) return prev;
-                                return {
-                                  ...prev,
-                                  [group.key]: {
-                                    ...prev[
-                                      group.key as
-                                        | "POLICY_MAX_CACHED_IMAGES"
-                                        | "POLICY_IDLE_TIMEOUT_MINUTES"
-                                    ],
-                                    [policy]: isNaN(num) ? group.min : num,
-                                  },
-                                };
-                              });
-                            }}
-                            className="w-full h-9 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-[12px] font-semibold focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all shadow-inner"
-                          />
-                        ) : (
-                          <div className="w-full h-9 px-3 rounded-xl bg-white/5 border border-white/5 text-white/30 text-[12px] font-semibold flex items-center">
-                            —
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            {/* Actions */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
               <div className="flex-1 min-w-0">
                 {configError && (
@@ -727,7 +754,7 @@ export function StorageSettings({
                   >
                     <Sparkles className="h-3 w-3 shrink-0" />
                     <span className="text-[10px] font-bold uppercase tracking-widest">
-                      Config saved. Restart the DGN client to apply.
+                      Storage settings saved. Cache limit sent to the running client.
                     </span>
                   </motion.div>
                 )}

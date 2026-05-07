@@ -96,6 +96,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
    stopAllContainers: () => ipcRenderer.invoke("docker:stop-all-containers"),
    purgeOpenForkData: () => ipcRenderer.invoke("docker:clean-openfork"),
    getDiskSpace: () => ipcRenderer.invoke("docker:get-disk-space"),
+   getDockerImageCacheUsage: () => ipcRenderer.invoke("docker:get-image-cache-usage"),
    onImageEvicted: (callback) => createListener("openfork_client:image-evicted", callback),
 
   // Docker Monitoring

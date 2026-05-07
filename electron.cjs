@@ -352,6 +352,10 @@ dockerEngine.init({
 ipcDocker.init({
   app,
   getPythonManager: () => pythonManager,
+  onImageRemoved: (payload) => {
+    if (cleanupManager) cleanupManager.notifyImageEvicted(payload);
+    if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);
+  },
 });
 
 ipcDeps.init({
@@ -1100,13 +1104,7 @@ ipcMain.handle("save-settings", async (event, newSettings) => {
 // --- PYTHON CONFIG OVERRIDES IPC HANDLERS ---
 
 const DEFAULT_PYTHON_CONFIG = {
-  POLICY_MAX_CACHED_IMAGES: {
-    monetize: 3,
-    all: 4,
-    project: 6,
-    users: 6,
-    mine: null,
-  },
+  DOCKER_IMAGE_CACHE_LIMIT_GB: 250,
   POLICY_IDLE_TIMEOUT_MINUTES: {
     monetize: 90,
     all: 120,
@@ -1116,7 +1114,6 @@ const DEFAULT_PYTHON_CONFIG = {
   },
   DISK_PRESSURE_HEALTHY_GB: 50,
   DISK_PRESSURE_CRITICAL_GB: 20,
-  MINE_POLICY_PRESSURE_CAP: 8,
 };
 
 function getConfigOverridesPath() {
@@ -1164,6 +1161,14 @@ ipcMain.handle("python-config:set", (event, payload) => {
     const merged = { ...overrides, ...payload };
     if (!writeConfigOverrides(merged)) {
       return { success: false, error: "Failed to write overrides file." };
+    }
+    if (
+      payload &&
+      Object.prototype.hasOwnProperty.call(payload, "DOCKER_IMAGE_CACHE_LIMIT_GB")
+    ) {
+      pythonManager?.updateStorageConfig?.({
+        dockerImageCacheLimitGb: payload.DOCKER_IMAGE_CACHE_LIMIT_GB,
+      });
     }
     return { success: true };
   } catch (e) {

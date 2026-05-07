@@ -320,14 +320,16 @@ export const SystemNotifications = memo(() => {
         tone="destructive"
         title={`Insufficient Disk Space: ${diskSpaceError.image_name}`}
         message={
-          <>
-            Need{" "}
-            <span className="font-black">{diskSpaceError.required_gb} GB</span>,
-            available{" "}
-            <span className="font-black">
-              {diskSpaceError.available_gb} GB
-            </span>
-          </>
+          diskSpaceError.message || (
+            <>
+              Need{" "}
+              <span className="font-black">{diskSpaceError.required_gb} GB</span>,
+              available{" "}
+              <span className="font-black">
+                {diskSpaceError.available_gb} GB
+              </span>
+            </>
+          )
         }
         icon={<AlertTriangle className="h-4 w-4 text-destructive" />}
         onDismiss={() => setDiskSpaceError(null)}

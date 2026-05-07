@@ -13,10 +13,12 @@ const engineInstall = require("./engine-install.cjs");
 
 let _app;
 let _getPythonManager;
+let _onImageRemoved;
 
-function init({ app, getPythonManager }) {
+function init({ app, getPythonManager, onImageRemoved }) {
   _app = app;
   _getPythonManager = getPythonManager;
+  _onImageRemoved = onImageRemoved || null;
 }
 
 function getPowerShellDiagnosticLines(output = "") {
@@ -90,6 +92,42 @@ async function tryTrimWslFilesystem() {
     success: true,
     output: trimResult.output || "",
   };
+}
+
+async function getDockerImageSizeBytes(imageId) {
+  try {
+    const output = await dockerEngine.execDockerCommand(
+      `docker image inspect ${dockerEngine.escapeShellArg(imageId)} --format "{{.Size}}"`,
+    );
+    const size = Number.parseInt(String(output || "").trim(), 10);
+    return Number.isFinite(size) && size > 0 ? size : 0;
+  } catch (error) {
+    console.warn(`Could not inspect image size for ${imageId}:`, error.message);
+    return 0;
+  }
+}
+
+function notifyImagesRemoved({ image = null, freedBytes = 0, reason = "manual_delete" }) {
+  const payload = {
+    service_type: null,
+    image,
+    freed_bytes: freedBytes,
+    reason,
+  };
+
+  if (_onImageRemoved && freedBytes > 0) {
+    try {
+      _onImageRemoved(payload);
+    } catch (error) {
+      console.warn("Image removal notification failed:", error.message);
+    }
+  }
+
+  try {
+    _getPythonManager?.()?.syncCachedImages?.();
+  } catch (error) {
+    console.warn("Could not request cached image sync after manual deletion:", error.message);
+  }
 }
 
 function register(ipcMain) {
@@ -185,12 +223,16 @@ function register(ipcMain) {
         'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
       );
       const lines = listOutput.split("\n").filter(Boolean);
+      let imageMeta = null;
       const isAllowed = lines.some((line) => {
         const [id, fullName] = line.split("|");
-        return (
+        const allowed =
           (id === imageId || id.startsWith(imageId)) &&
-          fullName.toLowerCase().includes("openfork")
-        );
+          fullName.toLowerCase().includes("openfork");
+        if (allowed) {
+          imageMeta = { id, fullName };
+        }
+        return allowed;
       });
 
       if (!isAllowed) {
@@ -217,6 +259,8 @@ function register(ipcMain) {
         );
       }
 
+      const freedBytes = await getDockerImageSizeBytes(imageId);
+
       // Force remove the image
       await dockerEngine.execDockerCommand(
         `docker rmi -f ${dockerEngine.escapeShellArg(imageId)}`,
@@ -233,6 +277,11 @@ function register(ipcMain) {
 
       // On WSL Docker, rmi + prune free space inside the VHDX but the file itself
       // doesn't shrink until compacted. Suggest that to the user.
+      notifyImagesRemoved({
+        image: imageMeta?.fullName || imageId,
+        freedBytes,
+        reason: "manual_delete",
+      });
       dockerEngine.emitCompactionSuggested();
       return { success: true };
     } catch (error) {
@@ -250,6 +299,7 @@ function register(ipcMain) {
 
       const lines = listOutput.split("\n").filter(Boolean);
       let removedCount = 0;
+      let freedBytes = 0;
       for (const line of lines) {
         const [id, fullName] = line.split("|");
         if (
@@ -258,6 +308,7 @@ function register(ipcMain) {
           dockerEngine.isValidDockerId(id)
         ) {
           try {
+            freedBytes += await getDockerImageSizeBytes(id);
             await dockerEngine.execDockerCommand(
               `docker rmi -f ${dockerEngine.escapeShellArg(id)}`,
             );
@@ -276,7 +327,14 @@ function register(ipcMain) {
 
       await tryTrimWslFilesystem();
 
-      if (removedCount > 0) dockerEngine.emitCompactionSuggested();
+      if (removedCount > 0) {
+        notifyImagesRemoved({
+          image: `${removedCount} OpenFork image${removedCount === 1 ? "" : "s"}`,
+          freedBytes,
+          reason: "manual_delete_all",
+        });
+        dockerEngine.emitCompactionSuggested();
+      }
       return { success: true, removedCount };
     } catch (error) {
       console.error("Failed to remove all Docker images:", error);
@@ -339,6 +397,7 @@ function register(ipcMain) {
       console.log("Starting targeted OpenFork cleanup...");
       let stoppedCount = 0;
       let removedCount = 0;
+      let freedBytes = 0;
 
       // 1. Force remove all dgn-client containers (by name)
       try {
@@ -380,6 +439,7 @@ function register(ipcMain) {
                 }
               } catch (e) {}
               try {
+                freedBytes += await getDockerImageSizeBytes(id);
                 await dockerEngine.execDockerCommand(`docker rmi -f ${id}`);
                 removedCount++;
               } catch (e) {
@@ -405,7 +465,14 @@ function register(ipcMain) {
 
       await tryTrimWslFilesystem();
 
-      if (removedCount > 0) dockerEngine.emitCompactionSuggested();
+      if (removedCount > 0) {
+        notifyImagesRemoved({
+          image: `${removedCount} OpenFork image${removedCount === 1 ? "" : "s"}`,
+          freedBytes,
+          reason: "manual_purge",
+        });
+        dockerEngine.emitCompactionSuggested();
+      }
       return { success: true, stoppedCount, removedCount };
     } catch (error) {
       console.error("Failed to clean OpenFork data:", error);
@@ -560,6 +627,61 @@ function register(ipcMain) {
           engine_file_path: null,
         },
       };
+    }
+  });
+
+  ipcMain.handle("docker:get-image-cache-usage", async () => {
+    try {
+      const routingStatus = await dockerMonitor.ensureDockerRouting();
+      if (
+        routingStatus?.error === "WSL_COMPACTING" ||
+        routingStatus?.error === "WSL_VHDX_LOCKED"
+      ) {
+        return {
+          success: true,
+          data: { total_bytes: 0, total_gb: "0.0", image_count: 0 },
+        };
+      }
+
+      const listOutput = await dockerEngine.execDockerCommand(
+        'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
+      );
+      if (!listOutput) {
+        return {
+          success: true,
+          data: { total_bytes: 0, total_gb: "0.0", image_count: 0 },
+        };
+      }
+
+      const uniqueImages = new Map();
+      for (const line of listOutput.split("\n").filter(Boolean)) {
+        const [id, fullName] = line.split("|");
+        if (
+          id &&
+          fullName &&
+          fullName.toLowerCase().includes("openfork") &&
+          dockerEngine.isValidDockerId(id)
+        ) {
+          uniqueImages.set(id, fullName);
+        }
+      }
+
+      let totalBytes = 0;
+      for (const id of uniqueImages.keys()) {
+        totalBytes += await getDockerImageSizeBytes(id);
+      }
+
+      return {
+        success: true,
+        data: {
+          total_bytes: totalBytes,
+          total_gb: (totalBytes / 1024 ** 3).toFixed(1),
+          image_count: uniqueImages.size,
+        },
+      };
+    } catch (error) {
+      console.error("Failed to get OpenFork image cache usage:", error);
+      return { success: false, error: error.message };
     }
   });
 
