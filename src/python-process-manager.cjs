@@ -6,6 +6,16 @@ const http = require("http");
 const dockerMonitor = require("./docker-monitor.cjs");
 
 const PROCESS_MARKER = "openfork_dgn_client_v1_marker";
+const RENDERER_REFRESH_TOKEN_SENTINEL =
+  "__openfork_renderer_refresh_token_not_available__";
+
+function sessionForRenderer(session) {
+  if (!session) return null;
+  return {
+    ...session,
+    refresh_token: RENDERER_REFRESH_TOKEN_SENTINEL,
+  };
+}
 
 function isInvalidSupabaseRefreshTokenError(error) {
   const code = error?.code || error?.error_code;
@@ -625,7 +635,7 @@ class PythonProcessManager {
                   if (this.mainWindow && !this.mainWindow.isDestroyed()) {
                     this.mainWindow.webContents.send(
                       "auth:session",
-                      freshData.session
+                      sessionForRenderer(freshData.session)
                     );
                   }
                 }

@@ -320,6 +320,23 @@ let authStateSubscription = null;
 let pendingAuthState = null;
 let ipcSenderGuardInstalled = false;
 
+const RENDERER_REFRESH_TOKEN_SENTINEL =
+  "__openfork_renderer_refresh_token_not_available__";
+
+function sessionForRenderer(authSession) {
+  if (!authSession) return null;
+  return {
+    ...authSession,
+    refresh_token: RENDERER_REFRESH_TOKEN_SENTINEL,
+  };
+}
+
+function sendSessionToRenderer(authSession) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:session", sessionForRenderer(authSession));
+  }
+}
+
 const SERVICE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -501,7 +518,7 @@ async function clearLocalAuthSession(reason, error) {
 
   session = null;
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("auth:session", null);
+    sendSessionToRenderer(null);
     mainWindow.webContents.send("auth:force-logout");
   }
 }
@@ -546,7 +563,7 @@ function handleSupabaseAuthStateChange(event, newSession) {
   }
 
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("auth:session", session);
+    sendSessionToRenderer(session);
 
     if (
       event === "SIGNED_OUT" ||
@@ -591,7 +608,7 @@ async function logout() {
   }
   session = null;
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("auth:session", null);
+    sendSessionToRenderer(null);
   }
 }
 
@@ -669,9 +686,7 @@ async function handleAuthCallback(url) {
   }
 
   session = data.session;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("auth:session", session);
-  }
+  sendSessionToRenderer(session);
 }
 
 // --- APP LIFECYCLE ---
@@ -750,9 +765,7 @@ function createWindow() {
       session = null;
     }
     subscribeAuthStateChanges();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("auth:session", session);
-    }
+    sendSessionToRenderer(session);
   });
 
   const userDataPath = app.getPath("userData");
@@ -1174,7 +1187,7 @@ ipcMain.handle("get-process-info", () => ({
   argv: process.argv,
   isPackaged: app.isPackaged,
 }));
-ipcMain.handle("get-session", async () => session);
+ipcMain.handle("get-session", async () => sessionForRenderer(session));
 
 // --- MONETIZE / STRIPE IPC HANDLERS ---
 
@@ -1374,7 +1387,10 @@ function readConfigOverrides() {
   const filePath = getConfigOverridesPath();
   try {
     if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, "utf8"));
+      const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
     }
   } catch (e) {
     console.error("Failed to read config overrides:", e);
@@ -1393,6 +1409,113 @@ function writeConfigOverrides(overrides) {
   }
 }
 
+function readFiniteInteger(value, fieldName, min, max) {
+  if (!Number.isFinite(value) || !Number.isInteger(value)) {
+    throw new Error(`${fieldName} must be an integer.`);
+  }
+  if (value < min || value > max) {
+    throw new Error(`${fieldName} must be between ${min} and ${max}.`);
+  }
+  return value;
+}
+
+function sanitizePythonConfigPatch(payload, currentConfig) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Invalid Python config payload.");
+  }
+
+  const allowedKeys = new Set([
+    "DOCKER_IMAGE_CACHE_LIMIT_GB",
+    "POLICY_IDLE_TIMEOUT_MINUTES",
+    "DISK_PRESSURE_HEALTHY_GB",
+    "DISK_PRESSURE_CRITICAL_GB",
+  ]);
+  const unknownKeys = Object.keys(payload).filter((key) => !allowedKeys.has(key));
+  if (unknownKeys.length > 0) {
+    throw new Error(`Unsupported Python config key: ${unknownKeys[0]}`);
+  }
+
+  const nextConfig = { ...currentConfig };
+  const patch = {};
+
+  if (Object.prototype.hasOwnProperty.call(payload, "DOCKER_IMAGE_CACHE_LIMIT_GB")) {
+    patch.DOCKER_IMAGE_CACHE_LIMIT_GB = readFiniteInteger(
+      payload.DOCKER_IMAGE_CACHE_LIMIT_GB,
+      "DOCKER_IMAGE_CACHE_LIMIT_GB",
+      50,
+      2000,
+    );
+    nextConfig.DOCKER_IMAGE_CACHE_LIMIT_GB = patch.DOCKER_IMAGE_CACHE_LIMIT_GB;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "DISK_PRESSURE_HEALTHY_GB")) {
+    patch.DISK_PRESSURE_HEALTHY_GB = readFiniteInteger(
+      payload.DISK_PRESSURE_HEALTHY_GB,
+      "DISK_PRESSURE_HEALTHY_GB",
+      20,
+      500,
+    );
+    nextConfig.DISK_PRESSURE_HEALTHY_GB = patch.DISK_PRESSURE_HEALTHY_GB;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "DISK_PRESSURE_CRITICAL_GB")) {
+    patch.DISK_PRESSURE_CRITICAL_GB = readFiniteInteger(
+      payload.DISK_PRESSURE_CRITICAL_GB,
+      "DISK_PRESSURE_CRITICAL_GB",
+      5,
+      500,
+    );
+    nextConfig.DISK_PRESSURE_CRITICAL_GB = patch.DISK_PRESSURE_CRITICAL_GB;
+  }
+
+  if (
+    nextConfig.DISK_PRESSURE_CRITICAL_GB >= nextConfig.DISK_PRESSURE_HEALTHY_GB
+  ) {
+    throw new Error(
+      "DISK_PRESSURE_CRITICAL_GB must be lower than DISK_PRESSURE_HEALTHY_GB.",
+    );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(payload, "POLICY_IDLE_TIMEOUT_MINUTES")
+  ) {
+    const policyPayload = payload.POLICY_IDLE_TIMEOUT_MINUTES;
+    if (
+      !policyPayload ||
+      typeof policyPayload !== "object" ||
+      Array.isArray(policyPayload)
+    ) {
+      throw new Error("POLICY_IDLE_TIMEOUT_MINUTES must be an object.");
+    }
+
+    const defaultPolicy = DEFAULT_PYTHON_CONFIG.POLICY_IDLE_TIMEOUT_MINUTES;
+    const currentPolicy = currentConfig.POLICY_IDLE_TIMEOUT_MINUTES || {};
+    const policyPatch = {};
+    for (const [policyName, policyValue] of Object.entries(policyPayload)) {
+      if (!Object.prototype.hasOwnProperty.call(defaultPolicy, policyName)) {
+        throw new Error(`Unsupported idle timeout policy: ${policyName}`);
+      }
+      policyPatch[policyName] =
+        policyValue === null
+          ? null
+          : readFiniteInteger(
+              policyValue,
+              `POLICY_IDLE_TIMEOUT_MINUTES.${policyName}`,
+              5,
+              1440,
+            );
+    }
+
+    patch.POLICY_IDLE_TIMEOUT_MINUTES = {
+      ...defaultPolicy,
+      ...currentPolicy,
+      ...policyPatch,
+    };
+  }
+
+  return patch;
+}
+
 ipcMain.handle("python-config:get", () => {
   const overrides = readConfigOverrides();
   return {
@@ -1408,7 +1531,21 @@ ipcMain.handle("python-config:get", () => {
 ipcMain.handle("python-config:set", (event, payload) => {
   try {
     const overrides = readConfigOverrides();
-    const merged = { ...overrides, ...payload };
+    const overridePolicy =
+      overrides.POLICY_IDLE_TIMEOUT_MINUTES &&
+      typeof overrides.POLICY_IDLE_TIMEOUT_MINUTES === "object" &&
+      !Array.isArray(overrides.POLICY_IDLE_TIMEOUT_MINUTES)
+        ? overrides.POLICY_IDLE_TIMEOUT_MINUTES
+        : {};
+    const sanitizedPayload = sanitizePythonConfigPatch(payload, {
+      ...DEFAULT_PYTHON_CONFIG,
+      ...overrides,
+      POLICY_IDLE_TIMEOUT_MINUTES: {
+        ...DEFAULT_PYTHON_CONFIG.POLICY_IDLE_TIMEOUT_MINUTES,
+        ...overridePolicy,
+      },
+    });
+    const merged = { ...overrides, ...sanitizedPayload };
     if (!writeConfigOverrides(merged)) {
       return { success: false, error: "Failed to write overrides file." };
     }
@@ -1420,7 +1557,7 @@ ipcMain.handle("python-config:set", (event, payload) => {
       )
     ) {
       pythonManager?.updateStorageConfig?.({
-        dockerImageCacheLimitGb: payload.DOCKER_IMAGE_CACHE_LIMIT_GB,
+        dockerImageCacheLimitGb: sanitizedPayload.DOCKER_IMAGE_CACHE_LIMIT_GB,
       });
     }
     return { success: true };
