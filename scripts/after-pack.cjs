@@ -18,7 +18,9 @@ function shellQuote(value) {
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== "linux") return;
 
-  const targetNames = context.targets.map((target) => target.name.toLowerCase());
+  const targetNames = context.targets.map((target) =>
+    target.name.toLowerCase(),
+  );
   const isAppImageOnlyBuild =
     targetNames.length === 1 && targetNames[0] === "appimage";
 
@@ -36,7 +38,7 @@ exports.default = async function afterPack(context) {
     "#!/bin/sh",
     "set -e",
     'DIR=$(dirname "$(readlink -f "$0")")',
-    `exec "$DIR/${executableName}.bin" --no-sandbox "$@"`,
+    `exec "$DIR/${executableName}.bin" "$@"`,
     "",
   ].join("\n");
 
@@ -44,7 +46,5 @@ exports.default = async function afterPack(context) {
   await chmod(executablePath, 0o755);
   await chmod(realExecutablePath, 0o755);
 
-  console.log(
-    `Wrapped ${shellQuote(executableName)} with --no-sandbox for AppImage packaging.`,
-  );
+  console.log(`Wrapped ${shellQuote(executableName)} for AppImage packaging.`);
 };

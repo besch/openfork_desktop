@@ -687,36 +687,6 @@ function initializeIpcListeners() {
     }),
   );
 
-  cleanupFns.push(
-    window.electronAPI.onAuthCallback(async (url) => {
-      const hashPart = url.split("#")[1];
-      if (!hashPart) return;
-
-      const params = new URLSearchParams(hashPart);
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-
-      if (accessToken && refreshToken) {
-        const { session: newSession, error } =
-          await window.electronAPI.setSessionFromTokens(
-            accessToken,
-            refreshToken,
-          );
-
-        if (error) {
-          console.error(
-            "Error persisting session in main process:",
-            error.message,
-          );
-          return;
-        }
-        if (newSession) {
-          await setSession(newSession);
-        }
-      }
-    }),
-  );
-
   // Handle force refresh from main process (token was refreshed)
   cleanupFns.push(
     window.electronAPI.onForceRefresh(async () => {

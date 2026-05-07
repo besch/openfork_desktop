@@ -1,6 +1,6 @@
 "use strict";
 
-const { execFile, exec } = require("child_process");
+const { execFile } = require("child_process");
 const os = require("os");
 
 const dockerEngine = require("./docker-engine.cjs");
@@ -22,13 +22,16 @@ function register(ipcMain) {
     try {
       const installState = engineInstall.getCurrentInstallState?.();
       if (process.platform === "win32" && installState?.active) {
-        const installDriveMatch = installState.installPath?.match(/^([A-Za-z]):\\/);
+        const installDriveMatch =
+          installState.installPath?.match(/^([A-Za-z]):\\/);
         return {
           installed: false,
           running: false,
           isNative: false,
           isStarting: true,
-          installDrive: installDriveMatch ? installDriveMatch[1].toUpperCase() : undefined,
+          installDrive: installDriveMatch
+            ? installDriveMatch[1].toUpperCase()
+            : undefined,
         };
       }
       return await dockerEngine.resolveDockerStatus({ allowNativeStart: true });
@@ -58,18 +61,26 @@ function register(ipcMain) {
   // --- LINUX DOCKER PERMISSIONS FIX ---
 
   ipcMain.handle("deps:fix-linux-docker-permissions", async () => {
-    if (process.platform !== "linux") return { success: false, error: "Not on Linux" };
+    if (process.platform !== "linux")
+      return { success: false, error: "Not on Linux" };
     const username = os.userInfo().username;
+    if (!/^[a-z_][a-z0-9_-]*[$]?$/i.test(username)) {
+      return { success: false, error: "Unsafe local username" };
+    }
     return new Promise((resolve) => {
-      exec(`pkexec /usr/sbin/usermod -aG docker ${username}`, (error) => {
-        if (error) {
-          console.error("Failed to add user to docker group:", error.message);
-          resolve({ success: false, error: error.message });
-        } else {
-          console.log(`Added ${username} to docker group via pkexec`);
-          resolve({ success: true });
-        }
-      });
+      execFile(
+        "pkexec",
+        ["/usr/sbin/usermod", "-aG", "docker", username],
+        (error) => {
+          if (error) {
+            console.error("Failed to add user to docker group:", error.message);
+            resolve({ success: false, error: error.message });
+          } else {
+            console.log(`Added ${username} to docker group via pkexec`);
+            resolve({ success: true });
+          }
+        },
+      );
     });
   });
 
@@ -80,7 +91,10 @@ function register(ipcMain) {
       // Minimum CUDA version required for OpenFork AI models
       const MIN_CUDA_VERSION = "12.8";
 
-      const nvidiaSmiArgs = ["--query-gpu=name,cuda_version", "--format=csv,noheader"];
+      const nvidiaSmiArgs = [
+        "--query-gpu=name,cuda_version",
+        "--format=csv,noheader",
+      ];
 
       const runExecFile = (cmd, args, opts) =>
         new Promise((resolve, reject) =>
@@ -103,7 +117,9 @@ function register(ipcMain) {
         let found = false;
         for (const candidate of directPaths) {
           try {
-            output = await runExecFile(candidate, nvidiaSmiArgs, { timeout: 10000 });
+            output = await runExecFile(candidate, nvidiaSmiArgs, {
+              timeout: 10000,
+            });
             found = true;
             break;
           } catch {
@@ -139,9 +155,13 @@ function register(ipcMain) {
           // Try using cmd.exe where command
           if (!found) {
             try {
-              output = await runExecFile("cmd.exe", ["/c", "where nvidia-smi"], {
-                timeout: 15000,
-              });
+              output = await runExecFile(
+                "cmd.exe",
+                ["/c", "where nvidia-smi"],
+                {
+                  timeout: 15000,
+                },
+              );
               const nvidiaPath = output.toString().trim().split("\r?\n")[0];
               if (nvidiaPath) {
                 output = await runExecFile(nvidiaPath, nvidiaSmiArgs, {
@@ -203,29 +223,44 @@ function register(ipcMain) {
         }
       } else {
         try {
-          output = await runExecFile("nvidia-smi", nvidiaSmiArgs, { timeout: 10000 });
+          output = await runExecFile("nvidia-smi", nvidiaSmiArgs, {
+            timeout: 10000,
+          });
         } catch {
           // --query-gpu=cuda_version is not supported on all nvidia-smi versions.
           // Fall back: query just the name, then parse CUDA version from plain output.
           let nameOut;
           try {
             nameOut = await runExecFile(
-              "nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], { timeout: 10000 }
+              "nvidia-smi",
+              ["--query-gpu=name", "--format=csv,noheader"],
+              { timeout: 10000 },
             );
           } catch {
-            return { available: false, gpu: null, cudaVersion: null, isOutdated: false };
+            return {
+              available: false,
+              gpu: null,
+              cudaVersion: null,
+              isOutdated: false,
+            };
           }
           let plainOut = "";
           try {
             plainOut = await runExecFile("nvidia-smi", [], { timeout: 10000 });
-          } catch { /* best-effort */ }
-          const gpuName = nameOut.toString().trim().split("\n")[0].trim() || null;
-          const cudaMatch = plainOut.toString().match(/CUDA Version:\s*(\d+\.\d+)/);
+          } catch {
+            /* best-effort */
+          }
+          const gpuName =
+            nameOut.toString().trim().split("\n")[0].trim() || null;
+          const cudaMatch = plainOut
+            .toString()
+            .match(/CUDA Version:\s*(\d+\.\d+)/);
           const cudaVersion = cudaMatch ? cudaMatch[1] : null;
           let isOutdated = false;
           if (cudaVersion) {
             const [major, minor] = cudaVersion.split(".").map(Number);
-            const [minMajor, minMinor] = MIN_CUDA_VERSION.split(".").map(Number);
+            const [minMajor, minMinor] =
+              MIN_CUDA_VERSION.split(".").map(Number);
             if (major < minMajor || (major === minMajor && minor < minMinor)) {
               isOutdated = true;
             }
@@ -236,7 +271,12 @@ function register(ipcMain) {
 
       const lines = output.toString().trim().split("\n");
       if (lines.length === 0 || !lines[0].trim()) {
-        return { available: false, gpu: null, cudaVersion: null, isOutdated: false };
+        return {
+          available: false,
+          gpu: null,
+          cudaVersion: null,
+          isOutdated: false,
+        };
       }
 
       const gpuInfo = lines[0].split(",").map((s) => s.trim());
@@ -254,8 +294,16 @@ function register(ipcMain) {
 
       return { available: true, gpu: gpuName, cudaVersion, isOutdated };
     } catch (err) {
-      console.error("[deps:check-nvidia] detection failed:", err?.message ?? err);
-      return { available: false, gpu: null, cudaVersion: null, isOutdated: false };
+      console.error(
+        "[deps:check-nvidia] detection failed:",
+        err?.message ?? err,
+      );
+      return {
+        available: false,
+        gpu: null,
+        cudaVersion: null,
+        isOutdated: false,
+      };
     }
   });
 

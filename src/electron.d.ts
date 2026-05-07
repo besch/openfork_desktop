@@ -53,11 +53,6 @@ interface DockerOperationResult {
   stoppedCount?: number;
 }
 
-interface SessionResult {
-  session: Session | null;
-  error: { message: string } | null;
-}
-
 interface SettingsResult {
   success: boolean;
   error?: string;
@@ -133,7 +128,10 @@ interface ElectronAPI {
   // DGN Client controls
   startClient: (service: string, routingConfig: ProviderRoutingConfig) => void;
   stopClient: () => void;
-  updateProviderConfig: (providerId: string, routingConfig: ProviderRoutingConfig) => Promise<{ success: boolean; error?: string }>;
+  updateProviderConfig: (
+    providerId: string,
+    routingConfig: ProviderRoutingConfig,
+  ) => Promise<{ success: boolean; error?: string }>;
   cancelDownload: (serviceType: string) => void;
   cleanupProcesses: () => Promise<{ success: boolean; error?: string }>;
 
@@ -143,9 +141,7 @@ interface ElectronAPI {
   onDockerProgress: (
     callback: (progress: DockerPullProgress | null) => void,
   ) => CleanupFn;
-  onDiskSpaceError: (
-    callback: (data: DiskSpaceError) => void,
-  ) => CleanupFn;
+  onDiskSpaceError: (callback: (data: DiskSpaceError) => void) => CleanupFn;
   onImageEvicted: (
     callback: (payload: ImageEvictedNotification) => void,
   ) => CleanupFn;
@@ -154,11 +150,6 @@ interface ElectronAPI {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   onSession: (callback: (session: Session | null) => void) => CleanupFn;
-  onAuthCallback: (callback: (url: string) => void) => CleanupFn;
-  setSessionFromTokens: (
-    accessToken: string,
-    refreshToken: string,
-  ) => Promise<SessionResult>;
 
   // Window controls
   setWindowClosable: (closable: boolean) => void;
@@ -171,9 +162,6 @@ interface ElectronAPI {
 
   // Session management
   getSession: () => Promise<Session | null>;
-
-  // Utility to remove listeners
-  removeAllListeners: (channel: string) => void;
 
   // Search
   searchUsers: (term: string) => Promise<SearchUsersResult>;
@@ -244,21 +232,36 @@ interface ElectronAPI {
   ) => CleanupFn;
   cancelInstall: () => Promise<{ success: boolean; error?: string }>;
   resetWslDistro: () => Promise<{ success: boolean }>;
-  fixLinuxDockerPermissions: () => Promise<{ success: boolean; error?: string }>;
+  fixLinuxDockerPermissions: () => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   onWslDistroMissing: (callback: () => void) => CleanupFn;
-  onEngineSwitch: (
-    callback: (data: EngineSwitchNotice) => void,
-  ) => CleanupFn;
+  onEngineSwitch: (callback: (data: EngineSwitchNotice) => void) => CleanupFn;
   onWslRecoveryStatus: (
     callback: (status: WslRecoveryStatus) => void,
   ) => CleanupFn;
 
   // Disk Management
   getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
-  reclaimDiskSpace: () => Promise<{ success: boolean; error?: string; message?: string; started?: boolean; status?: ReclaimStatus }>;
+  reclaimDiskSpace: () => Promise<{
+    success: boolean;
+    error?: string;
+    message?: string;
+    started?: boolean;
+    status?: ReclaimStatus;
+  }>;
   getReclaimStatus: () => Promise<ReclaimStatus>;
-  cancelReclaimDiskSpace: () => Promise<{ success: boolean; status?: ReclaimStatus; error?: string }>;
-  resetEngine: () => Promise<{ success: boolean; error?: string; message?: string }>;
+  cancelReclaimDiskSpace: () => Promise<{
+    success: boolean;
+    status?: ReclaimStatus;
+    error?: string;
+  }>;
+  resetEngine: () => Promise<{
+    success: boolean;
+    error?: string;
+    message?: string;
+  }>;
   onReclaimStatus: (callback: (status: ReclaimStatus) => void) => CleanupFn;
   onCompactionSuggested: (callback: () => void) => CleanupFn;
   relocateStorage: (
@@ -288,7 +291,9 @@ interface ElectronAPI {
 
   // Python config overrides
   getPythonConfig: () => Promise<PythonConfigResult>;
-  setPythonConfig: (config: Partial<PythonConfigData>) => Promise<{ success: boolean; error?: string }>;
+  setPythonConfig: (
+    config: Partial<PythonConfigData>,
+  ) => Promise<{ success: boolean; error?: string }>;
   resetPythonConfig: () => Promise<{ success: boolean; error?: string }>;
 
   // Schedule Management

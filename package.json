@@ -163,9 +163,7 @@
       "afterRemove": "build/postuninstall.sh"
     },
     "appImage": {
-      "executableArgs": [
-        "--no-sandbox"
-      ]
+      "executableArgs": []
     },
     "nsis": {
       "oneClick": false,

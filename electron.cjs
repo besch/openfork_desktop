@@ -1,7 +1,16 @@
-const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  net,
+  session: electronSession,
+} = require("electron");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
+const crypto = require("crypto");
+const { fileURLToPath } = require("url");
 const { execFile: _execFile } = require("child_process");
 
 const Store = require("electron-store").default;
@@ -114,6 +123,11 @@ async function tryLinuxFallbackOpen(url) {
 }
 
 async function openExternal(url) {
+  if (!isAllowedExternalUrl(url)) {
+    console.warn(`Blocked external URL: ${url}`);
+    return { success: false, error: "URL_NOT_ALLOWED" };
+  }
+
   // On Linux running inside WSL (Windows host), use explorer.exe to open URLs
   // in the host browser. On native Linux, prefer xdg-open/gio directly because
   // shell.openExternal can sometimes appear to succeed without actually opening.
@@ -198,7 +212,7 @@ async function registerAppImageProtocolHandler() {
       "Name=Openfork Client",
       "Type=Application",
       "Terminal=false",
-      `Exec=${appImagePath} --no-sandbox %u`,
+      `Exec=${appImagePath} %u`,
       `Icon=${iconName}`,
       "MimeType=x-scheme-handler/openfork-desktop-app;",
       "Categories=Network;AudioVideo;",
@@ -303,6 +317,162 @@ let autoCompactManager;
 let isQuittingApp = false;
 let pendingClientStart = null;
 let authStateSubscription = null;
+let pendingAuthState = null;
+let ipcSenderGuardInstalled = false;
+
+const SERVICE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const COMMUNITY_MODES = new Set([
+  "none",
+  "trusted_users",
+  "trusted_projects",
+  "all",
+]);
+const EXTERNAL_HTTPS_HOSTS = new Set([
+  "openfork.video",
+  "www.openfork.video",
+  "docker.com",
+  "www.docker.com",
+  "docs.docker.com",
+  "stripe.com",
+  "www.stripe.com",
+  "checkout.stripe.com",
+  "connect.stripe.com",
+  "dashboard.stripe.com",
+  "billing.stripe.com",
+]);
+
+function getOrigin(value) {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getAllowedExternalOrigins() {
+  return new Set(
+    [getOrigin(ORCHESTRATOR_API_URL), getOrigin(SUPABASE_URL)].filter(Boolean),
+  );
+}
+
+function isAllowedExternalUrl(value) {
+  if (typeof value !== "string" || value.length > 2048) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (parsed.username || parsed.password) return false;
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    !app.isPackaged &&
+    parsed.protocol === "http:" &&
+    (hostname === "localhost" || hostname === "127.0.0.1")
+  ) {
+    return true;
+  }
+  if (parsed.protocol !== "https:") return false;
+  if (getAllowedExternalOrigins().has(parsed.origin)) return true;
+  if (EXTERNAL_HTTPS_HOSTS.has(hostname)) return true;
+  if (hostname.endsWith(".stripe.com")) return true;
+
+  return false;
+}
+
+function getAllowedRendererOrigins() {
+  const origins = new Set();
+  if (!app.isPackaged) {
+    origins.add("http://localhost:5173");
+    origins.add("http://127.0.0.1:5173");
+  }
+  return origins;
+}
+
+function isTrustedRendererUrl(value) {
+  if (!value) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (app.isPackaged) {
+    if (parsed.protocol !== "file:") return false;
+    try {
+      const rendererPath = path.resolve(fileURLToPath(parsed));
+      const distPath = path.resolve(__dirname, "dist");
+      return rendererPath === path.join(distPath, "index.html");
+    } catch {
+      return false;
+    }
+  }
+
+  return getAllowedRendererOrigins().has(parsed.origin);
+}
+
+function isTrustedIpcSender(event) {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (event.sender !== mainWindow.webContents) return false;
+
+  const frameUrl = event.senderFrame?.url || event.sender.getURL();
+  return isTrustedRendererUrl(frameUrl);
+}
+
+function installIpcSenderGuard() {
+  if (ipcSenderGuardInstalled) return;
+  ipcSenderGuardInstalled = true;
+
+  const rawHandle = ipcMain.handle.bind(ipcMain);
+  ipcMain.handle = (channel, listener) =>
+    rawHandle(channel, async (event, ...args) => {
+      if (!isTrustedIpcSender(event)) {
+        console.warn(`Blocked IPC invoke from untrusted sender: ${channel}`);
+        return { success: false, error: "UNTRUSTED_IPC_SENDER" };
+      }
+      return listener(event, ...args);
+    });
+
+  const rawOn = ipcMain.on.bind(ipcMain);
+  ipcMain.on = (channel, listener) =>
+    rawOn(channel, (event, ...args) => {
+      if (!isTrustedIpcSender(event)) {
+        console.warn(`Blocked IPC event from untrusted sender: ${channel}`);
+        return;
+      }
+      return listener(event, ...args);
+    });
+}
+
+function sanitizeRoutingConfig(value = {}) {
+  const config = value && typeof value === "object" ? value : {};
+  const communityMode = COMMUNITY_MODES.has(config.communityMode)
+    ? config.communityMode
+    : "none";
+  const trustedIds = Array.isArray(config.trustedIds)
+    ? config.trustedIds
+        .filter((id) => typeof id === "string" && UUID_PATTERN.test(id))
+        .slice(0, 500)
+    : [];
+
+  return {
+    processOwnJobs: config.processOwnJobs === true,
+    communityMode,
+    trustedIds,
+    monetizeMode: config.monetizeMode === true,
+  };
+}
+
+function isValidServiceId(value) {
+  return typeof value === "string" && SERVICE_ID_PATTERN.test(value);
+}
 
 function isInvalidSupabaseRefreshTokenError(error) {
   const code = error?.code || error?.error_code;
@@ -404,9 +574,11 @@ async function googleLogin() {
   // Instead of starting an OAuth flow from Electron,
   // we open a page on the website which will handle auth
   // and then redirect back to Electron with the session.
-  const syncUrl = `${ORCHESTRATOR_API_URL}/auth/electron-login`;
-  console.log(`Opening auth URL: ${syncUrl}`);
-  return openExternal(syncUrl);
+  pendingAuthState = crypto.randomBytes(32).toString("hex");
+  const syncUrl = new URL("/auth/electron-login", ORCHESTRATOR_API_URL);
+  syncUrl.searchParams.set("desktop_state", pendingAuthState);
+  console.log(`Opening auth URL: ${syncUrl.toString()}`);
+  return openExternal(syncUrl.toString());
 }
 
 async function logout() {
@@ -440,9 +612,65 @@ async function hydrateInitialSession() {
   }
 }
 
-function handleAuthCallback(url) {
-  if (mainWindow) {
-    mainWindow.webContents.send("auth:callback", url);
+async function handleAuthCallback(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    console.warn("Blocked malformed auth callback URL.");
+    return;
+  }
+
+  if (
+    parsed.protocol !== "openfork-desktop-app:" ||
+    parsed.hostname !== "auth" ||
+    parsed.pathname !== "/callback"
+  ) {
+    console.warn(`Blocked unexpected deep link URL: ${url}`);
+    return;
+  }
+
+  const params = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+  const state = params.get("desktop_state");
+  if (!pendingAuthState || state !== pendingAuthState) {
+    console.warn("Blocked auth callback with missing or invalid state.");
+    pendingAuthState = null;
+    return;
+  }
+
+  pendingAuthState = null;
+
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+  if (!accessToken || !refreshToken) {
+    console.warn("Auth callback missing session tokens.");
+    return;
+  }
+
+  let data;
+  let error;
+  try {
+    const result = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    data = result.data;
+    error = result.error;
+  } catch (err) {
+    error = err;
+  }
+
+  if (error) {
+    console.error(
+      "Failed to set session from auth callback:",
+      error?.message || error,
+    );
+    return;
+  }
+
+  session = data.session;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:session", session);
   }
 }
 
@@ -459,7 +687,7 @@ if (!gotTheLock) {
       mainWindow.focus();
     }
     const url = commandLine.pop();
-    if (url.startsWith("openfork-desktop-app://")) {
+    if (typeof url === "string" && url.startsWith("openfork-desktop-app://")) {
       handleAuthCallback(url);
     }
   });
@@ -479,15 +707,33 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       webSecurity: true,
     },
   });
 
   // Ensure all target="_blank" links open in the system's default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    openExternal(url);
+    openExternal(url).catch((err) =>
+      console.warn("Failed to open external URL:", err?.message || err),
+    );
     return { action: "deny" };
   });
+
+  mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
+    if (!isTrustedRendererUrl(navigationUrl)) {
+      console.warn(`Blocked renderer navigation to: ${navigationUrl}`);
+      event.preventDefault();
+    }
+  });
+
+  electronSession.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      const allowedPermissions = new Set(["clipboard-read"]);
+      const url = webContents.getURL();
+      callback(isTrustedRendererUrl(url) && allowedPermissions.has(permission));
+    },
+  );
 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
@@ -531,7 +777,8 @@ function createWindow() {
       if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);
     },
     onProviderRegistered: (providerId) => {
-      if (autoCompactManager) autoCompactManager.setCurrentProviderId(providerId);
+      if (autoCompactManager)
+        autoCompactManager.setCurrentProviderId(providerId);
     },
   });
 
@@ -672,6 +919,8 @@ app.on("open-url", (event, url) => {
 
 // --- IPC HANDLERS ---
 
+installIpcSenderGuard();
+
 // Auth
 ipcMain.handle("auth:google-login", googleLogin);
 ipcMain.handle("auth:logout", logout);
@@ -680,26 +929,16 @@ ipcMain.on("auth:force-refresh", () => {
     mainWindow.webContents.send("auth:force-refresh");
   }
 });
-ipcMain.handle(
-  "auth:set-session-from-tokens",
-  async (event, accessToken, refreshToken) => {
-    const { data, error } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-
-    if (error) {
-      console.error("Failed to set session in main:", error.message);
-      return { session: null, error };
-    }
-
-    session = data.session;
-    return { session: data.session, error: null };
-  },
-);
 
 // Client lifecycle
 ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
+  if (!isValidServiceId(service)) {
+    console.warn(`Blocked client start with invalid service id: ${service}`);
+    return;
+  }
+
+  const safeRoutingConfig = sanitizeRoutingConfig(routingConfig);
+
   if (!pythonManager || pythonManager.isRunning() || pendingClientStart) {
     return;
   }
@@ -712,7 +951,8 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
       mainWindow.webContents.send("auto-compact:status", compactStatus);
       mainWindow.webContents.send("openfork_client:log", {
         type: "stderr",
-        message: "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
+        message:
+          "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
       });
       mainWindow.webContents.send("openfork_client:status", "stopped");
     }
@@ -794,10 +1034,10 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
           dockerStatus.error === "WSL_VHDX_LOCKED"
             ? "OpenFork Ubuntu disk is locked by another Windows process. Disk compaction is probably still finishing; please wait and retry."
             : dockerStatus.error === "DOCKER_API_UNREACHABLE"
-            ? "OpenFork Ubuntu is running, but its Docker API is not reachable from Windows yet."
-            : dockerStatus.error === "WSL_DISTRO_MISSING"
-              ? "OpenFork Ubuntu is missing. Reinstall the local AI engine before starting OpenFork."
-              : "OpenFork Ubuntu is not ready yet. Please retry once the engine is running.";
+              ? "OpenFork Ubuntu is running, but its Docker API is not reachable from Windows yet."
+              : dockerStatus.error === "WSL_DISTRO_MISSING"
+                ? "OpenFork Ubuntu is missing. Reinstall the local AI engine before starting OpenFork."
+                : "OpenFork Ubuntu is not ready yet. Please retry once the engine is running.";
 
         console.error(message);
 
@@ -812,7 +1052,7 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
       }
     }
 
-    await pythonManager.start(service, routingConfig);
+    await pythonManager.start(service, safeRoutingConfig);
 
     if (recoveredWslDocker && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("docker:wsl-recovery-status", {
@@ -823,7 +1063,7 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
     }
 
     if (cleanupManager) {
-      cleanupManager.updatePolicy(mapCleanupPolicy(routingConfig));
+      cleanupManager.updatePolicy(mapCleanupPolicy(safeRoutingConfig));
     }
   })().finally(() => {
     pendingClientStart = null;
@@ -834,6 +1074,10 @@ ipcMain.handle(
   "provider:update-config",
   async (event, providerId, routingConfig) => {
     if (!session) return { success: false, error: "Not authenticated" };
+    if (!UUID_PATTERN.test(String(providerId || ""))) {
+      return { success: false, error: "Invalid provider id" };
+    }
+    const safeRoutingConfig = sanitizeRoutingConfig(routingConfig);
     return new Promise((resolve) => {
       const request = net.request({
         method: "PATCH",
@@ -862,9 +1106,9 @@ ipcMain.handle(
           }
 
           if (result.success && pythonManager) {
-            pythonManager.updateRoutingConfig(routingConfig);
+            pythonManager.updateRoutingConfig(safeRoutingConfig);
             if (cleanupManager) {
-              cleanupManager.updatePolicy(mapCleanupPolicy(routingConfig));
+              cleanupManager.updatePolicy(mapCleanupPolicy(safeRoutingConfig));
             }
           }
 
@@ -876,10 +1120,10 @@ ipcMain.handle(
         resolve({ success: false, error: err.message });
       });
       const payload = {
-        process_own_jobs: routingConfig.processOwnJobs ?? false,
-        community_mode: routingConfig.communityMode ?? "none",
-        allowed_ids: routingConfig.trustedIds ?? [],
-        monetize_mode: routingConfig.monetizeMode ?? false,
+        process_own_jobs: safeRoutingConfig.processOwnJobs,
+        community_mode: safeRoutingConfig.communityMode,
+        allowed_ids: safeRoutingConfig.trustedIds,
+        monetize_mode: safeRoutingConfig.monetizeMode,
       };
       request.write(JSON.stringify(payload));
       request.end();
@@ -893,7 +1137,7 @@ ipcMain.on("openfork_client:stop", () => {
 });
 
 ipcMain.on("docker:cancel-download", (event, serviceType) => {
-  if (pythonManager) {
+  if (pythonManager && isValidServiceId(serviceType)) {
     pythonManager.cancelDownload(serviceType);
   }
 });
@@ -914,7 +1158,7 @@ ipcMain.handle("openfork_client:cleanup", async () => {
 // Window
 ipcMain.on("window:set-closable", (event, closable) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setClosable(closable);
+    mainWindow.setClosable(closable === true);
   }
 });
 
@@ -1082,7 +1326,9 @@ ipcMain.handle("monetize:open-stripe-dashboard", async () => {
 });
 
 ipcMain.on("open-external", (event, url) => {
-  openExternal(url);
+  openExternal(url).catch((err) =>
+    console.warn("Failed to open external URL:", err?.message || err),
+  );
 });
 
 // Settings persistence
@@ -1168,7 +1414,10 @@ ipcMain.handle("python-config:set", (event, payload) => {
     }
     if (
       payload &&
-      Object.prototype.hasOwnProperty.call(payload, "DOCKER_IMAGE_CACHE_LIMIT_GB")
+      Object.prototype.hasOwnProperty.call(
+        payload,
+        "DOCKER_IMAGE_CACHE_LIMIT_GB",
+      )
     ) {
       pythonManager?.updateStorageConfig?.({
         dockerImageCacheLimitGb: payload.DOCKER_IMAGE_CACHE_LIMIT_GB,

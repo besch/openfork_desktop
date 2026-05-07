@@ -174,7 +174,11 @@ async function getDockerImageSizeBytes(imageId) {
   }
 }
 
-function notifyImagesRemoved({ image = null, freedBytes = 0, reason = "manual_delete" }) {
+function notifyImagesRemoved({
+  image = null,
+  freedBytes = 0,
+  reason = "manual_delete",
+}) {
   const payload = {
     service_type: null,
     image,
@@ -193,7 +197,10 @@ function notifyImagesRemoved({ image = null, freedBytes = 0, reason = "manual_de
   try {
     _getPythonManager?.()?.syncCachedImages?.();
   } catch (error) {
-    console.warn("Could not request cached image sync after manual deletion:", error.message);
+    console.warn(
+      "Could not request cached image sync after manual deletion:",
+      error.message,
+    );
   }
 }
 
@@ -201,7 +208,14 @@ function runPowerShellCommand(command, { timeout = 15000 } = {}) {
   return new Promise((resolve) => {
     execFile(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        command,
+      ],
       { timeout, windowsHide: true, encoding: "utf8" },
       (error, stdout, stderr) => {
         resolve({
@@ -250,7 +264,9 @@ async function getWslVersionSummary() {
           .split(/\r?\n/)
           .map((line) => line.trim())
           .filter(Boolean);
-        resolve(lines.find((line) => /^WSL version:/i.test(line)) || lines[0] || null);
+        resolve(
+          lines.find((line) => /^WSL version:/i.test(line)) || lines[0] || null,
+        );
       },
     );
   });
@@ -265,6 +281,24 @@ function getRelocateWslScriptPath() {
   return _app.isPackaged
     ? path.join(process.resourcesPath, "scripts", "relocate-wsl.ps1")
     : path.join(__dirname, "..", "scripts", "relocate-wsl.ps1");
+}
+
+async function isOpenForkContainerId(containerId) {
+  if (!dockerEngine.isValidDockerId(containerId)) return false;
+  const output = await dockerEngine.execDockerCommand(
+    'docker ps -a --format "{{.ID}}|{{.Names}}|{{.Image}}" --filter "name=dgn-client"',
+  );
+  return output
+    .split("\n")
+    .filter(Boolean)
+    .some((line) => {
+      const [id, names, image] = line.split("|");
+      return (
+        (id === containerId || id?.startsWith(containerId)) &&
+        ((names || "").toLowerCase().includes("dgn-client") ||
+          (image || "").toLowerCase().includes("openfork"))
+      );
+    });
 }
 
 function register(ipcMain) {
@@ -380,13 +414,18 @@ function register(ipcMain) {
       // WSL2 ROBUSTNESS: Find and remove ANY containers using this image (running or stopped)
       try {
         const containerIds = await dockerEngine.execDockerCommand(
-          `docker ps -a -q --filter ancestor=${imageId}`,
+          `docker ps -a -q --filter ancestor=${dockerEngine.escapeShellArg(imageId)}`,
         );
         if (containerIds) {
           const ids = containerIds.split("\n").filter(Boolean);
           for (const id of ids) {
-            console.log(`Force removing dependent container ${id} for image ${imageId}`);
-            await dockerEngine.execDockerCommand(`docker rm -f ${id}`);
+            if (!dockerEngine.isValidDockerId(id)) continue;
+            console.log(
+              `Force removing dependent container ${id} for image ${imageId}`,
+            );
+            await dockerEngine.execDockerCommand(
+              `docker rm -f ${dockerEngine.escapeShellArg(id)}`,
+            );
           }
         }
       } catch (e) {
@@ -485,6 +524,15 @@ function register(ipcMain) {
         console.warn(`Invalid Docker container ID format: ${containerId}`);
         return { success: false, error: "Invalid container ID format" };
       }
+      if (!(await isOpenForkContainerId(containerId))) {
+        console.warn(
+          `Container ${containerId} validation failed, skipping stop`,
+        );
+        return {
+          success: false,
+          error: "Only OpenFork DGN containers can be stopped",
+        };
+      }
       await dockerEngine.execDockerCommand(
         `docker stop ${dockerEngine.escapeShellArg(containerId)}`,
       );
@@ -544,7 +592,10 @@ function register(ipcMain) {
         if (containerOutput) {
           const ids = containerOutput.split("\n").filter(Boolean);
           for (const id of ids) {
-            await dockerEngine.execDockerCommand(`docker rm -f ${id}`);
+            if (!dockerEngine.isValidDockerId(id)) continue;
+            await dockerEngine.execDockerCommand(
+              `docker rm -f ${dockerEngine.escapeShellArg(id)}`,
+            );
             stoppedCount++;
           }
         }
@@ -561,23 +612,31 @@ function register(ipcMain) {
           const lines = imageOutput.split("\n").filter(Boolean);
           for (const line of lines) {
             const [id, repo] = line.split("|");
-            if (repo.toLowerCase().includes("openfork")) {
+            if (
+              repo.toLowerCase().includes("openfork") &&
+              dockerEngine.isValidDockerId(id)
+            ) {
               // Find any remaining containers using this image
               try {
                 const deps = await dockerEngine.execDockerCommand(
-                  `docker ps -a -q --filter ancestor=${id}`,
+                  `docker ps -a -q --filter ancestor=${dockerEngine.escapeShellArg(id)}`,
                 );
                 if (deps) {
                   const depIds = deps.split("\n").filter(Boolean);
                   for (const depId of depIds) {
-                    await dockerEngine.execDockerCommand(`docker rm -f ${depId}`);
+                    if (!dockerEngine.isValidDockerId(depId)) continue;
+                    await dockerEngine.execDockerCommand(
+                      `docker rm -f ${dockerEngine.escapeShellArg(depId)}`,
+                    );
                     stoppedCount++;
                   }
                 }
               } catch (e) {}
               try {
                 freedBytes += await getDockerImageSizeBytes(id);
-                await dockerEngine.execDockerCommand(`docker rmi -f ${id}`);
+                await dockerEngine.execDockerCommand(
+                  `docker rmi -f ${dockerEngine.escapeShellArg(id)}`,
+                );
                 removedCount++;
               } catch (e) {
                 console.warn(`Failed to remove image ${id}:`, e.message);
@@ -589,15 +648,10 @@ function register(ipcMain) {
         console.warn("Error cleaning images:", e.message);
       }
 
-      // 3. Remove all associated volumes
+      // 3. Prune dangling layers only. Avoid global volume/container prunes:
+      // this screen is scoped to OpenFork and must not delete unrelated Docker data.
       try {
-        await dockerEngine.execDockerCommand("docker volume prune -f");
-      } catch (e) {}
-
-      // 4. Aggressive prune to reclaim WSL2 space
-      try {
-        await dockerEngine.execDockerCommand("docker image prune -af");
-        await dockerEngine.execDockerCommand("docker container prune -f");
+        await dockerEngine.execDockerCommand("docker image prune -f");
       } catch (e) {}
 
       await tryTrimWslFilesystem();
@@ -648,7 +702,10 @@ function register(ipcMain) {
             { timeout: 15000 },
             (error, stdout) => {
               if (error) {
-                console.error("PowerShell disk space check error:", error.message);
+                console.error(
+                  "PowerShell disk space check error:",
+                  error.message,
+                );
                 resolve("");
                 return;
               }
@@ -723,7 +780,10 @@ function register(ipcMain) {
             `df -k ${dockerEngine.escapeShellArg(targetPath)}`,
             { timeout: 10000 },
             (error, stdout) => {
-              if (error) { reject(error); return; }
+              if (error) {
+                reject(error);
+                return;
+              }
               resolve(stdout.trim());
             },
           );
@@ -915,7 +975,11 @@ function register(ipcMain) {
           }
 
           if (error) {
-            const message = buildCompactionFailureMessage(error, stdout, stderr);
+            const message = buildCompactionFailureMessage(
+              error,
+              stdout,
+              stderr,
+            );
             console.error("Compaction failed:", {
               message: error.message,
               stdout,
@@ -972,7 +1036,8 @@ function register(ipcMain) {
       return {
         success: false,
         error: "NOT_WINDOWS",
-        message: "Fast engine reset is only available for the Windows WSL engine.",
+        message:
+          "Fast engine reset is only available for the Windows WSL engine.",
       };
     }
 
@@ -980,7 +1045,8 @@ function register(ipcMain) {
       return {
         success: false,
         error: "COMPACTION_RUNNING",
-        message: "Wait for disk compaction to finish before resetting the engine.",
+        message:
+          "Wait for disk compaction to finish before resetting the engine.",
       };
     }
 
@@ -1002,10 +1068,20 @@ function register(ipcMain) {
         };
       }
 
-      const installPath =
+      const detectedInstallPath =
         (await wslUtils.getDistroBasePath(wslDistro)) ||
         settings.getAppSettings().wslStoragePath ||
         getWindowsDefaultOpenForkInstallPath();
+      let installPath = getWindowsDefaultOpenForkInstallPath();
+      try {
+        installPath =
+          engineInstall.normalizeWindowsInstallPath(detectedInstallPath) ||
+          installPath;
+      } catch {
+        console.warn(
+          `Ignoring unsafe stored WSL path during reset: ${detectedInstallPath}`,
+        );
+      }
 
       const resetArgs = [
         "-NoProfile",
@@ -1026,7 +1102,9 @@ function register(ipcMain) {
           { windowsHide: true, timeout: 120000, encoding: "utf8" },
           (error, stdout, stderr) => {
             if (error) {
-              const detail = (stderr || stdout || error.message).toString().trim();
+              const detail = (stderr || stdout || error.message)
+                .toString()
+                .trim();
               resolve({
                 success: false,
                 error: detail || error.message,
@@ -1049,7 +1127,8 @@ function register(ipcMain) {
       wslUtils.resetWslDistro();
       dockerMonitor.resetDockerRoutingCache();
 
-      const installResult = await engineInstall.handleInstallEngine(installPath);
+      const installResult =
+        await engineInstall.handleInstallEngine(installPath);
       if (!installResult.success) {
         return {
           success: false,
@@ -1076,6 +1155,20 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:relocate-storage", async (event, newDrivePath) => {
     try {
+      let safeNewDrivePath;
+      try {
+        safeNewDrivePath =
+          engineInstall.normalizeWindowsInstallPath(newDrivePath);
+      } catch (pathError) {
+        return { success: false, error: pathError.message };
+      }
+      if (!safeNewDrivePath) {
+        return {
+          success: false,
+          error: "A target OpenFork WSL path is required.",
+        };
+      }
+
       const relocateScriptPath = _app.isPackaged
         ? path.join(process.resourcesPath, "scripts", "relocate-wsl.ps1")
         : path.join(__dirname, "..", "scripts", "relocate-wsl.ps1");
@@ -1084,7 +1177,9 @@ function register(ipcMain) {
         ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
         : path.join(__dirname, "..", "..", "client", "setup-wsl.ps1");
 
-      console.log(`Cleaning up old distribution before relocation to: ${newDrivePath}`);
+      console.log(
+        `Cleaning up old distribution before relocation to: ${safeNewDrivePath}`,
+      );
       const relocateArgs = [
         "-NoProfile",
         "-ExecutionPolicy",
@@ -1094,7 +1189,7 @@ function register(ipcMain) {
         "-DistroName",
         await wslUtils.getWslDistroName(),
         "-NewLocation",
-        newDrivePath,
+        safeNewDrivePath,
       ];
 
       const relocateResult = await new Promise((resolve) => {
@@ -1115,16 +1210,24 @@ function register(ipcMain) {
       if (!relocateResult.success) return relocateResult;
 
       console.log("Triggering fresh engine installation (elevated)...");
-      const setupArgs = newDrivePath ? ["-InstallPath", newDrivePath] : [];
-      const result = await engineInstall.runElevatedPowerShell(setupScriptPath, setupArgs);
+      const setupArgs = safeNewDrivePath
+        ? ["-InstallPath", safeNewDrivePath]
+        : [];
+      const result = await engineInstall.runElevatedPowerShell(
+        setupScriptPath,
+        setupArgs,
+      );
 
       if (!result.success) {
         console.error("Relocation install failed:", result.error);
-        return { success: false, error: `Installation failed: ${result.error}` };
+        return {
+          success: false,
+          error: `Installation failed: ${result.error}`,
+        };
       }
 
-      settings.saveAppSettings({ wslStoragePath: newDrivePath });
-      console.log(`Engine reinstalled successfully at ${newDrivePath}.`);
+      settings.saveAppSettings({ wslStoragePath: safeNewDrivePath });
+      console.log(`Engine reinstalled successfully at ${safeNewDrivePath}.`);
       return { success: true };
     } catch (error) {
       console.error("Error during docker:relocate-storage:", error);

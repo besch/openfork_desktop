@@ -1,6 +1,6 @@
 "use strict";
 
-const { exec, execFile, execSync } = require("child_process");
+const { exec, execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -22,6 +22,7 @@ let currentInstallDistro = null;
 let currentInstallActive = false;
 let currentInstallPath = null;
 const INSTALL_PROGRESS_LOG = "C:\\Windows\\Temp\\openfork_install_progress.log";
+const WINDOWS_INSTALL_PATH_RE = /^[A-Za-z]:\\OpenFork\\wsl\\?$/;
 
 function readInstallProgressTail(maxLines = 80) {
   try {
@@ -51,28 +52,108 @@ function parseInstallPhase(line) {
   }
 
   const phases = [
-    { re: /Checking Windows Subsystem|Checking system/i, phase: "Checking system requirements", percent: 5 },
-    { re: /Enabling WSL feature|Enabling Virtual Machine/i, phase: "Enabling WSL features", percent: 10 },
-    { re: /Downloading Ubuntu/i, phase: "Downloading Ubuntu (~130MB)", percent: 18 },
+    {
+      re: /Checking Windows Subsystem|Checking system/i,
+      phase: "Checking system requirements",
+      percent: 5,
+    },
+    {
+      re: /Enabling WSL feature|Enabling Virtual Machine/i,
+      phase: "Enabling WSL features",
+      percent: 10,
+    },
+    {
+      re: /Downloading Ubuntu/i,
+      phase: "Downloading Ubuntu (~130MB)",
+      percent: 18,
+    },
     { re: /Download complete/i, phase: "Download complete", percent: 27 },
-    { re: /Importing |Installing Ubuntu without launch/i, phase: "Installing Ubuntu", percent: 28 },
-    { re: /Waiting for WSL to list/i, phase: "Registering Ubuntu", percent: 40 },
-    { re: /Provisioning default user/i, phase: "Configuring Ubuntu user", percent: 50 },
+    {
+      re: /Importing |Installing Ubuntu without launch/i,
+      phase: "Installing Ubuntu",
+      percent: 28,
+    },
+    {
+      re: /Waiting for WSL to list/i,
+      phase: "Registering Ubuntu",
+      percent: 40,
+    },
+    {
+      re: /Provisioning default user/i,
+      phase: "Configuring Ubuntu user",
+      percent: 50,
+    },
     { re: /Restarting WSL/i, phase: "Restarting WSL", percent: 55 },
-    { re: /Enabling Sparse VHD/i, phase: "Optimizing disk storage", percent: 60 },
-    { re: /Ensuring WSL is running/i, phase: "Running setup inside WSL…", percent: 63 },
-    { re: /\[OpenFork\].*Installing Docker Engine|\[Linux\].*Installing Docker/i, phase: "Installing Docker Engine", percent: 70 },
-    { re: /\[OpenFork\].*Installing Docker|\[Linux\].*Downloading.*Docker/i, phase: "Downloading Docker packages", percent: 72 },
-    { re: /\[OpenFork\].*Docker is already installed|\[Linux\].*Docker Engine installed/i, phase: "Docker Engine installed", percent: 78 },
-    { re: /\[OpenFork\].*Docker is already|\[Linux\].*Docker is already/i, phase: "Docker already present", percent: 65 },
-    { re: /\[OpenFork\].*Installing NVIDIA Container Toolkit|\[Linux\].*Installing NVIDIA/i, phase: "Installing NVIDIA Container Toolkit", percent: 80 },
-    { re: /\[OpenFork\].*Updating package lists|\[Linux\].*Updating package lists/i, phase: "Updating packages for NVIDIA toolkit", percent: 82 },
-    { re: /\[OpenFork\].*Installing NVIDIA|\[Linux\].*Downloading.*NVIDIA/i, phase: "Installing NVIDIA toolkit packages", percent: 84 },
-    { re: /\[OpenFork\].*NVIDIA Container Toolkit is already|\[Linux\].*NVIDIA Container Toolkit is already/i, phase: "NVIDIA toolkit present", percent: 80 },
-    { re: /\[OpenFork\].*Configuring NVIDIA|\[Linux\].*Configuring Docker/i, phase: "Configuring Docker TCP", percent: 88 },
-    { re: /\[OpenFork\].*Waiting for Docker daemon|\[Linux\].*Waiting for Docker daemon/i, phase: "Starting Docker daemon", percent: 93 },
-    { re: /\[OpenFork\].*Docker daemon is running|\[Linux\].*Docker daemon is running/i, phase: "Docker daemon running", percent: 97 },
-    { re: /Setup Complete|OpenFork AI Engine Setup Complete/i, phase: "Setup complete!", percent: 100 },
+    {
+      re: /Enabling Sparse VHD/i,
+      phase: "Optimizing disk storage",
+      percent: 60,
+    },
+    {
+      re: /Ensuring WSL is running/i,
+      phase: "Running setup inside WSL…",
+      percent: 63,
+    },
+    {
+      re: /\[OpenFork\].*Installing Docker Engine|\[Linux\].*Installing Docker/i,
+      phase: "Installing Docker Engine",
+      percent: 70,
+    },
+    {
+      re: /\[OpenFork\].*Installing Docker|\[Linux\].*Downloading.*Docker/i,
+      phase: "Downloading Docker packages",
+      percent: 72,
+    },
+    {
+      re: /\[OpenFork\].*Docker is already installed|\[Linux\].*Docker Engine installed/i,
+      phase: "Docker Engine installed",
+      percent: 78,
+    },
+    {
+      re: /\[OpenFork\].*Docker is already|\[Linux\].*Docker is already/i,
+      phase: "Docker already present",
+      percent: 65,
+    },
+    {
+      re: /\[OpenFork\].*Installing NVIDIA Container Toolkit|\[Linux\].*Installing NVIDIA/i,
+      phase: "Installing NVIDIA Container Toolkit",
+      percent: 80,
+    },
+    {
+      re: /\[OpenFork\].*Updating package lists|\[Linux\].*Updating package lists/i,
+      phase: "Updating packages for NVIDIA toolkit",
+      percent: 82,
+    },
+    {
+      re: /\[OpenFork\].*Installing NVIDIA|\[Linux\].*Downloading.*NVIDIA/i,
+      phase: "Installing NVIDIA toolkit packages",
+      percent: 84,
+    },
+    {
+      re: /\[OpenFork\].*NVIDIA Container Toolkit is already|\[Linux\].*NVIDIA Container Toolkit is already/i,
+      phase: "NVIDIA toolkit present",
+      percent: 80,
+    },
+    {
+      re: /\[OpenFork\].*Configuring NVIDIA|\[Linux\].*Configuring Docker/i,
+      phase: "Configuring Docker TCP",
+      percent: 88,
+    },
+    {
+      re: /\[OpenFork\].*Waiting for Docker daemon|\[Linux\].*Waiting for Docker daemon/i,
+      phase: "Starting Docker daemon",
+      percent: 93,
+    },
+    {
+      re: /\[OpenFork\].*Docker daemon is running|\[Linux\].*Docker daemon is running/i,
+      phase: "Docker daemon running",
+      percent: 97,
+    },
+    {
+      re: /Setup Complete|OpenFork AI Engine Setup Complete/i,
+      phase: "Setup complete!",
+      percent: 100,
+    },
   ];
 
   for (const { re, phase, percent } of phases) {
@@ -139,8 +220,23 @@ function runElevatedPowerShell(scriptPath, args = []) {
 
 // --- INSTALL HANDLER ---
 
+function normalizeWindowsInstallPath(installPath) {
+  if (!installPath) return null;
+  if (typeof installPath !== "string" || installPath.length > 80) {
+    throw new Error("Invalid install path.");
+  }
+  if (!WINDOWS_INSTALL_PATH_RE.test(installPath)) {
+    throw new Error(
+      "Install path must be a local drive path like D:\\OpenFork\\wsl.",
+    );
+  }
+  return path.win32.normalize(installPath);
+}
+
 async function handleInstallEngine(installPath) {
-  console.log(`Starting engine installation on path: ${installPath || "default"}`);
+  console.log(
+    `Starting engine installation on path: ${installPath || "default"}`,
+  );
 
   if (process.platform === "darwin") {
     return { success: false, error: "Auto-install not supported on macOS." };
@@ -158,13 +254,22 @@ async function handleInstallEngine(installPath) {
         : path.join(desktopDir, "..", "client", "setup-linux.sh");
 
   if (process.platform === "win32") {
+    let safeInstallPath = null;
+    try {
+      safeInstallPath = normalizeWindowsInstallPath(installPath);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+
     console.log(`Using setup script: ${scriptPath}`);
     const distroName = "OpenFork";
     currentInstallActive = true;
-    currentInstallPath = installPath || null;
+    currentInstallPath = safeInstallPath;
 
     // Clear the progress log before starting
-    try { fs.writeFileSync(INSTALL_PROGRESS_LOG, "", "utf8"); } catch (_) {}
+    try {
+      fs.writeFileSync(INSTALL_PROGRESS_LOG, "", "utf8");
+    } catch (_) {}
 
     let lastReadPos = 0;
     let lastPhase = "";
@@ -181,7 +286,10 @@ async function handleInstallEngine(installPath) {
         fs.closeSync(fd);
         lastReadPos = stat.size;
         const newText = buf.toString("utf8");
-        const lines = newText.split("\n").map((l) => l.trim()).filter(Boolean);
+        const lines = newText
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
         const mainWindow = _getMainWindow();
         for (const line of lines) {
           const phaseInfo = parseInstallPhase(line);
@@ -204,7 +312,7 @@ async function handleInstallEngine(installPath) {
     const setupArgs = [
       "-DistroName",
       distroName,
-      ...(installPath ? ["-InstallPath", installPath] : []),
+      ...(safeInstallPath ? ["-InstallPath", safeInstallPath] : []),
     ];
 
     let result;
@@ -220,7 +328,9 @@ async function handleInstallEngine(installPath) {
       currentInstallDistro = null;
       clearInterval(watchInterval);
       if (!result || result.success || result.error === "cancelled") {
-        try { fs.unlinkSync(INSTALL_PROGRESS_LOG); } catch (_) {}
+        try {
+          fs.unlinkSync(INSTALL_PROGRESS_LOG);
+        } catch (_) {}
       }
     }
 
@@ -236,31 +346,39 @@ async function handleInstallEngine(installPath) {
     _setWslDistro(distroName);
     console.log("Installation process completed successfully.");
     return { success: true };
-   } else {
-      // Linux pkexec handler with progress streaming
-      const os = require("os");
-      const username = os.userInfo().username;
-      return new Promise((resolve) => {
-        console.log(`Using setup script: ${scriptPath}`);
-        // AppImage mounts under /tmp/.mount_* which is read-only; pkexec bash
-        // cannot read the script from there. Copy it to a writable temp path first.
-        const tmpScript = path.join(os.tmpdir(), "openfork-setup-linux.sh");
-        try {
-          fs.copyFileSync(scriptPath, tmpScript);
-          fs.chmodSync(tmpScript, 0o755);
-        } catch (copyErr) {
-          console.error("Failed to copy setup script to temp location:", copyErr.message);
-          resolve({ success: false, error: copyErr.message });
-          return;
-        }
+  } else {
+    // Linux pkexec handler with progress streaming
+    const os = require("os");
+    const username = os.userInfo().username;
+    return new Promise((resolve) => {
+      console.log(`Using setup script: ${scriptPath}`);
+      // AppImage mounts under /tmp/.mount_* which is read-only; pkexec bash
+      // cannot read the script from there. Copy it to a writable temp path first.
+      const tmpScript = path.join(os.tmpdir(), "openfork-setup-linux.sh");
+      try {
+        fs.copyFileSync(scriptPath, tmpScript);
+        fs.chmodSync(tmpScript, 0o755);
+      } catch (copyErr) {
+        console.error(
+          "Failed to copy setup script to temp location:",
+          copyErr.message,
+        );
+        resolve({ success: false, error: copyErr.message });
+        return;
+      }
 
-        const mainWindow = _getMainWindow();
-        let lastPhase = "";
-        let lastPercent = 0;
+      const mainWindow = _getMainWindow();
+      let lastPhase = "";
+      let lastPercent = 0;
 
-        // Use stdbuf to force line buffering so progress is streamed in real-time
-        const child = execFile("pkexec", ["stdbuf", "-oL", "bash", tmpScript, username], (error) => {
-          try { fs.unlinkSync(tmpScript); } catch (_) {}
+      // Use stdbuf to force line buffering so progress is streamed in real-time
+      const child = execFile(
+        "pkexec",
+        ["stdbuf", "-oL", "bash", tmpScript, username],
+        (error) => {
+          try {
+            fs.unlinkSync(tmpScript);
+          } catch (_) {}
           if (error) {
             console.error("Installation process error:", error.message);
             resolve({ success: false, error: error.message });
@@ -274,42 +392,51 @@ async function handleInstallEngine(installPath) {
             console.log("Installation process completed successfully.");
             resolve({ success: true });
           }
-        });
+        },
+      );
 
-        // Capture stdout and stderr for progress reporting
-        child.stdout?.on("data", (data) => {
-          const lines = data.toString().split("\n").map((l) => l.trim()).filter(Boolean);
-          for (const line of lines) {
-            const phaseInfo = parseInstallPhase(line);
-            if (phaseInfo) {
-              lastPhase = phaseInfo.phase;
-              lastPercent = phaseInfo.percent;
-            }
-            mainWindow?.webContents.send("deps:install-progress", {
-              line,
-              phase: lastPhase,
-              percent: lastPercent,
-            });
+      // Capture stdout and stderr for progress reporting
+      child.stdout?.on("data", (data) => {
+        const lines = data
+          .toString()
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+        for (const line of lines) {
+          const phaseInfo = parseInstallPhase(line);
+          if (phaseInfo) {
+            lastPhase = phaseInfo.phase;
+            lastPercent = phaseInfo.percent;
           }
-        });
-
-        child.stderr?.on("data", (data) => {
-          const lines = data.toString().split("\n").map((l) => l.trim()).filter(Boolean);
-          for (const line of lines) {
-            const phaseInfo = parseInstallPhase(line);
-            if (phaseInfo) {
-              lastPhase = phaseInfo.phase;
-              lastPercent = phaseInfo.percent;
-            }
-            mainWindow?.webContents.send("deps:install-progress", {
-              line,
-              phase: lastPhase,
-              percent: lastPercent,
-            });
-          }
-        });
+          mainWindow?.webContents.send("deps:install-progress", {
+            line,
+            phase: lastPhase,
+            percent: lastPercent,
+          });
+        }
       });
-    }
+
+      child.stderr?.on("data", (data) => {
+        const lines = data
+          .toString()
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+        for (const line of lines) {
+          const phaseInfo = parseInstallPhase(line);
+          if (phaseInfo) {
+            lastPhase = phaseInfo.phase;
+            lastPercent = phaseInfo.percent;
+          }
+          mainWindow?.webContents.send("deps:install-progress", {
+            line,
+            phase: lastPhase,
+            percent: lastPercent,
+          });
+        }
+      });
+    });
+  }
 }
 
 function handleCancelInstall() {
@@ -319,10 +446,19 @@ function handleCancelInstall() {
   // Kill the outer powershell process
   currentInstallProcess.kill();
   // Also try to kill the full process tree (includes elevated child)
-  try { execSync(`taskkill /F /T /PID ${pid}`); } catch (_) {}
+  try {
+    execFile("taskkill.exe", ["/F", "/T", "/PID", String(pid)], () => {});
+  } catch (_) {}
   // Attempt to unregister the partially installed distro
   const distroToClean = currentInstallDistro || "OpenFork";
-  try { execSync(`wsl --unregister ${distroToClean}`, { timeout: 15000 }); } catch (_) {}
+  try {
+    execFile(
+      "wsl.exe",
+      ["--unregister", distroToClean],
+      { timeout: 15000 },
+      () => {},
+    );
+  } catch (_) {}
   return { success: true };
 }
 
@@ -341,4 +477,5 @@ module.exports = {
   handleInstallEngine,
   handleCancelInstall,
   getCurrentInstallState,
+  normalizeWindowsInstallPath,
 };
