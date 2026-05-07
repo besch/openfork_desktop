@@ -110,7 +110,11 @@ export const DockerManagement = memo(() => {
     setDiskSpaceError(null);
     try {
       const compactStatus = await window.electronAPI.getAutoCompactStatus();
-      setAutoCompactStatus(compactStatus);
+      // Don't resurface a stale "completed" banner from a prior session —
+      // same filter as store.ts hydration. Live events keep the store current.
+      if (compactStatus.compactInProgress || compactStatus.phase !== "completed") {
+        setAutoCompactStatus(compactStatus);
+      }
 
       if (compactStatus?.compactInProgress) {
         const diskResult = await window.electronAPI.getDiskSpace();

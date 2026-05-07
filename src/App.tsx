@@ -140,7 +140,9 @@ function App() {
           window.electronAPI
             .getAutoCompactStatus()
             .then(async (compactStatus) => {
-              setAutoCompactStatus(compactStatus);
+              if (compactStatus.compactInProgress || compactStatus.phase !== "completed") {
+                setAutoCompactStatus(compactStatus);
+              }
               if (compactStatus?.compactInProgress) {
                 return {
                   installed: true,
