@@ -577,7 +577,17 @@ function initializeIpcListeners() {
   window.electronAPI
     .getAutoCompactStatus()
     .then((status) => {
-      setAutoCompactStatus(status);
+      // "completed" phase is transient — don't resurface a stale banner from
+      // the prior session. "failed" and in-progress states should persist.
+      if (!status.compactInProgress && status.phase === "completed") {
+        setAutoCompactStatus({
+          ...status,
+          phase: undefined,
+          recoveredAfterRestart: undefined,
+        });
+      } else {
+        setAutoCompactStatus(status);
+      }
     })
     .catch((error) => {
       console.error("Failed to hydrate auto-compact status:", error);

@@ -127,6 +127,9 @@ export interface AutoCompactStatus {
   enabled: boolean;
   freedBytes: number;
   thresholdBytes: number;
+  hostFreeGateBytes?: number;
+  hostFreeBytes?: number | null;
+  deferredByHostFreeSpace?: boolean;
   lastCompactTs: number;
   compactInProgress: boolean;
   platformSupported: boolean;
@@ -135,6 +138,15 @@ export interface AutoCompactStatus {
   error?: string;
   restartAfterCompact?: boolean;
   recoveredAfterRestart?: boolean;
+}
+
+export interface ReclaimStatus {
+  inProgress: boolean;
+  phase?: "compacting" | "cancelling" | "cancelled" | "completed" | "failed";
+  error?: string;
+  startedTs?: number;
+  pid?: number | null;
+  cancelRequested?: boolean;
 }
 
 export interface WslRecoveryStatus {

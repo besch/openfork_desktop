@@ -11,6 +11,7 @@ import type {
   ScheduleStatus,
   ProviderRoutingConfig,
   AutoCompactStatus,
+  ReclaimStatus,
   DiskSpaceError,
   EngineSwitchNotice,
   ImageEvictedNotification,
@@ -207,6 +208,8 @@ interface ElectronAPI {
       path: string;
       engine_file_gb: string | null;
       engine_file_path: string | null;
+      engine_file_sparse: boolean | null;
+      wsl_version: string | null;
     };
   }>;
   getDockerImageCacheUsage: () => Promise<{
@@ -252,7 +255,11 @@ interface ElectronAPI {
 
   // Disk Management
   getAvailableDrives: () => Promise<{ name: string; freeGB: number }[]>;
-  reclaimDiskSpace: () => Promise<{ success: boolean; error?: string; message?: string }>;
+  reclaimDiskSpace: () => Promise<{ success: boolean; error?: string; message?: string; started?: boolean; status?: ReclaimStatus }>;
+  getReclaimStatus: () => Promise<ReclaimStatus>;
+  cancelReclaimDiskSpace: () => Promise<{ success: boolean; status?: ReclaimStatus; error?: string }>;
+  resetEngine: () => Promise<{ success: boolean; error?: string; message?: string }>;
+  onReclaimStatus: (callback: (status: ReclaimStatus) => void) => CleanupFn;
   onCompactionSuggested: (callback: () => void) => CleanupFn;
   relocateStorage: (
     newDrivePath: string,

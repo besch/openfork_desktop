@@ -351,10 +351,14 @@ dockerEngine.init({
 
 ipcDocker.init({
   app,
+  getMainWindow: () => mainWindow,
   getPythonManager: () => pythonManager,
   onImageRemoved: (payload) => {
     if (cleanupManager) cleanupManager.notifyImageEvicted(payload);
     if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);
+  },
+  onManualCompactCompleted: () => {
+    if (autoCompactManager) autoCompactManager.notifyManualCompactCompleted();
   },
 });
 

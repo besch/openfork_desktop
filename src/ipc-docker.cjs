@@ -12,13 +12,80 @@ const settings = require("./settings.cjs");
 const engineInstall = require("./engine-install.cjs");
 
 let _app;
+let _getMainWindow;
 let _getPythonManager;
 let _onImageRemoved;
+let _onManualCompactCompleted;
 
-function init({ app, getPythonManager, onImageRemoved }) {
+function init({
+  app,
+  getMainWindow,
+  getPythonManager,
+  onImageRemoved,
+  onManualCompactCompleted,
+}) {
   _app = app;
+  _getMainWindow = getMainWindow || null;
   _getPythonManager = getPythonManager;
   _onImageRemoved = onImageRemoved || null;
+  _onManualCompactCompleted = onManualCompactCompleted || null;
+}
+
+let reclaimProcess = null;
+let reclaimCancelRequested = false;
+let reclaimWasMonitoring = false;
+const reclaimState = {
+  inProgress: false,
+  phase: undefined,
+  error: undefined,
+  startedTs: 0,
+  pid: null,
+  cancelRequested: false,
+};
+
+function getReclaimStatus() {
+  return { ...reclaimState };
+}
+
+function notifyReclaimStatus(patch = {}) {
+  Object.assign(reclaimState, patch);
+  const mainWindow = _getMainWindow?.();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("docker:reclaim-status", getReclaimStatus());
+  }
+}
+
+function resetReclaimRouting() {
+  dockerMonitor.resetDockerRoutingCache();
+  if (reclaimWasMonitoring) {
+    dockerMonitor.startDockerMonitoring();
+  }
+  reclaimWasMonitoring = false;
+}
+
+function finishReclaim({ phase, error } = {}) {
+  const completed = phase === "completed";
+  reclaimProcess = null;
+  reclaimCancelRequested = false;
+  notifyReclaimStatus({
+    inProgress: false,
+    phase: phase || "completed",
+    error,
+    pid: null,
+    cancelRequested: false,
+  });
+  resetReclaimRouting();
+
+  if (completed && typeof _onManualCompactCompleted === "function") {
+    try {
+      _onManualCompactCompleted();
+    } catch (callbackError) {
+      console.warn(
+        "Manual compaction completion callback failed:",
+        callbackError.message,
+      );
+    }
+  }
 }
 
 function getPowerShellDiagnosticLines(output = "") {
@@ -128,6 +195,76 @@ function notifyImagesRemoved({ image = null, freedBytes = 0, reason = "manual_de
   } catch (error) {
     console.warn("Could not request cached image sync after manual deletion:", error.message);
   }
+}
+
+function runPowerShellCommand(command, { timeout = 15000 } = {}) {
+  return new Promise((resolve) => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
+      { timeout, windowsHide: true, encoding: "utf8" },
+      (error, stdout, stderr) => {
+        resolve({
+          success: !error,
+          stdout: stdout?.toString?.() || "",
+          stderr: stderr?.toString?.() || "",
+          error: error?.message,
+        });
+      },
+    );
+  });
+}
+
+async function isSparseFile(filePath) {
+  if (process.platform !== "win32" || !filePath) return null;
+  const escapedPath = filePath.replace(/'/g, "''");
+  const command = [
+    `$path = '${escapedPath}'`,
+    "if (-not (Test-Path -LiteralPath $path)) { exit 2 }",
+    "$attrs = [System.IO.File]::GetAttributes($path)",
+    "if (($attrs -band [System.IO.FileAttributes]::SparseFile) -ne 0) { 'true' } else { 'false' }",
+  ].join("; ");
+
+  const result = await runPowerShellCommand(command, { timeout: 5000 });
+  if (!result.success) return null;
+  const value = result.stdout.trim().toLowerCase();
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+async function getWslVersionSummary() {
+  if (process.platform !== "win32") return null;
+  return new Promise((resolve) => {
+    execFile(
+      "wsl.exe",
+      ["--version"],
+      { timeout: 5000, windowsHide: true, encoding: "utf8" },
+      (error, stdout) => {
+        if (error || !stdout) {
+          resolve(null);
+          return;
+        }
+        const lines = stdout
+          .replace(/\0/g, "")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        resolve(lines.find((line) => /^WSL version:/i.test(line)) || lines[0] || null);
+      },
+    );
+  });
+}
+
+function getWindowsDefaultOpenForkInstallPath() {
+  const systemDrive = process.env.SYSTEMDRIVE || "C:";
+  return path.join(systemDrive, "OpenFork", "wsl");
+}
+
+function getRelocateWslScriptPath() {
+  return _app.isPackaged
+    ? path.join(process.resourcesPath, "scripts", "relocate-wsl.ps1")
+    : path.join(__dirname, "..", "scripts", "relocate-wsl.ps1");
 }
 
 function register(ipcMain) {
@@ -487,6 +624,8 @@ function register(ipcMain) {
       let totalBytes, freeBytes, usedBytes, diskPath;
       let engineFileBytes = null;
       let engineFilePath = null;
+      let engineFileSparse = null;
+      let wslVersion = null;
 
       if (process.platform === "win32") {
         let driveLetter = wslUtils.getWindowsSystemDriveLetter();
@@ -541,6 +680,8 @@ function register(ipcMain) {
               path: "C:\\",
               engine_file_gb: null,
               engine_file_path: null,
+              engine_file_sparse: null,
+              wsl_version: null,
             },
           };
         }
@@ -553,6 +694,7 @@ function register(ipcMain) {
           try {
             engineFileBytes = fs.statSync(storagePath).size;
             engineFilePath = storagePath;
+            engineFileSparse = await isSparseFile(storagePath);
           } catch (statError) {
             console.warn(
               `Failed to stat WSL disk file '${storagePath}':`,
@@ -560,6 +702,7 @@ function register(ipcMain) {
             );
           }
         }
+        wslVersion = await getWslVersionSummary();
       } else {
         let targetPath = "/";
         if (process.platform === "linux") {
@@ -611,6 +754,8 @@ function register(ipcMain) {
               ? (engineFileBytes / 1024 ** 3).toFixed(1)
               : null,
           engine_file_path: engineFilePath,
+          engine_file_sparse: engineFileSparse,
+          wsl_version: wslVersion,
         },
       };
     } catch (error) {
@@ -625,6 +770,8 @@ function register(ipcMain) {
           path: "",
           engine_file_gb: null,
           engine_file_path: null,
+          engine_file_sparse: null,
+          wsl_version: null,
         },
       };
     }
@@ -687,6 +834,8 @@ function register(ipcMain) {
 
   // --- DISK MANAGEMENT ---
 
+  ipcMain.handle("docker:get-reclaim-status", () => getReclaimStatus());
+
   ipcMain.handle("docker:reclaim-space", async () => {
     // Compaction only makes sense when Docker is running inside a WSL VHDX.
     if (!dockerEngine.isUsingWslDocker()) {
@@ -698,6 +847,10 @@ function register(ipcMain) {
       };
     }
 
+    if (reclaimState.inProgress) {
+      return { success: true, started: false, status: getReclaimStatus() };
+    }
+
     // Refuse to compact while the DGN client is running
     if (_getPythonManager()?.isRunning()) {
       return {
@@ -707,7 +860,7 @@ function register(ipcMain) {
       };
     }
 
-    const wasMonitoring = dockerMonitor.isDockerMonitoringActive();
+    reclaimWasMonitoring = dockerMonitor.isDockerMonitoringActive();
 
     try {
       dockerMonitor.stopDockerMonitoring();
@@ -719,6 +872,7 @@ function register(ipcMain) {
 
       const wslDistro = await wslUtils.getWslDistroName();
       if (!wslDistro) {
+        resetReclaimRouting();
         return {
           success: false,
           error: "WSL_DISTRO_MISSING",
@@ -726,50 +880,197 @@ function register(ipcMain) {
         };
       }
 
-      return await new Promise((resolve) => {
-        const args = [
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          scriptPath,
-          "-DistroName",
-          wslDistro,
-        ];
-        execFile(
-          "powershell.exe",
-          args,
-          { windowsHide: true },
-          (error, stdout, stderr) => {
-            if (error) {
-              const message = buildCompactionFailureMessage(
-                error,
-                stdout,
-                stderr,
-              );
-              console.error("Compaction failed:", {
-                message: error.message,
-                stdout,
-                stderr,
-              });
-              resolve({ success: false, error: message, message });
-            } else {
-              resolve({ success: true });
-            }
-          },
-        );
+      notifyReclaimStatus({
+        inProgress: true,
+        phase: "compacting",
+        error: undefined,
+        startedTs: Date.now(),
+        pid: null,
+        cancelRequested: false,
       });
+
+      const args = [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        scriptPath,
+        "-DistroName",
+        wslDistro,
+      ];
+
+      reclaimCancelRequested = false;
+      reclaimProcess = execFile(
+        "powershell.exe",
+        args,
+        {
+          windowsHide: true,
+          timeout: 30 * 60 * 1000,
+          encoding: "utf8",
+        },
+        (error, stdout, stderr) => {
+          if (reclaimCancelRequested) {
+            finishReclaim({ phase: "cancelled" });
+            return;
+          }
+
+          if (error) {
+            const message = buildCompactionFailureMessage(error, stdout, stderr);
+            console.error("Compaction failed:", {
+              message: error.message,
+              stdout,
+              stderr,
+            });
+            finishReclaim({ phase: "failed", error: message });
+            return;
+          }
+
+          finishReclaim({ phase: "completed" });
+        },
+      );
+
+      notifyReclaimStatus({ pid: reclaimProcess.pid || null });
+      return { success: true, started: true, status: getReclaimStatus() };
     } catch (error) {
+      finishReclaim({ phase: "failed", error: error.message });
       return {
         success: false,
         error: error.message,
         message: error.message,
       };
-    } finally {
-      dockerMonitor.resetDockerRoutingCache();
-      if (wasMonitoring) {
-        dockerMonitor.startDockerMonitoring();
+    }
+  });
+
+  ipcMain.handle("docker:cancel-reclaim-space", async () => {
+    if (!reclaimState.inProgress || !reclaimProcess) {
+      return { success: true, status: getReclaimStatus() };
+    }
+
+    reclaimCancelRequested = true;
+    notifyReclaimStatus({ phase: "cancelling", cancelRequested: true });
+
+    const pid = reclaimProcess.pid;
+    try {
+      reclaimProcess.kill();
+    } catch {}
+    if (pid) {
+      await new Promise((resolve) => {
+        execFile(
+          "taskkill.exe",
+          ["/F", "/T", "/PID", String(pid)],
+          { windowsHide: true, timeout: 10000 },
+          () => resolve(),
+        );
+      });
+    }
+
+    return { success: true, status: getReclaimStatus() };
+  });
+
+  ipcMain.handle("docker:reset-engine", async () => {
+    if (process.platform !== "win32") {
+      return {
+        success: false,
+        error: "NOT_WINDOWS",
+        message: "Fast engine reset is only available for the Windows WSL engine.",
+      };
+    }
+
+    if (reclaimState.inProgress) {
+      return {
+        success: false,
+        error: "COMPACTION_RUNNING",
+        message: "Wait for disk compaction to finish before resetting the engine.",
+      };
+    }
+
+    if (_getPythonManager()?.isRunning()) {
+      return {
+        success: false,
+        error: "CLIENT_RUNNING",
+        message: "Stop the DGN engine before resetting OpenFork Ubuntu.",
+      };
+    }
+
+    try {
+      const wslDistro = await wslUtils.getWslDistroName();
+      if (!wslDistro) {
+        return {
+          success: false,
+          error: "WSL_DISTRO_MISSING",
+          message: "The OpenFork Ubuntu distro could not be found.",
+        };
       }
+
+      const installPath =
+        (await wslUtils.getDistroBasePath(wslDistro)) ||
+        settings.getAppSettings().wslStoragePath ||
+        getWindowsDefaultOpenForkInstallPath();
+
+      const resetArgs = [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        getRelocateWslScriptPath(),
+        "-DistroName",
+        wslDistro,
+        "-NewLocation",
+        installPath,
+      ];
+
+      const resetResult = await new Promise((resolve) => {
+        execFile(
+          "powershell.exe",
+          resetArgs,
+          { windowsHide: true, timeout: 120000, encoding: "utf8" },
+          (error, stdout, stderr) => {
+            if (error) {
+              const detail = (stderr || stdout || error.message).toString().trim();
+              resolve({
+                success: false,
+                error: detail || error.message,
+              });
+              return;
+            }
+            resolve({ success: true });
+          },
+        );
+      });
+
+      if (!resetResult.success) {
+        return {
+          success: false,
+          error: resetResult.error,
+          message: resetResult.error,
+        };
+      }
+
+      wslUtils.resetWslDistro();
+      dockerMonitor.resetDockerRoutingCache();
+
+      const installResult = await engineInstall.handleInstallEngine(installPath);
+      if (!installResult.success) {
+        return {
+          success: false,
+          error: installResult.error,
+          message: installResult.error,
+        };
+      }
+
+      settings.saveAppSettings({ wslStoragePath: installPath });
+      try {
+        _getPythonManager?.()?.syncCachedImages?.();
+      } catch (syncError) {
+        console.warn(
+          "Could not request cached image sync after engine reset:",
+          syncError.message,
+        );
+      }
+      return { success: true };
+    } catch (error) {
+      console.error("Error during docker:reset-engine:", error);
+      return { success: false, error: error.message, message: error.message };
     }
   });
 

@@ -24,7 +24,8 @@ const path = require("path");
  * Linux/macOS: no-op (docker rmi reclaims space immediately on those platforms).
  */
 class AutoCompactManager {
-  static DEFAULT_THRESHOLD_BYTES = 20 * 1024 ** 3; // 20 GB
+  static DEFAULT_THRESHOLD_BYTES = 75 * 1024 ** 3; // 75 GB
+  static DEFAULT_HOST_FREE_GATE_BYTES = 30 * 1024 ** 3; // compact only when the host drive is low
   static IDLE_CHECK_INTERVAL_MS = 30 * 1000; // 30 seconds
   static MIN_COMPACT_GAP_MS = 60 * 60 * 1000; // 1 hour minimum between auto-compactions
   static RECOVERY_POLL_INTERVAL_MS = 5000;
@@ -54,13 +55,16 @@ class AutoCompactManager {
     this._freedSinceLastCompact = Number(saved.freedSinceLastCompact || 0);
     this._lastCompactTs = Number(saved.lastCompactTs || 0);
     this._enabled = saved.enabled !== false; // default on
+    const savedThresholdBytes = Number(saved.thresholdBytes) || 0;
     this._thresholdBytes =
-      Number(saved.thresholdBytes) ||
-      AutoCompactManager.DEFAULT_THRESHOLD_BYTES;
+      savedThresholdBytes >= 50 * 1024 ** 3
+        ? savedThresholdBytes
+        : AutoCompactManager.DEFAULT_THRESHOLD_BYTES;
 
     this._idleTimer = null;
     this._recoveryTimer = null;
     this._recoveryProbeInFlight = false;
+    this._idleCheckInFlight = false;
     this._ownedCompactionFlow = false;
     this._compactInProgress =
       process.platform === "win32" && saved.compactInProgress === true;
@@ -75,6 +79,8 @@ class AutoCompactManager {
     this._lastRoutingConfigForRestart = saved.lastRoutingConfig || null;
     this._pausedProviderId = saved.pausedProviderId || null;
     this._currentProviderId = null;
+    this._hostFreeBytes = null;
+    this._deferredByHostFreeSpace = false;
 
     // If the app restarts while compact-wsl.ps1 or DiskPart is still holding
     // the VHDX, keep the state active until a host-side probe proves otherwise.
@@ -94,7 +100,12 @@ class AutoCompactManager {
 
     this._freedSinceLastCompact += freed_bytes;
     this._persistState();
-    this._maybeStartIdleWatch();
+    this._maybeStartIdleWatch().catch((err) => {
+      console.warn(
+        "AutoCompactManager: could not start idle watch:",
+        err?.message || err,
+      );
+    });
   }
 
   /** Wired to electron.cjs IPC `openfork_client:provider-id` so we know which row to flag. */
@@ -131,6 +142,9 @@ class AutoCompactManager {
       enabled: this._enabled,
       freedBytes: this._freedSinceLastCompact,
       thresholdBytes: this._thresholdBytes,
+      hostFreeGateBytes: AutoCompactManager.DEFAULT_HOST_FREE_GATE_BYTES,
+      hostFreeBytes: this._hostFreeBytes,
+      deferredByHostFreeSpace: this._deferredByHostFreeSpace,
       lastCompactTs: this._lastCompactTs,
       compactInProgress: this._compactInProgress,
       platformSupported: process.platform === "win32",
@@ -222,6 +236,9 @@ class AutoCompactManager {
       lastCompactTs: this._lastCompactTs,
       enabled: this._enabled,
       thresholdBytes: this._thresholdBytes,
+      hostFreeGateBytes: AutoCompactManager.DEFAULT_HOST_FREE_GATE_BYTES,
+      hostFreeBytes: this._hostFreeBytes,
+      deferredByHostFreeSpace: this._deferredByHostFreeSpace,
       compactInProgress: this._compactInProgress,
       phase: this._phase,
       error: this._lastError,
@@ -426,7 +443,7 @@ class AutoCompactManager {
     });
   }
 
-  _shouldCompact() {
+  _shouldCompactBase() {
     if (process.platform !== "win32") return false;
     if (!this._enabled) return false;
     if (this._compactInProgress) return false;
@@ -439,6 +456,54 @@ class AutoCompactManager {
     return true;
   }
 
+  async _shouldCompact() {
+    if (!this._shouldCompactBase()) {
+      this._deferredByHostFreeSpace = false;
+      return false;
+    }
+
+    const freeBytes = await this._getHostFreeBytesForWslDistro();
+    this._hostFreeBytes = Number.isFinite(freeBytes) ? freeBytes : null;
+
+    // If the host free-space probe fails, fall back to the historical behavior
+    // so disk pressure cleanup still works on unusual Windows installations.
+    if (!Number.isFinite(freeBytes)) {
+      this._deferredByHostFreeSpace = false;
+      return true;
+    }
+
+    this._deferredByHostFreeSpace =
+      freeBytes > AutoCompactManager.DEFAULT_HOST_FREE_GATE_BYTES;
+    return !this._deferredByHostFreeSpace;
+  }
+
+  async _getHostFreeBytesForWslDistro() {
+    const wslDistro = await this.wslUtils?.getWslDistroName?.();
+    if (!wslDistro) return null;
+    const storagePath = await this.wslUtils?.resolveWslStoragePath?.(wslDistro);
+    const match = String(storagePath || "").match(/^([a-zA-Z]):/);
+    if (!match) return null;
+    const drive = `${match[1].toUpperCase()}:`;
+    const escapedDrive = drive.replace(/'/g, "''");
+    const command = `(Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='${escapedDrive}'").FreeSpace`;
+
+    return await new Promise((resolve) => {
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", command],
+        { windowsHide: true, timeout: 5000, encoding: "utf8" },
+        (error, stdout) => {
+          if (error) {
+            resolve(null);
+            return;
+          }
+          const value = Number.parseInt(stdout.toString().trim(), 10);
+          resolve(Number.isFinite(value) && value >= 0 ? value : null);
+        },
+      );
+    });
+  }
+
   _isIdle() {
     if (!this.pythonManager) return false;
     return (
@@ -448,15 +513,25 @@ class AutoCompactManager {
     );
   }
 
-  _maybeStartIdleWatch() {
-    if (!this._shouldCompact()) return;
+  async _maybeStartIdleWatch() {
+    if (!this._shouldCompactBase()) return;
     if (this._idleTimer) return;
+    if (!(await this._shouldCompact())) {
+      this._persistState();
+      this._notify("auto-compact:status", {});
+      return;
+    }
     this._idleTimer = setInterval(
       () => this._tickIdleCheck(),
       AutoCompactManager.IDLE_CHECK_INTERVAL_MS,
     );
     // Run once immediately so a long-idle session doesn't wait 30 s.
-    this._tickIdleCheck();
+    this._tickIdleCheck().catch((err) => {
+      console.warn(
+        "AutoCompactManager: idle check failed:",
+        err?.message || err,
+      );
+    });
   }
 
   _stopIdleWatch() {
@@ -466,20 +541,28 @@ class AutoCompactManager {
     }
   }
 
-  _tickIdleCheck() {
-    if (!this._shouldCompact()) {
+  async _tickIdleCheck() {
+    if (this._idleCheckInFlight) return;
+    this._idleCheckInFlight = true;
+    try {
+      if (!(await this._shouldCompact())) {
+        this._stopIdleWatch();
+        this._persistState();
+        this._notify("auto-compact:status", {});
+        return;
+      }
+      if (!this._isIdle()) return;
+      if (!this._currentProviderId) {
+        // No provider id yet (Python registering / restarting). Wait for the next tick.
+        return;
+      }
       this._stopIdleWatch();
-      return;
+      this._runCompactionFlow().catch((err) => {
+        console.error("AutoCompactManager: compaction flow failed:", err);
+      });
+    } finally {
+      this._idleCheckInFlight = false;
     }
-    if (!this._isIdle()) return;
-    if (!this._currentProviderId) {
-      // No provider id yet (Python registering / restarting). Wait for the next tick.
-      return;
-    }
-    this._stopIdleWatch();
-    this._runCompactionFlow().catch((err) => {
-      console.error("AutoCompactManager: compaction flow failed:", err);
-    });
   }
 
   async _runCompactionFlow() {

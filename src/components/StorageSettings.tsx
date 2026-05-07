@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
 import { Loader } from "@/components/ui/loader";
-import type { DockerStatus } from "@/types";
+import type { AutoCompactStatus, DockerStatus, ReclaimStatus } from "@/types";
 import {
   HardDrive,
   AlertTriangle,
@@ -22,6 +22,7 @@ import {
   Save,
   Info,
   Gauge,
+  Trash2,
 } from "lucide-react";
 
 interface StorageSettingsProps {
@@ -46,6 +47,8 @@ export function StorageSettings({
     path: string;
     engine_file_gb: string | null;
     engine_file_path: string | null;
+    engine_file_sparse: boolean | null;
+    wsl_version: string | null;
   } | null>(null);
   const [availableDrives, setAvailableDrives] = useState<
     { name: string; freeGB: number }[]
@@ -57,17 +60,15 @@ export function StorageSettings({
   } | null>(null);
   const [selectedDrive, setSelectedDrive] = useState<string>("");
   const [isReclaiming, setIsReclaiming] = useState(false);
+  const [isResettingEngine, setIsResettingEngine] = useState(false);
+  const [resetProgress, setResetProgress] = useState<{ phase: string; percent: number } | null>(null);
+  const [reclaimStatus, setReclaimStatus] = useState<ReclaimStatus | null>(
+    null,
+  );
   const [isRelocating, setIsRelocating] = useState(false);
   const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [autoCompact, setAutoCompact] = useState<{
-    enabled: boolean;
-    freedBytes: number;
-    thresholdBytes: number;
-    lastCompactTs: number;
-    compactInProgress: boolean;
-    platformSupported: boolean;
-  } | null>(null);
+  const [autoCompact, setAutoCompact] = useState<AutoCompactStatus | null>(null);
 
   // Python advanced config overrides
   const [pythonConfig, setPythonConfig] = useState<{
@@ -175,7 +176,7 @@ export function StorageSettings({
     }
   };
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     setLoading(true);
     try {
       const [status, info, drives, usage] = await Promise.all([
@@ -202,7 +203,7 @@ export function StorageSettings({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     window.electronAPI.getProcessInfo().then((info) => {
@@ -211,11 +212,36 @@ export function StorageSettings({
     refreshData();
     refreshAutoCompactStatus();
     loadPythonConfig();
-    const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
+    window.electronAPI
+      .getReclaimStatus()
+      .then(setReclaimStatus)
+      .catch((e) => console.error("Failed to get reclaim status:", e));
+    const cleanupAutoCompact = window.electronAPI.onAutoCompactStatus((status) => {
       setAutoCompact(status);
     });
-    return cleanup;
-  }, [refreshAutoCompactStatus, loadPythonConfig]);
+    const cleanupReclaim = window.electronAPI.onReclaimStatus((status) => {
+      setReclaimStatus(status);
+      if (!status.inProgress && status.phase === "completed") {
+        refreshData();
+        refreshAutoCompactStatus();
+        Promise.resolve(onSettingsChanged?.()).catch((e) =>
+          console.error("Failed to refresh after compaction:", e),
+        );
+      }
+      if (!status.inProgress && status.phase === "failed" && status.error) {
+        setError(status.error);
+      }
+    });
+    return () => {
+      cleanupAutoCompact();
+      cleanupReclaim();
+    };
+  }, [
+    refreshAutoCompactStatus,
+    loadPythonConfig,
+    refreshData,
+    onSettingsChanged,
+  ]);
 
   const isWindows = platform === "win32";
   const isWslMode = isWindows && dockerStatus?.isNative === false;
@@ -291,6 +317,18 @@ export function StorageSettings({
     cacheLimitGb > 0
       ? Math.min(100, Math.round((imageCacheUsedGb / cacheLimitGb) * 100))
       : 0;
+  const reclaimInProgress = !!reclaimStatus?.inProgress;
+  const reclaimBusy = isReclaiming || reclaimInProgress;
+  const autoCompactThresholdGb = Math.round(
+    (autoCompact?.thresholdBytes || 0) / 1024 ** 3,
+  );
+  const autoCompactHostGateGb = Math.round(
+    (autoCompact?.hostFreeGateBytes || 0) / 1024 ** 3,
+  );
+  const autoCompactHostFreeGb =
+    typeof autoCompact?.hostFreeBytes === "number"
+      ? (autoCompact.hostFreeBytes / 1024 ** 3).toFixed(1)
+      : null;
   const cachePresetOptions = [
     {
       label: "Minimal",
@@ -347,6 +385,19 @@ export function StorageSettings({
                       : "Openfork VHDX --"}
                   </div>
                 )}
+                {diskInfo?.engine_file_sparse !== null &&
+                  diskInfo?.engine_file_sparse !== undefined && (
+                    <div className={statChipClassName}>
+                      {diskInfo.engine_file_sparse
+                        ? "Sparse VHD enabled"
+                        : "Sparse VHD not detected"}
+                    </div>
+                  )}
+                {diskInfo?.wsl_version && (
+                  <div className={statChipClassName}>
+                    {diskInfo.wsl_version}
+                  </div>
+                )}
               </div>
               <div className={summaryClassName}>
                 {diskInfo
@@ -399,11 +450,15 @@ export function StorageSettings({
         {isWindows && autoCompact?.platformSupported && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <p className={helperTextClassName}>
-              Auto-compact runs the VHDX shrink in idle windows after{" "}
-              {Math.round((autoCompact.thresholdBytes || 0) / 1024 ** 3)} GB of
-              images have been evicted. Currently{" "}
+              Auto-compact runs only after {autoCompactThresholdGb} GB of images
+              have been evicted and the WSL drive has less than{" "}
+              {autoCompactHostGateGb} GB free. Currently{" "}
               {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since
-              last compaction.
+              last compaction
+              {autoCompactHostFreeGb
+                ? `, with ${autoCompactHostFreeGb} GB free on the host drive`
+                : ""}
+              .
             </p>
             <Button
               variant={autoCompact.enabled ? "primary" : "ghost"}
@@ -433,7 +488,8 @@ export function StorageSettings({
                     Disk Compaction
                   </Label>
                   <p className={copyMutedClassName}>
-                    Shrink the WSL disk file so Windows sees reclaimed space.
+                    Reclaim space slowly while keeping remaining images, or
+                    reset the engine quickly and redownload images later.
                   </p>
                 </div>
                 {(diskInfo?.engine_file_gb || loading) && (
@@ -449,23 +505,91 @@ export function StorageSettings({
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <p className={helperTextClassName}>
-                  Stop the engine first. Windows may ask for admin permission.
+                  Stop the engine first. Compaction runs in the background and
+                  Windows may ask for admin permission.
                 </p>
                 <Button
                   variant="primary"
                   size="sm"
-                  className={`${buttonTextClassName} sm:ml-auto`}
+                  className={`${buttonTextClassName} h-auto min-h-9 whitespace-normal leading-tight sm:ml-auto`}
                   onClick={handleReclaim}
-                  disabled={loading || isReclaiming || isRelocating}
+                  disabled={
+                    loading ||
+                    reclaimBusy ||
+                    isRelocating ||
+                    isResettingEngine
+                  }
                 >
-                  {isReclaiming ? (
+                  {reclaimBusy ? (
                     <Loader size="xs" className="mr-2" />
                   ) : (
                     <HardDrive className="h-3.5 w-3.5 mr-2" />
                   )}
-                  {isReclaiming ? "Compacting..." : "Compact VHDX"}
+                  {reclaimBusy
+                    ? "Reclaiming..."
+                    : "Reclaim Space (Slow, Keeps Images)"}
                 </Button>
+                {reclaimInProgress ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`${buttonTextClassName} h-auto min-h-9 whitespace-normal leading-tight`}
+                    onClick={handleCancelReclaim}
+                    disabled={reclaimStatus?.phase === "cancelling"}
+                  >
+                    {reclaimStatus?.phase === "cancelling"
+                      ? "Cancelling..."
+                      : "Cancel"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className={`${buttonTextClassName} h-auto min-h-9 whitespace-normal leading-tight`}
+                    onClick={handleResetEngine}
+                    disabled={
+                      loading ||
+                      reclaimBusy ||
+                      isRelocating ||
+                      isResettingEngine
+                    }
+                  >
+                    {isResettingEngine ? (
+                      <Loader size="xs" className="mr-2" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                    )}
+                    {isResettingEngine
+                      ? "Resetting..."
+                      : "Reset Engine (Fast, Deletes Images)"}
+                  </Button>
+                )}
               </div>
+              {isResettingEngine && (
+                <div className="space-y-1.5 pt-0.5">
+                  <div className="h-1 overflow-hidden rounded-full bg-white/5">
+                    <div
+                      className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                      style={{ width: `${resetProgress?.percent ?? 0}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/45">
+                    {resetProgress?.phase ?? "Preparing..."}
+                  </p>
+                </div>
+              )}
+              {!isResettingEngine && diskInfo?.engine_file_sparse === false && (
+                <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold leading-relaxed text-amber-200">
+                  This OpenFork VHDX is not marked sparse. Resetting the engine
+                  recreates it with sparse mode enabled, which should reduce the
+                  need for slow DiskPart compaction on recent WSL builds.
+                </p>
+              )}
+              {reclaimStatus?.phase === "completed" && (
+                <p className="text-[11px] font-semibold text-emerald-300">
+                  Reclaimed disk space successfully.
+                </p>
+              )}
             </div>
             {loading && renderSectionLoadingOverlay()}
           </div>
@@ -534,7 +658,8 @@ export function StorageSettings({
                     !selectedDrive ||
                     selectedDrive === dockerStatus?.installDrive ||
                     isRelocating ||
-                    isReclaiming
+                    reclaimBusy ||
+                    isResettingEngine
                   }
                 >
                   {isRelocating ? <Loader size="xs" /> : "Move"}
@@ -802,7 +927,7 @@ export function StorageSettings({
   );
 
   async function handleReclaim() {
-    if (isReclaiming) return;
+    if (isReclaiming || reclaimInProgress) return;
     setIsReclaiming(true);
     setError(null);
     try {
@@ -810,19 +935,48 @@ export function StorageSettings({
       if (!result.success) {
         setError(result.message || result.error || "Reclaim failed");
       } else {
-        // Tell the auto-compact manager the user just compacted manually so
-        // the cumulative-freed counter resets and we don't trigger again soon.
-        try {
-          window.electronAPI.notifyManualCompactCompleted();
-        } catch (e) {
-          // Non-critical — older builds may not expose this API yet.
-        }
+        setReclaimStatus(result.status ?? null);
       }
-      await refreshData();
-      await refreshAutoCompactStatus();
-      await Promise.resolve(onSettingsChanged?.());
     } finally {
       setIsReclaiming(false);
+    }
+  }
+
+  async function handleCancelReclaim() {
+    setError(null);
+    const result = await window.electronAPI.cancelReclaimDiskSpace();
+    if (!result.success) {
+      setError(result.error || "Could not cancel compaction.");
+    }
+  }
+
+  async function handleResetEngine() {
+    if (isResettingEngine || reclaimInProgress) return;
+
+    const confirm = window.confirm(
+      "Reset OpenFork Ubuntu?\n\nThis is fast and will recreate the engine as a sparse VHDX, but it deletes all downloaded Docker images. Ubuntu, Docker, and NVIDIA tooling will be reinstalled automatically.",
+    );
+    if (!confirm) return;
+
+    setIsResettingEngine(true);
+    setResetProgress(null);
+    setError(null);
+    const cleanupProgress = window.electronAPI.onInstallProgress((data) => {
+      setResetProgress({ phase: data.phase, percent: data.percent });
+    });
+    try {
+      const result = await window.electronAPI.resetEngine();
+      if (!result.success) {
+        setError(result.message || result.error || "Engine reset failed");
+      } else {
+        await refreshData();
+        await refreshAutoCompactStatus();
+        await Promise.resolve(onSettingsChanged?.());
+      }
+    } finally {
+      cleanupProgress();
+      setIsResettingEngine(false);
+      setResetProgress(null);
     }
   }
 
