@@ -8,18 +8,8 @@ $ErrorActionPreference = "Stop"
 function Test-OpenForkManagedDistro {
     param([string]$Name)
     try {
-        $probe = wsl.exe -d $Name --user root -- bash -lc @'
-if [ -f /etc/openfork-managed ]; then
-  echo managed
-elif id -u openfork >/dev/null 2>&1 \
-  && [ -f /etc/sudoers.d/openfork ] \
-  && grep -q "default=openfork" /etc/wsl.conf 2>/dev/null \
-  && grep -Eq "tcp://(0\.0\.0\.0|127\.0\.0\.1):2375" /etc/docker/daemon.json 2>/dev/null; then
-  echo legacy-managed
-else
-  echo unmanaged
-fi
-'@
+        $probeScript = 'if [ -f /etc/openfork-managed ]; then echo managed; elif id -u openfork >/dev/null 2>&1 && [ -f /etc/sudoers.d/openfork ] && grep -q "default=openfork" /etc/wsl.conf 2>/dev/null && grep -Eq "tcp://(0[.]0[.]0[.]0|127[.]0[.]0[.]1):2375" /etc/docker/daemon.json 2>/dev/null; then echo legacy-managed; else echo unmanaged; fi'
+        $probe = wsl.exe -d $Name --user root -- bash -lc $probeScript
         $probe = ($probe | Out-String).Trim()
         return ($LASTEXITCODE -eq 0) -and ($probe -in @("managed", "legacy-managed"))
     } catch {
