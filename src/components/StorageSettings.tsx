@@ -298,6 +298,7 @@ export function StorageSettings({
   const buttonTextClassName = readableMode
     ? "px-5 h-9 text-[11px] font-bold tracking-tight"
     : "px-4 h-8 text-[10px] font-black uppercase tracking-widest";
+  const buttonLoaderClassName = "flex-row gap-0 p-0";
   const sectionRadiusClassName = readableMode ? "rounded-2xl" : "rounded-xl";
   const cacheLimitGb = pythonConfig?.DOCKER_IMAGE_CACHE_LIMIT_GB ?? 250;
   const totalDiskGb = Number.parseFloat(diskInfo?.total_gb || "0");
@@ -521,7 +522,10 @@ export function StorageSettings({
                   }
                 >
                   {reclaimBusy ? (
-                    <Loader size="xs" className="mr-2" />
+                    <Loader
+                      size="xs"
+                      className={`${buttonLoaderClassName} mr-2`}
+                    />
                   ) : (
                     <HardDrive className="h-3.5 w-3.5 mr-2" />
                   )}
@@ -555,7 +559,10 @@ export function StorageSettings({
                     }
                   >
                     {isResettingEngine ? (
-                      <Loader size="xs" className="mr-2" />
+                      <Loader
+                        size="xs"
+                        className={`${buttonLoaderClassName} mr-2`}
+                      />
                     ) : (
                       <Trash2 className="h-3.5 w-3.5 mr-2" />
                     )}
@@ -662,7 +669,11 @@ export function StorageSettings({
                     isResettingEngine
                   }
                 >
-                  {isRelocating ? <Loader size="xs" /> : "Move"}
+                  {isRelocating ? (
+                    <Loader size="xs" className={buttonLoaderClassName} />
+                  ) : (
+                    "Move"
+                  )}
                 </Button>
               </div>
             </div>
