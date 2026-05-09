@@ -297,11 +297,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
 // Must happen after store is created and before any module functions are called.
 settings.init(store);
 wslUtils.init({ store, execFile: _execFile });
-dockerEngine.init({
-  getMainWindow: () => mainWindow,
-  onWslVhdxLocked: (details) =>
-    autoCompactManager?.adoptExternalCompaction?.(details),
-});
 dockerMonitor.init({
   getMainWindow: () => mainWindow,
   getPythonManager: () => pythonManager,
@@ -1789,6 +1784,7 @@ ipcMain.handle("fetch:config", async () => {
 });
 
 ipcMain.handle("search:general", async (event, query) => {
+  if (!session) return { success: false, error: "Not authenticated" };
   try {
     const requestUrl = new URL(`${ORCHESTRATOR_API_URL}/api/search`);
     requestUrl.searchParams.set("q", query);
