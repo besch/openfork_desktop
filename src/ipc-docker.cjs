@@ -102,15 +102,26 @@ function getPowerShellDiagnosticLines(output = "") {
     .filter(
       (line) =>
         !/^At line:/i.test(line) &&
-        !/^\+ CategoryInfo/i.test(line) &&
-        !/^\+ FullyQualifiedErrorId/i.test(line),
+        !/^At .+:\d+ char:\d+/i.test(line) &&
+        !/^\+/.test(line) &&
+        !/^~+$/.test(line) &&
+        !/^CategoryInfo/i.test(line) &&
+        !/^FullyQualifiedErrorId/i.test(line),
     );
 }
 
 function buildCompactionFailureMessage(error, stdout = "", stderr = "") {
   const stderrLines = getPowerShellDiagnosticLines(stderr);
   const stdoutLines = getPowerShellDiagnosticLines(stdout);
-  const prioritized = [...stderrLines, ...stdoutLines].filter((line) =>
+  const lines = [...stderrLines, ...stdoutLines];
+  const compactionError = lines.find((line) =>
+    /Error during compaction:/i.test(line),
+  );
+  if (compactionError) {
+    return compactionError.replace(/^.*?:\s*(Error during compaction:)/i, "$1");
+  }
+
+  const prioritized = lines.filter((line) =>
     /(error|failed|denied|timed out|canceled|cancelled|in use|requires elevation|not found)/i.test(
       line,
     ),

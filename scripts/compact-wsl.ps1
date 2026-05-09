@@ -162,6 +162,6 @@ exit
     Write-Host "Successfully reclaimed disk space."
     exit 0
 } catch {
-    Write-Error "Error during compaction: $($_.Exception.Message)"
+    [Console]::Error.WriteLine("Error during compaction: $($_.Exception.Message)")
     exit 1
 }

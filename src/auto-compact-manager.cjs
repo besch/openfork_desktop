@@ -1,6 +1,44 @@
 const { execFile } = require("child_process");
 const path = require("path");
 
+function getPowerShellDiagnosticLines(output = "") {
+  return output
+    .replace(/\0/g, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(
+      (line) =>
+        !/^At line:/i.test(line) &&
+        !/^At .+:\d+ char:\d+/i.test(line) &&
+        !/^\+/.test(line) &&
+        !/^~+$/.test(line) &&
+        !/^CategoryInfo/i.test(line) &&
+        !/^FullyQualifiedErrorId/i.test(line),
+    );
+}
+
+function buildPowerShellFailureMessage(error, stdout = "", stderr = "") {
+  const lines = [
+    ...getPowerShellDiagnosticLines(stderr),
+    ...getPowerShellDiagnosticLines(stdout),
+  ];
+  const compactionError = lines.find((line) =>
+    /Error during compaction:/i.test(line),
+  );
+  if (compactionError) {
+    return compactionError.replace(/^.*?:\s*(Error during compaction:)/i, "$1");
+  }
+  const prioritized = lines.filter((line) =>
+    /(error|failed|denied|timed out|canceled|cancelled|in use|requires elevation|not found)/i.test(
+      line,
+    ),
+  );
+  if (prioritized.length > 0) return prioritized[prioritized.length - 1];
+  if (lines.length > 0) return lines[lines.length - 1];
+  return error?.message || "compact-wsl.ps1 failed";
+}
+
 /**
  * AutoCompactManager — Windows-only orchestrator for automatic VHDX compaction.
  *
@@ -772,9 +810,11 @@ class AutoCompactManager {
         { windowsHide: true, timeout: 10 * 60 * 1000 },
         (error, stdout, stderr) => {
           if (error) {
-            const detail = (stderr || stdout || error.message)
-              .toString()
-              .trim();
+            const detail = buildPowerShellFailureMessage(
+              error,
+              stdout?.toString?.() || "",
+              stderr?.toString?.() || "",
+            );
             reject(new Error(detail || "compact-wsl.ps1 failed"));
           } else {
             resolve();
