@@ -35,6 +35,8 @@ function init({
 let reclaimProcess = null;
 let reclaimCancelRequested = false;
 let reclaimWasMonitoring = false;
+let lastSuccessfulReclaimTs = 0;
+const POST_RECLAIM_WSL_SETTLE_MS = 60 * 1000;
 const reclaimState = {
   inProgress: false,
   phase: undefined,
@@ -50,6 +52,13 @@ function getReclaimStatus() {
 
 function isReclaimInProgress() {
   return reclaimState.inProgress === true;
+}
+
+function isInPostReclaimSettleWindow() {
+  return (
+    lastSuccessfulReclaimTs > 0 &&
+    Date.now() - lastSuccessfulReclaimTs < POST_RECLAIM_WSL_SETTLE_MS
+  );
 }
 
 function notifyReclaimStatus(patch = {}) {
@@ -70,6 +79,9 @@ function resetReclaimRouting() {
 
 function finishReclaim({ phase, error } = {}) {
   const completed = phase === "completed";
+  if (completed) {
+    lastSuccessfulReclaimTs = Date.now();
+  }
   reclaimProcess = null;
   reclaimCancelRequested = false;
   notifyReclaimStatus({
@@ -90,6 +102,46 @@ function finishReclaim({ phase, error } = {}) {
         callbackError.message,
       );
     }
+  }
+}
+
+async function recoverWslAfterSuccessfulReclaim(wslDistro) {
+  if (process.platform !== "win32" || !wslDistro) return;
+
+  notifyReclaimStatus({ phase: "recovering_wsl" });
+  dockerMonitor.resetDockerRoutingCache();
+
+  try {
+    let dockerStatus = await dockerEngine.resolveDockerStatus({
+      allowNativeStart: false,
+      wslHostTimeoutMs: 10000,
+    });
+    if (dockerStatus.running) return;
+
+    if (
+      dockerStatus.error === "WSL_VHDX_LOCKED" ||
+      dockerStatus.error === "DOCKER_API_UNREACHABLE"
+    ) {
+      dockerStatus = await dockerEngine.restartWslDockerEngine({
+        wslDistro,
+        waitTimeoutMs: 120000,
+        onPhase: (phase) => {
+          notifyReclaimStatus({ phase: `recovering_${phase}` });
+        },
+      });
+      if (dockerStatus?.running) return;
+    }
+
+    console.warn(
+      `Manual compaction finished, but WSL Docker is not ready yet (${dockerStatus.error || "unknown"}). It may recover on the next monitor poll.`,
+    );
+  } catch (error) {
+    console.warn(
+      "Manual compaction finished, but post-compaction WSL recovery did not complete:",
+      error?.message || error,
+    );
+  } finally {
+    dockerMonitor.resetDockerRoutingCache();
   }
 }
 
@@ -1071,7 +1123,16 @@ function register(ipcMain) {
             return;
           }
 
-          finishReclaim({ phase: "completed" });
+          recoverWslAfterSuccessfulReclaim(wslDistro)
+            .catch((recoveryError) => {
+              console.warn(
+                "Post-compaction WSL recovery failed:",
+                recoveryError?.message || recoveryError,
+              );
+            })
+            .finally(() => {
+              finishReclaim({ phase: "completed" });
+            });
         },
       );
 
@@ -1358,4 +1419,10 @@ function register(ipcMain) {
   });
 }
 
-module.exports = { init, register, getReclaimStatus, isReclaimInProgress };
+module.exports = {
+  init,
+  register,
+  getReclaimStatus,
+  isReclaimInProgress,
+  isInPostReclaimSettleWindow,
+};

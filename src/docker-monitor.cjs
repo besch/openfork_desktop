@@ -7,17 +7,20 @@ let _getMainWindow;
 let _getPythonManager;
 let _getAutoCompactManager;
 let _getIsManualReclaimInProgress;
+let _getIsPostReclaimSettling;
 
 function init({
   getMainWindow,
   getPythonManager,
   getAutoCompactManager,
   getIsManualReclaimInProgress,
+  getIsPostReclaimSettling,
 }) {
   _getMainWindow = getMainWindow;
   _getPythonManager = getPythonManager;
   _getAutoCompactManager = getAutoCompactManager;
   _getIsManualReclaimInProgress = getIsManualReclaimInProgress;
+  _getIsPostReclaimSettling = getIsPostReclaimSettling;
 }
 
 let dockerMonitorInterval = null;
@@ -52,7 +55,8 @@ const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
 function isCompactionInProgress() {
   return (
     !!_getAutoCompactManager?.()?.isCompactionInProgress?.() ||
-    !!_getIsManualReclaimInProgress?.()
+    !!_getIsManualReclaimInProgress?.() ||
+    !!_getIsPostReclaimSettling?.()
   );
 }
 

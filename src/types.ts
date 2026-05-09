@@ -142,7 +142,7 @@ export interface AutoCompactStatus {
 
 export interface ReclaimStatus {
   inProgress: boolean;
-  phase?: "compacting" | "cancelling" | "cancelled" | "completed" | "failed";
+  phase?: string;
   error?: string;
   startedTs?: number;
   pid?: number | null;

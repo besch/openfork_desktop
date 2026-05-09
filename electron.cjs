@@ -303,6 +303,8 @@ dockerMonitor.init({
   getAutoCompactManager: () => autoCompactManager,
   getIsManualReclaimInProgress: () =>
     ipcDocker.isReclaimInProgress?.() === true,
+  getIsPostReclaimSettling: () =>
+    ipcDocker.isInPostReclaimSettleWindow?.() === true,
 });
 
 let mainWindow;
@@ -529,8 +531,15 @@ engineInstall.init({
 dockerEngine.init({
   getMainWindow: () => mainWindow,
   getInstallState: engineInstall.getCurrentInstallState,
-  onWslVhdxLocked: (details) =>
-    autoCompactManager?.adoptExternalCompaction?.(details),
+  onWslVhdxLocked: (details) => {
+    if (
+      ipcDocker.isReclaimInProgress?.() ||
+      ipcDocker.isInPostReclaimSettleWindow?.()
+    ) {
+      return;
+    }
+    autoCompactManager?.adoptExternalCompaction?.(details);
+  },
 });
 
 ipcDocker.init({
@@ -551,7 +560,8 @@ ipcDeps.init({
   openExternal,
   getIsCompactionInProgress: () =>
     autoCompactManager?.isCompactionInProgress?.() === true ||
-    ipcDocker.isReclaimInProgress?.() === true,
+    ipcDocker.isReclaimInProgress?.() === true ||
+    ipcDocker.isInPostReclaimSettleWindow?.() === true,
 });
 
 function handleSupabaseAuthStateChange(event, newSession) {

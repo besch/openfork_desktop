@@ -320,6 +320,11 @@ export function StorageSettings({
       : 0;
   const reclaimInProgress = !!reclaimStatus?.inProgress;
   const reclaimBusy = isReclaiming || reclaimInProgress;
+  const reclaimBusyLabel = reclaimStatus?.phase?.startsWith("recovering")
+    ? "Reconnecting..."
+    : reclaimBusy
+      ? "Reclaiming..."
+      : "Reclaim Space (Slow, Keeps Images)";
   const autoCompactThresholdGb = Math.round(
     (autoCompact?.thresholdBytes || 0) / 1024 ** 3,
   );
@@ -529,9 +534,7 @@ export function StorageSettings({
                   ) : (
                     <HardDrive className="h-3.5 w-3.5 mr-2" />
                   )}
-                  {reclaimBusy
-                    ? "Reclaiming..."
-                    : "Reclaim Space (Slow, Keeps Images)"}
+                  {reclaimBusyLabel}
                 </Button>
                 {reclaimInProgress ? (
                   <Button
