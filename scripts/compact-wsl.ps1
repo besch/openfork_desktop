@@ -5,16 +5,30 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Test-OpenForkManagedDistro {
-    param([string]$Name)
+function Invoke-WslRootCommand {
+    param([string]$Name, [string[]]$Command)
     try {
-        $probeScript = 'if [ -f /etc/openfork-managed ]; then echo managed; elif id -u openfork >/dev/null 2>&1 && [ -f /etc/sudoers.d/openfork ] && grep -q "default=openfork" /etc/wsl.conf 2>/dev/null && grep -Eq "tcp://(0[.]0[.]0[.]0|127[.]0[.]0[.]1):2375" /etc/docker/daemon.json 2>/dev/null; then echo legacy-managed; else echo unmanaged; fi'
-        $probe = wsl.exe -d $Name --user root -- bash -lc $probeScript
-        $probe = ($probe | Out-String).Trim()
-        return ($LASTEXITCODE -eq 0) -and ($probe -in @("managed", "legacy-managed"))
+        $null = & wsl.exe -d $Name --user root -- @Command 2>$null
+        return $LASTEXITCODE -eq 0
     } catch {
         return $false
     }
+}
+
+function Test-OpenForkManagedDistro {
+    param([string]$Name)
+    if (Invoke-WslRootCommand -Name $Name -Command @("test", "-f", "/etc/openfork-managed")) {
+        return $true
+    }
+
+    $hasOpenForkUser = Invoke-WslRootCommand -Name $Name -Command @("id", "-u", "openfork")
+    $hasOpenForkSudoers = Invoke-WslRootCommand -Name $Name -Command @("test", "-f", "/etc/sudoers.d/openfork")
+    $hasOpenForkDefaultUser = Invoke-WslRootCommand -Name $Name -Command @("grep", "-q", "default=openfork", "/etc/wsl.conf")
+    $hasDockerTcpBinding =
+        (Invoke-WslRootCommand -Name $Name -Command @("grep", "-Fq", "tcp://0.0.0.0:2375", "/etc/docker/daemon.json")) -or
+        (Invoke-WslRootCommand -Name $Name -Command @("grep", "-Fq", "tcp://127.0.0.1:2375", "/etc/docker/daemon.json"))
+
+    return $hasOpenForkUser -and $hasOpenForkSudoers -and $hasOpenForkDefaultUser -and $hasDockerTcpBinding
 }
 
 function Test-FileExclusiveAccess {
