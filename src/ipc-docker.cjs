@@ -48,6 +48,10 @@ function getReclaimStatus() {
   return { ...reclaimState };
 }
 
+function isReclaimInProgress() {
+  return reclaimState.inProgress === true;
+}
+
 function notifyReclaimStatus(patch = {}) {
   Object.assign(reclaimState, patch);
   const mainWindow = _getMainWindow?.();
@@ -1343,4 +1347,4 @@ function register(ipcMain) {
   });
 }
 
-module.exports = { init, register };
+module.exports = { init, register, getReclaimStatus, isReclaimInProgress };

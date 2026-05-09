@@ -97,6 +97,10 @@ export const DockerManagement = memo(() => {
       return "OpenFork Ubuntu disk is locked by Windows. Disk compaction may still be finishing.";
     }
 
+    if (nextStatus.error === "WSL_COMPACTING") {
+      return "OpenFork Ubuntu disk compaction is running. Docker will reconnect when compaction finishes.";
+    }
+
     if (nextStatus.error === "WSL_DISTRO_MISSING") {
       return "The OpenFork Ubuntu distro is missing. Reinstall the local engine to restore Docker access.";
     }
@@ -109,14 +113,17 @@ export const DockerManagement = memo(() => {
     setError(null);
     setDiskSpaceError(null);
     try {
-      const compactStatus = await window.electronAPI.getAutoCompactStatus();
+      const [compactStatus, reclaimStatus] = await Promise.all([
+        window.electronAPI.getAutoCompactStatus(),
+        window.electronAPI.getReclaimStatus(),
+      ]);
       // Don't resurface a stale "completed" banner from a prior session —
       // same filter as store.ts hydration. Live events keep the store current.
       if (compactStatus.compactInProgress || compactStatus.phase !== "completed") {
         setAutoCompactStatus(compactStatus);
       }
 
-      if (compactStatus?.compactInProgress) {
+      if (compactStatus?.compactInProgress || reclaimStatus?.inProgress) {
         const diskResult = await window.electronAPI.getDiskSpace();
         if (diskResult.success) setDiskSpace(diskResult.data);
         setImages([]);
@@ -198,7 +205,7 @@ export const DockerManagement = memo(() => {
     if (dockerPullProgress !== null) {
       setDiskSpaceError(null);
     }
-  }, [dockerPullProgress]);
+  }, [dockerPullProgress, setDiskSpaceError]);
 
   // Clear Docker-related errors when the client reaches a healthy state.
   useEffect(() => {
@@ -206,13 +213,26 @@ export const DockerManagement = memo(() => {
       setError(null);
       setDiskSpaceError(null);
     }
-  }, [status]);
+  }, [setDiskSpaceError, status]);
 
   // Refresh the Docker tab when app-wide compaction completes.
   useEffect(() => {
     const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
       if (status.phase === "completed") {
         fetchData();
+      }
+    });
+    return cleanup;
+  }, [fetchData]);
+
+  // Refresh the Docker tab when manual disk reclaim completes.
+  useEffect(() => {
+    const cleanup = window.electronAPI.onReclaimStatus((status) => {
+      if (status.phase === "completed") {
+        fetchData();
+      }
+      if (status.phase === "failed" && status.error) {
+        setError(status.error);
       }
     });
     return cleanup;

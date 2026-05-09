@@ -6,11 +6,18 @@ const wslUtils = require("./wsl-utils.cjs");
 let _getMainWindow;
 let _getPythonManager;
 let _getAutoCompactManager;
+let _getIsManualReclaimInProgress;
 
-function init({ getMainWindow, getPythonManager, getAutoCompactManager }) {
+function init({
+  getMainWindow,
+  getPythonManager,
+  getAutoCompactManager,
+  getIsManualReclaimInProgress,
+}) {
   _getMainWindow = getMainWindow;
   _getPythonManager = getPythonManager;
   _getAutoCompactManager = getAutoCompactManager;
+  _getIsManualReclaimInProgress = getIsManualReclaimInProgress;
 }
 
 let dockerMonitorInterval = null;
@@ -41,6 +48,13 @@ let _lastKnownActiveEngine = null;
 let _cachedRoutingResult = null;
 let _cachedRoutingTimestamp = 0;
 const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
+
+function isCompactionInProgress() {
+  return (
+    !!_getAutoCompactManager?.()?.isCompactionInProgress?.() ||
+    !!_getIsManualReclaimInProgress?.()
+  );
+}
 
 function notifyWslRecoveryStatus(payload) {
   const mainWindow = _getMainWindow();
@@ -194,7 +208,7 @@ async function runWslRecoveryFlow(dockerStatus) {
  * Returns the resolved Docker status.
  */
 async function ensureDockerRouting() {
-  if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+  if (isCompactionInProgress()) {
     return {
       installed: true,
       running: false,
@@ -214,7 +228,7 @@ async function ensureDockerRouting() {
     allowNativeStart: false,
     wslHostTimeoutMs: 5000,
   });
-  if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+  if (isCompactionInProgress()) {
     resetDockerRoutingCache();
     return {
       installed: true,
@@ -237,7 +251,7 @@ async function checkDockerUpdates() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   try {
-    if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+    if (isCompactionInProgress()) {
       dockerMonitorConsecutiveFailures = 0;
       dockerApiUnreachableFailures = 0;
       resetDockerRoutingCache();
@@ -249,7 +263,7 @@ async function checkDockerUpdates() {
       wslHostTimeoutMs: 5000,
     });
 
-    if (_getAutoCompactManager?.()?.isCompactionInProgress?.()) {
+    if (isCompactionInProgress()) {
       dockerMonitorConsecutiveFailures = 0;
       dockerApiUnreachableFailures = 0;
       resetDockerRoutingCache();

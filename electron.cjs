@@ -306,6 +306,8 @@ dockerMonitor.init({
   getMainWindow: () => mainWindow,
   getPythonManager: () => pythonManager,
   getAutoCompactManager: () => autoCompactManager,
+  getIsManualReclaimInProgress: () =>
+    ipcDocker.isReclaimInProgress?.() === true,
 });
 
 let mainWindow;
@@ -552,6 +554,9 @@ ipcDocker.init({
 ipcDeps.init({
   autoUpdater,
   openExternal,
+  getIsCompactionInProgress: () =>
+    autoCompactManager?.isCompactionInProgress?.() === true ||
+    ipcDocker.isReclaimInProgress?.() === true,
 });
 
 function handleSupabaseAuthStateChange(event, newSession) {

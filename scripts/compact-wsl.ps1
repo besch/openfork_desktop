@@ -132,7 +132,7 @@ try {
     Wait-ForVhdxReady -Name $DistroName -Path $vhdxPath
 
     if ($isSparse) {
-        Write-Host "Sparse VHDX — space already reclaimed by fstrim. Skipping DiskPart."
+        Write-Host "Sparse VHDX - space already reclaimed by fstrim. Skipping DiskPart."
         Write-Host "Successfully reclaimed disk space."
         exit 0
     }
@@ -146,7 +146,7 @@ compact vdisk
 detach vdisk
 exit
 "@ | Out-File -FilePath $tempFile -Encoding ascii
-        Write-Host "Running diskpart compaction (non-sparse VHDX — this may take several minutes)..."
+        Write-Host "Running diskpart compaction (non-sparse VHDX - this may take several minutes)..."
         $diskpartResult = Invoke-ElevatedDiskPart -ScriptPath $tempFile.FullName
     } finally {
         Remove-Item $tempFile -Force -ErrorAction SilentlyContinue

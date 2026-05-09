@@ -10,10 +10,12 @@ const engineInstall = require("./engine-install.cjs");
 
 let _autoUpdater;
 let _openExternal;
+let _getIsCompactionInProgress;
 
-function init({ autoUpdater, openExternal }) {
+function init({ autoUpdater, openExternal, getIsCompactionInProgress }) {
   _autoUpdater = autoUpdater;
   _openExternal = openExternal;
+  _getIsCompactionInProgress = getIsCompactionInProgress;
 }
 
 async function confirmSensitiveAction(event, { title, message, detail }) {
@@ -50,6 +52,14 @@ function register(ipcMain) {
 
   ipcMain.handle("deps:check-docker", async () => {
     try {
+      if (process.platform === "win32" && _getIsCompactionInProgress?.()) {
+        return {
+          installed: true,
+          running: false,
+          isNative: false,
+          error: "WSL_COMPACTING",
+        };
+      }
       const installState = engineInstall.getCurrentInstallState?.();
       if (process.platform === "win32" && installState?.active) {
         const installDriveMatch =
