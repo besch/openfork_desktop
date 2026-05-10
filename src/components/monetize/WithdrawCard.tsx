@@ -32,11 +32,6 @@ export function WithdrawCard({
   const pendingAmount = wallet?.pending_earnings_millicents ?? 0;
   const availableAmount = wallet?.available_to_withdraw_millicents ?? 0;
   const withdrawableAmount = getStripeWithdrawableMillicents(availableAmount);
-  const fractionalRemainder = Math.max(0, availableAmount - withdrawableAmount);
-  const withdrawShortfall = Math.max(
-    0,
-    MIN_WITHDRAWAL_MILLICENTS - withdrawableAmount,
-  );
   const withdrawProgress = Math.min(
     100,
     (withdrawableAmount / MIN_WITHDRAWAL_MILLICENTS) * 100,
