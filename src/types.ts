@@ -84,14 +84,19 @@ export const DEFAULT_ROUTING_CONFIG: ProviderRoutingConfig = {
 };
 
 export interface MonetizeWallet {
+  id?: string;
+  user_id?: string;
   pending_earnings_millicents: number;
   available_to_withdraw_millicents: number;
   total_earned_lifetime_millicents: number;
   total_withdrawn_millicents: number;
   prepaid_balance_millicents: number;
   total_purchased_millicents: number;
+  reserved_balance_millicents?: number;
+  stripe_account_id?: string | null;
   stripe_account_verified: boolean;
   stripe_details_submitted: boolean;
+  updated_at?: string;
 }
 
 export interface MonetizeConfig {

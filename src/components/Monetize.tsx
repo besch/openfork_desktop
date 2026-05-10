@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useClientStore } from "@/store";
 import { ProviderPricingCard } from "@/components/monetize/ProviderPricingCard";
 import { PayoutAccountCard } from "@/components/monetize/PayoutAccountCard";
@@ -6,26 +5,24 @@ import { RecentEarningsCard } from "@/components/monetize/RecentEarningsCard";
 import { WalletSummaryGrid } from "@/components/monetize/WalletSummaryGrid";
 import { WithdrawCard } from "@/components/monetize/WithdrawCard";
 import { useMonetizeTransactions } from "@/components/monetize/hooks/useMonetizeTransactions";
+import { useMonetizeWallet } from "@/components/monetize/hooks/useMonetizeWallet";
 import { useProviderRate } from "@/components/monetize/hooks/useProviderRate";
 import { useStripePayout } from "@/components/monetize/hooks/useStripePayout";
 import { useWithdrawal } from "@/components/monetize/hooks/useWithdrawal";
 
 export function Monetize() {
-  const { session, monetizeWallet, fetchMonetizeWallet } = useClientStore();
+  const session = useClientStore((state) => state.session);
   const userId = session?.user?.id;
 
+  const monetizeWallet = useMonetizeWallet(userId);
   const providerRate = useProviderRate();
   const transactions = useMonetizeTransactions(userId);
   const stripePayout = useStripePayout();
   const withdrawal = useWithdrawal({
-    wallet: monetizeWallet,
-    fetchMonetizeWallet,
+    wallet: monetizeWallet.wallet,
+    fetchMonetizeWallet: monetizeWallet.reloadWallet,
     reloadTransactions: transactions.reloadTransactions,
   });
-
-  useEffect(() => {
-    fetchMonetizeWallet();
-  }, [fetchMonetizeWallet]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -44,11 +41,16 @@ export function Monetize() {
         onResetRate={providerRate.handleResetRate}
       />
 
-      <WalletSummaryGrid wallet={monetizeWallet} />
+      <WalletSummaryGrid
+        wallet={monetizeWallet.wallet}
+        loadingWallet={monetizeWallet.loadingWallet}
+        walletError={monetizeWallet.walletError}
+        onReload={monetizeWallet.reloadWallet}
+      />
 
       <div className="grid md:grid-cols-2 gap-6">
         <PayoutAccountCard
-          wallet={monetizeWallet}
+          wallet={monetizeWallet.wallet}
           stripeLoading={stripePayout.stripeLoading}
           stripeError={stripePayout.stripeError}
           onStripeOnboard={stripePayout.handleStripeOnboard}
@@ -56,7 +58,7 @@ export function Monetize() {
         />
 
         <WithdrawCard
-          wallet={monetizeWallet}
+          wallet={monetizeWallet.wallet}
           rateInfo={providerRate.rateInfo}
           withdrawing={withdrawal.withdrawing}
           withdrawError={withdrawal.withdrawError}
