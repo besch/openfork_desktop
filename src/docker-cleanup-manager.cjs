@@ -17,7 +17,7 @@ const POLICY_IDLE_TIMEOUTS = {
  *
  * The actual `docker rmi` decisions are made by the Python DockerDownloadManager,
  * which has the full picture (active downloads, queued jobs, last-job timestamps,
- * disk-pressure tier). This class:
+ * idle image policy, disk-pressure tier). This class:
  *
  *   1. Keeps job-activity tracking so the Monetize tab can show recent jobs.
  *   2. Exposes the existing monetize idle-timeout configuration for backward
