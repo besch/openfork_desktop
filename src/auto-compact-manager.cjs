@@ -410,6 +410,9 @@ class AutoCompactManager {
     if (await this._hasCompactPowerShellProcess()) {
       return true;
     }
+    if (await this._hasDiskPartProcess()) {
+      return true;
+    }
     const wslDistro = await this.wslUtils?.getWslDistroName?.();
     if (!wslDistro) return false;
     const attachStatus = await this._probeWslAttachStatus(wslDistro);
@@ -418,9 +421,16 @@ class AutoCompactManager {
 
     // On app restart while DiskPart is still compacting, `wsl.exe -d ... true`
     // can time out instead of returning the usual sharing-violation text. Do
-    // not mark compaction complete from that ambiguous probe alone; fall back
-    // to a host-side VHDX lock check.
-    return await this._isWslVhdxLocked(wslDistro);
+    // not mark compaction complete from that ambiguous probe alone. First,
+    // distinguish a normal mounted WSL disk from a host-side DiskPart lock:
+    // a running distro keeps ext4.vhdx open even after compaction is done.
+    const distroState = await this._getWslDistroState(wslDistro);
+    if (distroState === "running") return false;
+
+    // With no compact-wsl/PowerShell/DiskPart process left, an ambiguous WSL
+    // probe should not keep the app blocked forever. Docker recovery can handle
+    // any remaining WSL service trouble after compaction is cleared.
+    return false;
   }
 
   _isProcessRunning(pid) {
@@ -489,37 +499,52 @@ class AutoCompactManager {
     });
   }
 
-  async _isWslVhdxLocked(wslDistro) {
-    const storagePath = await this.wslUtils?.resolveWslStoragePath?.(wslDistro);
-    if (!storagePath) return true;
+  _hasDiskPartProcess() {
+    return new Promise((resolve) => {
+      const command = [
+        "Get-CimInstance Win32_Process |",
+        "Where-Object { $_.ProcessId -ne $PID -and $_.Name -ieq 'diskpart.exe' } |",
+        "Select-Object -First 1 -ExpandProperty ProcessId",
+      ].join(" ");
 
-    const escapedPath = String(storagePath).replace(/'/g, "''");
-    const command = [
-      `$path = '${escapedPath}'`,
-      "if ((Test-Path -LiteralPath $path -PathType Container)) { $path = Join-Path $path 'ext4.vhdx' }",
-      "if (-not (Test-Path -LiteralPath $path)) { exit 2 }",
-      "$stream = $null",
-      "try {",
-      "  $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)",
-      "  'unlocked'",
-      "} catch {",
-      "  'locked'",
-      "} finally {",
-      "  if ($null -ne $stream) { $stream.Dispose() }",
-      "}",
-    ].join("; ");
-
-    return await new Promise((resolve) => {
       execFile(
         "powershell.exe",
         ["-NoProfile", "-NonInteractive", "-Command", command],
+        { windowsHide: true, timeout: 8000, encoding: "utf8" },
+        (error, stdout) => {
+          resolve(!error && stdout.toString().trim().length > 0);
+        },
+      );
+    });
+  }
+
+  _getWslDistroState(wslDistro) {
+    return new Promise((resolve) => {
+      execFile(
+        "wsl.exe",
+        ["--list", "--verbose"],
         { windowsHide: true, timeout: 5000, encoding: "utf8" },
         (error, stdout) => {
-          if (error) {
-            resolve(true);
+          if (error || !stdout) {
+            resolve(null);
             return;
           }
-          resolve(stdout.toString().trim().toLowerCase() !== "unlocked");
+
+          const targetName = String(wslDistro).toLowerCase();
+          const lines = stdout
+            .replace(/\0/g, "")
+            .split(/\r?\n/)
+            .map((line) => line.trim().replace(/^\*\s*/, ""))
+            .filter(Boolean);
+
+          for (const line of lines) {
+            const parts = line.split(/\s+/);
+            if (parts[0]?.toLowerCase() !== targetName) continue;
+            const state = parts[1]?.toLowerCase();
+            resolve(state || null);
+            return;
+          }
+          resolve(null);
         },
       );
     });
