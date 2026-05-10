@@ -302,7 +302,8 @@ dockerMonitor.init({
   getPythonManager: () => pythonManager,
   getAutoCompactManager: () => autoCompactManager,
   getIsManualReclaimInProgress: () =>
-    ipcDocker.isReclaimInProgress?.() === true,
+    ipcDocker.isReclaimInProgress?.() === true ||
+    ipcDocker.isEngineResetInProgress?.() === true,
   getIsPostReclaimSettling: () =>
     ipcDocker.isInPostReclaimSettleWindow?.() === true,
 });
@@ -546,6 +547,8 @@ ipcDocker.init({
   app,
   getMainWindow: () => mainWindow,
   getPythonManager: () => pythonManager,
+  getAutoCompactInProgress: () =>
+    autoCompactManager?.isCompactionInProgress?.() === true,
   onImageRemoved: (payload) => {
     if (cleanupManager) cleanupManager.notifyImageEvicted(payload);
     if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);
@@ -561,7 +564,8 @@ ipcDeps.init({
   getIsCompactionInProgress: () =>
     autoCompactManager?.isCompactionInProgress?.() === true ||
     ipcDocker.isReclaimInProgress?.() === true ||
-    ipcDocker.isInPostReclaimSettleWindow?.() === true,
+    ipcDocker.isInPostReclaimSettleWindow?.() === true ||
+    ipcDocker.isEngineResetInProgress?.() === true,
 });
 
 function handleSupabaseAuthStateChange(event, newSession) {

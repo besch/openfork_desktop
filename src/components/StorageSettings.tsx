@@ -320,6 +320,7 @@ export function StorageSettings({
       : 0;
   const reclaimInProgress = !!reclaimStatus?.inProgress;
   const reclaimBusy = isReclaiming || reclaimInProgress;
+  const autoCompactInProgress = autoCompact?.compactInProgress === true;
   const reclaimBusyLabel = reclaimStatus?.phase?.startsWith("recovering")
     ? "Reconnecting..."
     : reclaimBusy
@@ -523,7 +524,8 @@ export function StorageSettings({
                     loading ||
                     reclaimBusy ||
                     isRelocating ||
-                    isResettingEngine
+                    isResettingEngine ||
+                    autoCompactInProgress
                   }
                 >
                   {reclaimBusy ? (
@@ -558,7 +560,8 @@ export function StorageSettings({
                       loading ||
                       reclaimBusy ||
                       isRelocating ||
-                      isResettingEngine
+                      isResettingEngine ||
+                      autoCompactInProgress
                     }
                   >
                     {isResettingEngine ? (
@@ -965,12 +968,9 @@ export function StorageSettings({
   }
 
   async function handleResetEngine() {
-    if (isResettingEngine || reclaimInProgress) return;
-
-    const confirm = window.confirm(
-      "Reset OpenFork Ubuntu?\n\nThis is fast and will recreate the engine as a sparse VHDX, but it deletes all downloaded Docker images. Ubuntu, Docker, and NVIDIA tooling will be reinstalled automatically.",
-    );
-    if (!confirm) return;
+    if (isResettingEngine || reclaimInProgress || autoCompactInProgress) {
+      return;
+    }
 
     setIsResettingEngine(true);
     setResetProgress(null);
@@ -981,7 +981,9 @@ export function StorageSettings({
     try {
       const result = await window.electronAPI.resetEngine();
       if (!result.success) {
-        setError(result.message || result.error || "Engine reset failed");
+        if (result.error !== "ACTION_CANCELLED") {
+          setError(result.message || result.error || "Engine reset failed");
+        }
       } else {
         await refreshData();
         await refreshAutoCompactStatus();

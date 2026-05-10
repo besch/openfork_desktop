@@ -15,6 +15,7 @@ const engineInstall = require("./engine-install.cjs");
 let _app;
 let _getMainWindow;
 let _getPythonManager;
+let _getAutoCompactInProgress;
 let _onImageRemoved;
 let _onManualCompactCompleted;
 
@@ -22,12 +23,14 @@ function init({
   app,
   getMainWindow,
   getPythonManager,
+  getAutoCompactInProgress,
   onImageRemoved,
   onManualCompactCompleted,
 }) {
   _app = app;
   _getMainWindow = getMainWindow || null;
   _getPythonManager = getPythonManager;
+  _getAutoCompactInProgress = getAutoCompactInProgress || null;
   _onImageRemoved = onImageRemoved || null;
   _onManualCompactCompleted = onManualCompactCompleted || null;
 }
@@ -35,8 +38,10 @@ function init({
 let reclaimProcess = null;
 let reclaimCancelRequested = false;
 let reclaimWasMonitoring = false;
+let resetEngineInProgress = false;
 let lastSuccessfulReclaimTs = 0;
 const POST_RECLAIM_WSL_SETTLE_MS = 60 * 1000;
+const RESET_ENGINE_TIMEOUT_MS = 10 * 60 * 1000;
 const reclaimState = {
   inProgress: false,
   phase: undefined,
@@ -61,11 +66,30 @@ function isInPostReclaimSettleWindow() {
   );
 }
 
+function isEngineResetInProgress() {
+  return resetEngineInProgress === true;
+}
+
+function isAutoCompactInProgress() {
+  return _getAutoCompactInProgress?.() === true;
+}
+
 function notifyReclaimStatus(patch = {}) {
   Object.assign(reclaimState, patch);
   const mainWindow = _getMainWindow?.();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("docker:reclaim-status", getReclaimStatus());
+  }
+}
+
+function notifyInstallProgress({ line, phase, percent }) {
+  const mainWindow = _getMainWindow?.();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("deps:install-progress", {
+      line,
+      phase,
+      percent,
+    });
   }
 }
 
@@ -1045,6 +1069,24 @@ function register(ipcMain) {
       return { success: true, started: false, status: getReclaimStatus() };
     }
 
+    if (isEngineResetInProgress()) {
+      return {
+        success: false,
+        error: "RESET_RUNNING",
+        message:
+          "Wait for the engine reset to finish before reclaiming disk space.",
+      };
+    }
+
+    if (isAutoCompactInProgress()) {
+      return {
+        success: false,
+        error: "COMPACTION_RUNNING",
+        message:
+          "Wait for automatic disk compaction to finish before starting another compaction.",
+      };
+    }
+
     // Refuse to compact while the DGN client is running
     if (_getPythonManager()?.isRunning()) {
       return {
@@ -1193,6 +1235,23 @@ function register(ipcMain) {
       };
     }
 
+    if (isEngineResetInProgress()) {
+      return {
+        success: false,
+        error: "RESET_RUNNING",
+        message: "OpenFork Ubuntu reset is already in progress.",
+      };
+    }
+
+    if (isAutoCompactInProgress()) {
+      return {
+        success: false,
+        error: "COMPACTION_RUNNING",
+        message:
+          "Wait for disk compaction to finish before resetting the engine.",
+      };
+    }
+
     if (_getPythonManager()?.isRunning()) {
       return {
         success: false,
@@ -1201,15 +1260,27 @@ function register(ipcMain) {
       };
     }
 
-    const confirmed = await confirmSensitiveDockerAction({
-      title: "Reset OpenFork Engine",
-      message: "Reset the OpenFork WSL engine?",
-      detail:
-        "This unregisters the OpenFork Ubuntu distro and deletes its local Docker images before reinstalling it.",
-    });
-    if (!confirmed) return cancelledSensitiveAction();
+    resetEngineInProgress = true;
+    let wasMonitoring = false;
 
     try {
+      const confirmed = await confirmSensitiveDockerAction({
+        title: "Reset OpenFork Engine",
+        message: "Reset the OpenFork WSL engine?",
+        detail:
+          "This unregisters the OpenFork Ubuntu distro and deletes its local Docker images before reinstalling it.",
+      });
+      if (!confirmed) return cancelledSensitiveAction();
+
+      wasMonitoring = dockerMonitor.isDockerMonitoringActive();
+      dockerMonitor.stopDockerMonitoring();
+      dockerMonitor.resetDockerRoutingCache();
+      notifyInstallProgress({
+        line: "Preparing fast OpenFork Ubuntu reset...",
+        phase: "Preparing reset",
+        percent: 3,
+      });
+
       const wslDistro = await wslUtils.getWslDistroName();
       if (!wslDistro) {
         return {
@@ -1234,6 +1305,12 @@ function register(ipcMain) {
         );
       }
 
+      notifyInstallProgress({
+        line: `Deleting existing ${wslDistro} distro and cached Docker images...`,
+        phase: "Deleting old engine",
+        percent: 8,
+      });
+
       const resetArgs = [
         "-NoProfile",
         "-ExecutionPolicy",
@@ -1250,12 +1327,17 @@ function register(ipcMain) {
         execFile(
           "powershell.exe",
           resetArgs,
-          { windowsHide: true, timeout: 120000, encoding: "utf8" },
+          {
+            windowsHide: true,
+            timeout: RESET_ENGINE_TIMEOUT_MS,
+            encoding: "utf8",
+          },
           (error, stdout, stderr) => {
             if (error) {
-              const detail = (stderr || stdout || error.message)
-                .toString()
-                .trim();
+              const detail =
+                error.killed && error.signal === "SIGTERM"
+                  ? "Timed out while deleting the old OpenFork Ubuntu distro. WSL may still be finishing the unregister operation; wait a minute and try again."
+                  : (stderr || stdout || error.message).toString().trim();
               resolve({
                 success: false,
                 error: detail || error.message,
@@ -1276,7 +1358,14 @@ function register(ipcMain) {
       }
 
       wslUtils.resetWslDistro();
+      delete process.env.OPENFORK_WSL_DISTRO;
+      delete process.env.OPENFORK_DOCKER_HOST;
       dockerMonitor.resetDockerRoutingCache();
+      notifyInstallProgress({
+        line: "Old engine removed. Reinstalling OpenFork Ubuntu...",
+        phase: "Reinstalling Ubuntu",
+        percent: 18,
+      });
 
       const installResult =
         await engineInstall.handleInstallEngine(installPath);
@@ -1297,10 +1386,21 @@ function register(ipcMain) {
           syncError.message,
         );
       }
+      notifyInstallProgress({
+        line: "OpenFork Ubuntu reset complete.",
+        phase: "Setup complete!",
+        percent: 100,
+      });
       return { success: true };
     } catch (error) {
       console.error("Error during docker:reset-engine:", error);
       return { success: false, error: error.message, message: error.message };
+    } finally {
+      resetEngineInProgress = false;
+      dockerMonitor.resetDockerRoutingCache();
+      if (wasMonitoring) {
+        dockerMonitor.startDockerMonitoring();
+      }
     }
   });
 
@@ -1425,4 +1525,5 @@ module.exports = {
   getReclaimStatus,
   isReclaimInProgress,
   isInPostReclaimSettleWindow,
+  isEngineResetInProgress,
 };
