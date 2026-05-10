@@ -5,10 +5,10 @@ const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
 // (services/docker_download_manager.py), which performs LRU and disk-pressure
 // driven cleanup. These values are kept here only for monetize-tab UX defaults.
 const POLICY_IDLE_TIMEOUTS = {
-  all: 120,
-  project: 240,
-  users: 240,
-  monetize: 90,
+  monetize: 240,
+  all: 360,
+  project: 720,
+  users: 720,
   mine: null,
 };
 
