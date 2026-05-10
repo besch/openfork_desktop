@@ -15,6 +15,19 @@ export default defineConfig({
   base: "./", // Ensure assets are loaded correctly in Electron
   build: {
     outDir: "dist", // Output directory for production build
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("recharts")) return "vendor-charts";
+          if (id.includes("@radix-ui")) return "vendor-radix";
+          if (id.includes("@supabase")) return "vendor-supabase";
+          if (id.includes("framer-motion")) return "vendor-motion";
+          if (id.includes("lucide-react")) return "vendor-icons";
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     port: 5173, // Must match the port in electron.cjs

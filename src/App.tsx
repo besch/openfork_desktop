@@ -1,4 +1,6 @@
 import {
+  Suspense,
+  lazy,
   useState,
   useEffect,
   useRef,
@@ -11,17 +13,11 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/supabase";
 import type { DependencyStatus } from "./types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dashboard } from "@/components/Dashboard";
-import { LogViewer } from "@/components/LogViewer";
 import { Auth } from "@/components/Auth";
-import { Chart } from "@/components/Chart";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
-import { DockerManagement } from "@/components/DockerManagement";
 import { DependencySetup } from "@/components/DependencySetup";
 import { UpdateNotification } from "@/components/UpdateNotification";
 import { CudaUpdateNotification } from "@/components/CudaUpdateNotification";
-import { JobHistory } from "@/components/JobHistory";
-import { Monetize } from "@/components/Monetize";
 import { SystemNotifications } from "@/components/SystemNotifications";
 import { Loader } from "@/components/ui/loader";
 import {
@@ -41,6 +37,43 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "./components/ui/button";
+
+const Dashboard = lazy(() =>
+  import("@/components/Dashboard").then((module) => ({
+    default: module.Dashboard,
+  })),
+);
+const LogViewer = lazy(() =>
+  import("@/components/LogViewer").then((module) => ({
+    default: module.LogViewer,
+  })),
+);
+const Chart = lazy(() =>
+  import("@/components/Chart").then((module) => ({ default: module.Chart })),
+);
+const DockerManagement = lazy(() =>
+  import("@/components/DockerManagement").then((module) => ({
+    default: module.DockerManagement,
+  })),
+);
+const JobHistory = lazy(() =>
+  import("@/components/JobHistory").then((module) => ({
+    default: module.JobHistory,
+  })),
+);
+const Monetize = lazy(() =>
+  import("@/components/Monetize").then((module) => ({
+    default: module.Monetize,
+  })),
+);
+
+function TabContentLoader() {
+  return (
+    <div className="flex h-64 items-center justify-center rounded-lg border border-white/10 bg-surface/30">
+      <Loader size="lg" variant="primary" />
+    </div>
+  );
+}
 
 // Unified Tab Trigger Style
 const TabTrigger = memo(
@@ -441,42 +474,44 @@ function App() {
             </TabsList>
 
             <div className="mt-6 transition-all duration-500">
-              <TabsContent
-                value="dashboard"
-                className="mt-0 focus-visible:outline-none"
-              >
-                <Dashboard />
-              </TabsContent>
-              <TabsContent
-                value="chart"
-                className="mt-0 focus-visible:outline-none"
-              >
-                <Chart />
-              </TabsContent>
-              <TabsContent
-                value="logs"
-                className="mt-0 focus-visible:outline-none"
-              >
-                <LogViewer />
-              </TabsContent>
-              <TabsContent
-                value="docker"
-                className="mt-0 focus-visible:outline-none"
-              >
-                <DockerManagement />
-              </TabsContent>
-              <TabsContent
-                value="history"
-                className="mt-0 focus-visible:outline-none"
-              >
-                <JobHistory />
-              </TabsContent>
-              <TabsContent
-                value="monetize"
-                className="mt-0 focus-visible:outline-none"
-              >
-                <Monetize />
-              </TabsContent>
+              <Suspense fallback={<TabContentLoader />}>
+                <TabsContent
+                  value="dashboard"
+                  className="mt-0 focus-visible:outline-none"
+                >
+                  <Dashboard />
+                </TabsContent>
+                <TabsContent
+                  value="chart"
+                  className="mt-0 focus-visible:outline-none"
+                >
+                  <Chart />
+                </TabsContent>
+                <TabsContent
+                  value="logs"
+                  className="mt-0 focus-visible:outline-none"
+                >
+                  <LogViewer />
+                </TabsContent>
+                <TabsContent
+                  value="docker"
+                  className="mt-0 focus-visible:outline-none"
+                >
+                  <DockerManagement />
+                </TabsContent>
+                <TabsContent
+                  value="history"
+                  className="mt-0 focus-visible:outline-none"
+                >
+                  <JobHistory />
+                </TabsContent>
+                <TabsContent
+                  value="monetize"
+                  className="mt-0 focus-visible:outline-none"
+                >
+                  <Monetize />
+                </TabsContent>
+              </Suspense>
             </div>
           </Tabs>
         </div>
