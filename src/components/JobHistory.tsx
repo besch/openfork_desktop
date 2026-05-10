@@ -103,7 +103,7 @@ const StatusBadge = memo(({ status }: { status: string }) => {
       className: "border-merged-status bg-merged-status/70 text-white-status",
     },
     processing: {
-      icon: <Loader size="xs" className="text-merged-status" />,
+      icon: <RefreshCw className="h-3 w-3 animate-spin text-white" />,
       className: "border-merged-status bg-merged-status/70 text-white-status",
     },
     pending: {
@@ -118,7 +118,7 @@ const StatusBadge = memo(({ status }: { status: string }) => {
   return (
     <Badge
       variant="outline"
-      className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all duration-300 ${className}`}
+      className={`flex h-5 items-center gap-1.5 px-3 py-0 text-[10px] font-black uppercase leading-none tracking-wider rounded-lg transition-all duration-300 ${className}`}
     >
       {icon}
       {status}
