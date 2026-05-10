@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -50,6 +50,10 @@ export const DockerManagement = memo(() => {
     engine_file_path: string | null;
   } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const lastAutoCompactStatusRef = useRef<{
+    compactInProgress?: boolean;
+    phase?: string;
+  } | null>(null);
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
@@ -134,22 +138,30 @@ export const DockerManagement = memo(() => {
 
       const nextDockerStatus = await window.electronAPI.checkDocker();
 
-      // Always attempt to list containers — the listing command runs inside WSL
-      // where Docker is reachable even when the Windows→WSL TCP API (port 2375)
-      // is flaky. Only skip image listing when the status check says Docker is
-      // down because image listing depends on the same routing.
-      const [containersResult, diskResult] = await Promise.all([
+      // Always attempt to list containers/images via WSL. The Windows→WSL TCP
+      // API can be flaky even while the in-distro Docker CLI can still report
+      // the real state.
+      const [containersResult, diskResult, imagesResult] = await Promise.all([
         window.electronAPI.listDockerContainers(),
         window.electronAPI.getDiskSpace(),
+        window.electronAPI.listDockerImages(),
       ]);
 
       const hasRunningContainers =
         containersResult.success &&
         containersResult.data &&
         containersResult.data.length > 0;
+      const hasListedImages =
+        imagesResult.success &&
+        imagesResult.data &&
+        imagesResult.data.length > 0;
 
-      if (!nextDockerStatus.running && !hasRunningContainers) {
-        setImages([]);
+      if (!nextDockerStatus.running && !hasRunningContainers && !hasListedImages) {
+        if (imagesResult.success && imagesResult.data) {
+          setImages(imagesResult.data);
+        } else {
+          setImages([]);
+        }
         setContainers([]);
         useClientStore.getState().setDockerContainers([]);
         if (diskResult.success) setDiskSpace(diskResult.data);
@@ -167,15 +179,10 @@ export const DockerManagement = memo(() => {
         setDiskSpace(diskResult.data);
       }
 
-      if (nextDockerStatus.running) {
-        const imagesResult = await window.electronAPI.listDockerImages();
-        if (imagesResult.success && imagesResult.data) {
-          setImages(imagesResult.data);
-        } else {
-          setError(imagesResult.error || "Failed to fetch images");
-        }
+      if (imagesResult.success && imagesResult.data) {
+        setImages(imagesResult.data);
       } else {
-        setImages([]);
+        setError(imagesResult.error || "Failed to fetch images");
       }
     } catch (err) {
       setError(
@@ -217,8 +224,19 @@ export const DockerManagement = memo(() => {
 
   // Refresh the Docker tab when app-wide compaction completes.
   useEffect(() => {
-    const cleanup = window.electronAPI.onAutoCompactStatus((status) => {
-      if (status.phase === "completed") {
+    const cleanup = window.electronAPI.onAutoCompactStatus((nextStatus) => {
+      const previousStatus = lastAutoCompactStatusRef.current;
+      lastAutoCompactStatusRef.current = {
+        compactInProgress: nextStatus.compactInProgress,
+        phase: nextStatus.phase,
+      };
+
+      const completedAfterActiveCompaction =
+        nextStatus.phase === "completed" &&
+        (previousStatus?.compactInProgress ||
+          (previousStatus !== null && previousStatus.phase !== "completed"));
+
+      if (completedAfterActiveCompaction) {
         fetchData();
       }
     });

@@ -18,6 +18,7 @@ let _getPythonManager;
 let _getAutoCompactInProgress;
 let _onImageRemoved;
 let _onManualCompactCompleted;
+let _onStorageObserved;
 
 function init({
   app,
@@ -26,6 +27,7 @@ function init({
   getAutoCompactInProgress,
   onImageRemoved,
   onManualCompactCompleted,
+  onStorageObserved,
 }) {
   _app = app;
   _getMainWindow = getMainWindow || null;
@@ -33,6 +35,7 @@ function init({
   _getAutoCompactInProgress = getAutoCompactInProgress || null;
   _onImageRemoved = onImageRemoved || null;
   _onManualCompactCompleted = onManualCompactCompleted || null;
+  _onStorageObserved = onStorageObserved || null;
 }
 
 let reclaimProcess = null;
@@ -40,8 +43,12 @@ let reclaimCancelRequested = false;
 let reclaimWasMonitoring = false;
 let resetEngineInProgress = false;
 let lastSuccessfulReclaimTs = 0;
+let cachedOpenForkImageUsage = null;
+let cachedOpenForkImageUsageTs = 0;
+let openForkImageUsagePromise = null;
 const POST_RECLAIM_WSL_SETTLE_MS = 60 * 1000;
 const RESET_ENGINE_TIMEOUT_MS = 10 * 60 * 1000;
+const IMAGE_CACHE_USAGE_TTL_MS = 60 * 1000;
 const reclaimState = {
   inProgress: false,
   phase: undefined,
@@ -266,11 +273,183 @@ async function getDockerImageSizeBytes(imageId) {
   }
 }
 
+function parseDockerSizeToBytes(value) {
+  if (typeof value !== "string") return 0;
+  const cleaned = value.replace(/\([^)]*\)/g, "").trim();
+  const match = cleaned.match(/^([\d.]+)\s*([kmgtp]?i?b|b)?$/i);
+  if (!match) return 0;
+  const amount = Number.parseFloat(match[1]);
+  if (!Number.isFinite(amount)) return 0;
+
+  const unit = (match[2] || "B").toLowerCase();
+  const multipliers = {
+    b: 1,
+    kb: 1024,
+    kib: 1024,
+    mb: 1024 ** 2,
+    mib: 1024 ** 2,
+    gb: 1024 ** 3,
+    gib: 1024 ** 3,
+    tb: 1024 ** 4,
+    tib: 1024 ** 4,
+    pb: 1024 ** 5,
+    pib: 1024 ** 5,
+  };
+  return Math.round(amount * (multipliers[unit] || 1));
+}
+
+async function getDockerSystemDiskUsage() {
+  const output = await dockerEngine.execDockerCommand(
+    'docker system df --format "{{json .}}"',
+  );
+  const usage = {
+    systemImageBytes: 0,
+    buildCacheBytes: 0,
+    buildCacheReclaimableBytes: 0,
+    buildCacheCount: 0,
+  };
+
+  for (const line of output.split("\n").filter(Boolean)) {
+    try {
+      const row = JSON.parse(line);
+      const type = String(row.Type || "").toLowerCase();
+      if (type === "images") {
+        usage.systemImageBytes = parseDockerSizeToBytes(row.Size);
+      } else if (type === "build cache") {
+        usage.buildCacheBytes = parseDockerSizeToBytes(row.Size);
+        usage.buildCacheReclaimableBytes = parseDockerSizeToBytes(
+          row.Reclaimable,
+        );
+        usage.buildCacheCount = Number.parseInt(row.TotalCount || "0", 10) || 0;
+      }
+    } catch {
+      // Ignore malformed rows; Docker may print warnings before JSON on bad days.
+    }
+  }
+
+  return usage;
+}
+
+function isOpenForkImageName(fullName) {
+  return (
+    typeof fullName === "string" &&
+    fullName.toLowerCase().includes("openfork")
+  );
+}
+
+async function getOpenForkImageCacheUsage({ forceRefresh = false } = {}) {
+  const now = Date.now();
+  if (
+    !forceRefresh &&
+    cachedOpenForkImageUsage &&
+    now - cachedOpenForkImageUsageTs < IMAGE_CACHE_USAGE_TTL_MS
+  ) {
+    return cachedOpenForkImageUsage;
+  }
+  if (!forceRefresh && openForkImageUsagePromise) {
+    return openForkImageUsagePromise;
+  }
+
+  openForkImageUsagePromise = getOpenForkImageCacheUsageUncached()
+    .then((usage) => {
+      cachedOpenForkImageUsage = usage;
+      cachedOpenForkImageUsageTs = Date.now();
+      return usage;
+    })
+    .finally(() => {
+      openForkImageUsagePromise = null;
+    });
+  return openForkImageUsagePromise;
+}
+
+async function getOpenForkImageCacheUsageUncached() {
+  const routingStatus = await dockerMonitor.ensureDockerRouting();
+  const routingKnownRunning = routingStatus?.running === true;
+  if (
+    routingStatus?.error === "WSL_COMPACTING" ||
+    routingStatus?.error === "WSL_VHDX_LOCKED"
+  ) {
+    return { totalBytes: 0, imageCount: 0, known: false };
+  }
+
+  const systemUsage = await getDockerSystemDiskUsage();
+  const listOutput = await dockerEngine.execDockerCommand(
+    'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
+  );
+  if (!listOutput) {
+    return {
+      totalBytes: 0,
+      imageCount: 0,
+      ...systemUsage,
+      known: routingKnownRunning,
+    };
+  }
+
+  const uniqueImages = new Map();
+  for (const line of listOutput.split("\n").filter(Boolean)) {
+    const [id, fullName] = line.split("|");
+    if (id && isOpenForkImageName(fullName) && dockerEngine.isValidDockerId(id)) {
+      uniqueImages.set(id, fullName);
+    }
+  }
+
+  let totalBytes = 0;
+  for (const id of uniqueImages.keys()) {
+    totalBytes += await getDockerImageSizeBytes(id);
+  }
+
+  return {
+    totalBytes,
+    imageCount: uniqueImages.size,
+    ...systemUsage,
+    known: true,
+  };
+}
+
+function resetOpenForkImageUsageCache() {
+  cachedOpenForkImageUsage = null;
+  cachedOpenForkImageUsageTs = 0;
+  openForkImageUsagePromise = null;
+}
+
+async function pruneDockerBuildCache({ maxAgeHours = null } = {}) {
+  const before = await getDockerSystemDiskUsage();
+  const filter =
+    Number.isFinite(maxAgeHours) && maxAgeHours > 0
+      ? ` --filter until=${Math.floor(maxAgeHours)}h`
+      : "";
+
+  await dockerEngine.execDockerCommand(
+    `docker builder prune --force --all${filter}`,
+  );
+
+  resetOpenForkImageUsageCache();
+  const after = await getDockerSystemDiskUsage();
+  return {
+    before,
+    after,
+    freedBytes: Math.max(
+      0,
+      before.buildCacheReclaimableBytes - after.buildCacheReclaimableBytes,
+    ),
+  };
+}
+
+function notifyStorageObserved(payload) {
+  if (typeof _onStorageObserved !== "function") return;
+  try {
+    _onStorageObserved(payload);
+  } catch (error) {
+    console.warn("Storage observation callback failed:", error.message);
+  }
+}
+
 function notifyImagesRemoved({
   image = null,
   freedBytes = 0,
   reason = "manual_delete",
 }) {
+  resetOpenForkImageUsageCache();
   const payload = {
     service_type: null,
     image,
@@ -918,6 +1097,38 @@ function register(ipcMain) {
           }
         }
         wslVersion = await getWslVersionSummary();
+
+        if (engineFileBytes !== null) {
+          try {
+            const imageUsage = await getOpenForkImageCacheUsage();
+            notifyStorageObserved({
+              engineFileBytes,
+              engineFilePath,
+              hostFreeBytes: freeBytes,
+              imageCacheBytes: imageUsage.known ? imageUsage.totalBytes : null,
+              imageCacheCount: imageUsage.known ? imageUsage.imageCount : null,
+              buildCacheBytes: imageUsage.known
+                ? imageUsage.buildCacheBytes
+                : null,
+              buildCacheReclaimableBytes: imageUsage.known
+                ? imageUsage.buildCacheReclaimableBytes
+                : null,
+              buildCacheCount: imageUsage.known
+                ? imageUsage.buildCacheCount
+                : null,
+            });
+          } catch (usageError) {
+            notifyStorageObserved({
+              engineFileBytes,
+              engineFilePath,
+              hostFreeBytes: freeBytes,
+            });
+            console.warn(
+              "Could not include image usage in storage observation:",
+              usageError.message,
+            );
+          }
+        }
       } else {
         let targetPath = "/";
         if (process.platform === "linux") {
@@ -997,51 +1208,50 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:get-image-cache-usage", async () => {
     try {
-      const routingStatus = await dockerMonitor.ensureDockerRouting();
-      if (
-        routingStatus?.error === "WSL_COMPACTING" ||
-        routingStatus?.error === "WSL_VHDX_LOCKED"
-      ) {
-        return {
-          success: true,
-          data: { total_bytes: 0, total_gb: "0.0", image_count: 0 },
-        };
-      }
-
-      const listOutput = await dockerEngine.execDockerCommand(
-        'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
-      );
-      if (!listOutput) {
-        return {
-          success: true,
-          data: { total_bytes: 0, total_gb: "0.0", image_count: 0 },
-        };
-      }
-
-      const uniqueImages = new Map();
-      for (const line of listOutput.split("\n").filter(Boolean)) {
-        const [id, fullName] = line.split("|");
-        if (
-          id &&
-          fullName &&
-          fullName.toLowerCase().includes("openfork") &&
-          dockerEngine.isValidDockerId(id)
-        ) {
-          uniqueImages.set(id, fullName);
-        }
-      }
-
-      let totalBytes = 0;
-      for (const id of uniqueImages.keys()) {
-        totalBytes += await getDockerImageSizeBytes(id);
-      }
+      const imageUsage = await getOpenForkImageCacheUsage();
+      notifyStorageObserved({
+        imageCacheBytes: imageUsage.known ? imageUsage.totalBytes : null,
+        imageCacheCount: imageUsage.known ? imageUsage.imageCount : null,
+        buildCacheBytes: imageUsage.known ? imageUsage.buildCacheBytes : null,
+        buildCacheReclaimableBytes: imageUsage.known
+          ? imageUsage.buildCacheReclaimableBytes
+          : null,
+        buildCacheCount: imageUsage.known ? imageUsage.buildCacheCount : null,
+      });
 
       return {
         success: true,
         data: {
-          total_bytes: totalBytes,
-          total_gb: (totalBytes / 1024 ** 3).toFixed(1),
-          image_count: uniqueImages.size,
+          total_bytes: imageUsage.known ? imageUsage.totalBytes : 0,
+          total_gb: (
+            (imageUsage.known ? imageUsage.totalBytes : 0) /
+            1024 ** 3
+          ).toFixed(1),
+          image_count: imageUsage.known ? imageUsage.imageCount : 0,
+          build_cache_bytes: imageUsage.known
+            ? imageUsage.buildCacheBytes
+            : 0,
+          build_cache_gb: (
+            (imageUsage.known ? imageUsage.buildCacheBytes : 0) /
+            1024 ** 3
+          ).toFixed(1),
+          build_cache_reclaimable_bytes: imageUsage.known
+            ? imageUsage.buildCacheReclaimableBytes
+            : 0,
+          build_cache_reclaimable_gb: (
+            (imageUsage.known ? imageUsage.buildCacheReclaimableBytes : 0) /
+            1024 ** 3
+          ).toFixed(1),
+          build_cache_count: imageUsage.known
+            ? imageUsage.buildCacheCount
+            : 0,
+          docker_system_image_bytes: imageUsage.known
+            ? imageUsage.systemImageBytes
+            : 0,
+          docker_system_image_gb: (
+            (imageUsage.known ? imageUsage.systemImageBytes : 0) /
+            1024 ** 3
+          ).toFixed(1),
         },
       };
     } catch (error) {
@@ -1114,6 +1324,35 @@ function register(ipcMain) {
           error: "WSL_DISTRO_MISSING",
           message: "The OpenFork Ubuntu distro could not be found.",
         };
+      }
+
+      notifyReclaimStatus({
+        inProgress: true,
+        phase: "pruning_cache",
+        error: undefined,
+        startedTs: Date.now(),
+        pid: null,
+        cancelRequested: false,
+      });
+
+      try {
+        const pruneResult = await pruneDockerBuildCache();
+        notifyStorageObserved({
+          buildCacheBytes: pruneResult.after.buildCacheBytes,
+          buildCacheReclaimableBytes:
+            pruneResult.after.buildCacheReclaimableBytes,
+          buildCacheCount: pruneResult.after.buildCacheCount,
+        });
+        if (pruneResult.freedBytes > 0) {
+          console.log(
+            `Pruned ${(pruneResult.freedBytes / 1024 ** 3).toFixed(1)} GB of Docker build cache before WSL compaction.`,
+          );
+        }
+      } catch (pruneError) {
+        console.warn(
+          "Could not prune Docker build cache before WSL compaction:",
+          pruneError?.message || pruneError,
+        );
       }
 
       notifyReclaimStatus({

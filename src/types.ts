@@ -135,6 +135,14 @@ export interface AutoCompactStatus {
   hostFreeGateBytes?: number;
   hostFreeBytes?: number | null;
   deferredByHostFreeSpace?: boolean;
+  engineFileBytes?: number | null;
+  imageCacheBytes?: number | null;
+  imageCacheCount?: number | null;
+  buildCacheBytes?: number | null;
+  buildCacheReclaimableBytes?: number | null;
+  buildCacheCount?: number | null;
+  estimatedReclaimableBytes?: number;
+  staleVhdxCompactPending?: boolean;
   lastCompactTs: number;
   compactInProgress: boolean;
   platformSupported: boolean;

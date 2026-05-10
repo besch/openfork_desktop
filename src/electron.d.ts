@@ -216,6 +216,13 @@ interface ElectronAPI {
       total_bytes: number;
       total_gb: string;
       image_count: number;
+      build_cache_bytes: number;
+      build_cache_gb: string;
+      build_cache_reclaimable_bytes: number;
+      build_cache_reclaimable_gb: string;
+      build_cache_count: number;
+      docker_system_image_bytes: number;
+      docker_system_image_gb: string;
     };
   }>;
 

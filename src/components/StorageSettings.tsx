@@ -57,6 +57,13 @@ export function StorageSettings({
     total_bytes: number;
     total_gb: string;
     image_count: number;
+    build_cache_bytes: number;
+    build_cache_gb: string;
+    build_cache_reclaimable_bytes: number;
+    build_cache_reclaimable_gb: string;
+    build_cache_count: number;
+    docker_system_image_bytes: number;
+    docker_system_image_gb: string;
   } | null>(null);
   const [selectedDrive, setSelectedDrive] = useState<string>("");
   const [isReclaiming, setIsReclaiming] = useState(false);
@@ -323,6 +330,8 @@ export function StorageSettings({
   const autoCompactInProgress = autoCompact?.compactInProgress === true;
   const reclaimBusyLabel = reclaimStatus?.phase?.startsWith("recovering")
     ? "Reconnecting..."
+    : reclaimStatus?.phase === "pruning_cache"
+      ? "Cleaning cache..."
     : reclaimBusy
       ? "Reclaiming..."
       : "Reclaim Space (Slow, Keeps Images)";
@@ -457,9 +466,10 @@ export function StorageSettings({
         {isWindows && autoCompact?.platformSupported && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <p className={helperTextClassName}>
-              Auto-compact runs only after {autoCompactThresholdGb} GB of images
+              Auto-compact runs after {autoCompactThresholdGb} GB of images
               have been evicted and the WSL drive has less than{" "}
-              {autoCompactHostGateGb} GB free. Currently{" "}
+              {autoCompactHostGateGb} GB free. It can also compact a bloated
+              Ubuntu disk when image usage is low. Currently{" "}
               {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since
               last compaction
               {autoCompactHostFreeGb
@@ -728,7 +738,7 @@ export function StorageSettings({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
                   Limit
@@ -747,13 +757,36 @@ export function StorageSettings({
               </div>
               <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                  Images
+                  Image Count
                 </p>
                 <p className="mt-1 text-xl font-black text-white tabular-nums">
                   {imageCacheUsage ? imageCacheUsage.image_count : "--"}
                 </p>
               </div>
+              <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
+                  Build Cache
+                </p>
+                <p className="mt-1 text-xl font-black text-white tabular-nums">
+                  {imageCacheUsage
+                    ? `${imageCacheUsage.build_cache_reclaimable_gb} GB`
+                    : "--"}
+                </p>
+              </div>
             </div>
+
+            {imageCacheUsage &&
+              imageCacheUsage.build_cache_reclaimable_bytes > 1024 ** 3 && (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                  <Info className="h-3 w-3 text-amber-300 shrink-0" />
+                  <span className="text-[11px] font-semibold leading-relaxed text-amber-200">
+                    Docker reports{" "}
+                    {imageCacheUsage.build_cache_reclaimable_gb} GB of
+                    reclaimable build cache. Reclaim Space clears this cache
+                    before compacting the Ubuntu disk.
+                  </span>
+                </div>
+              )}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">

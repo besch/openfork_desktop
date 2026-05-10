@@ -556,6 +556,9 @@ ipcDocker.init({
   onManualCompactCompleted: () => {
     if (autoCompactManager) autoCompactManager.notifyManualCompactCompleted();
   },
+  onStorageObserved: (payload) => {
+    if (autoCompactManager) autoCompactManager.notifyStorageObserved(payload);
+  },
 });
 
 ipcDeps.init({

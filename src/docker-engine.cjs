@@ -10,10 +10,18 @@ const WINDOWS_DOCKER_API_PORT = 2375;
 const WSL_DOCKER_CHECK_TIMEOUT_MS = 30000;
 const WSL_LINUX_PATH =
   "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+const DOCKER_STATUS_CACHE_TTL_MS = 5000;
+const WSL_DAEMON_HARDEN_CHECK_TTL_MS = 5 * 60 * 1000;
 
 let _getMainWindow;
 let _getInstallState;
 let _onWslVhdxLocked;
+let _resolveDockerStatusPromise = null;
+let _cachedDockerStatus = null;
+let _cachedDockerStatusTs = 0;
+let _dockerStatusCacheGeneration = 0;
+let _lastHardenedWslDistro = null;
+let _lastHardenCheckTs = 0;
 // On Linux, set when the user is in the docker group but hasn't re-logged in yet.
 // Commands are then wrapped with `sg docker -c "..."` to pick up the group mid-session.
 let useSgDocker = false;
@@ -299,6 +307,13 @@ function runDockerCheckCommand(
         { timeout: timeoutMs ?? WSL_DOCKER_CHECK_TIMEOUT_MS, encoding: "utf8" },
         (error, stdout, stderr) => {
           if (error) {
+            // Docker 29 can print the insecure-TCP deprecation notice and exit
+            // non-zero while still returning complete `docker info` data. Treat
+            // that as usable so status polling does not hammer WSL with retries.
+            if (isDockerInfoCommand(cmd) && looksLikeDockerInfoOutput(stdout)) {
+              resolve({ success: true, output: stdout.trim() });
+              return;
+            }
             // WSL prints SHARING_VIOLATION to stdout, not stderr — combine all
             // three sources so the VHDX-locked case is correctly classified.
             const errorCode = classifyDockerCheckError(
@@ -359,8 +374,34 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isDockerInfoCommand(cmd = "") {
+  return /^docker\s+info(?:\s|$)/.test(String(cmd).trim());
+}
+
+function looksLikeDockerInfoOutput(output = "") {
+  const text = String(output || "");
+  return /\bServer:\s*$/im.test(text) && /\bDocker Root Dir:/i.test(text);
+}
+
+function resetDockerStatusCache() {
+  _dockerStatusCacheGeneration++;
+  _cachedDockerStatus = null;
+  _cachedDockerStatusTs = 0;
+  _resolveDockerStatusPromise = null;
+}
+
 async function hardenWslDockerDaemonBinding(wslDistro) {
   if (process.platform !== "win32" || !wslDistro) return;
+
+  const now = Date.now();
+  if (
+    _lastHardenedWslDistro === wslDistro &&
+    now - _lastHardenCheckTs < WSL_DAEMON_HARDEN_CHECK_TTL_MS
+  ) {
+    return;
+  }
+  _lastHardenedWslDistro = wslDistro;
+  _lastHardenCheckTs = now;
 
   const hardenCommand = [
     "if [ -f /etc/openfork-managed ] && grep -q 'tcp://0.0.0.0:2375' /etc/docker/daemon.json 2>/dev/null; then",
@@ -499,6 +540,7 @@ async function restartWslDockerEngine({
     }
   };
 
+  resetDockerStatusCache();
   delete process.env.OPENFORK_DOCKER_HOST;
   process.env.OPENFORK_WSL_DISTRO = distro;
 
@@ -551,6 +593,7 @@ async function restartWslDockerEngine({
 
   const deadline = Date.now() + waitTimeoutMs;
   let lastStatus = null;
+  resetDockerStatusCache();
   while (Date.now() < deadline) {
     lastStatus = await resolveDockerStatus({
       allowNativeStart: false,
@@ -802,7 +845,7 @@ function buildWslStatus(wsl) {
   };
 }
 
-async function resolveDockerStatus({
+async function resolveDockerStatusUncached({
   allowNativeStart = true,
   wslHostTimeoutMs = 15000,
 } = {}) {
@@ -874,6 +917,36 @@ async function resolveDockerStatus({
   });
 }
 
+async function resolveDockerStatus(options = {}) {
+  const now = Date.now();
+  if (
+    _cachedDockerStatus &&
+    now - _cachedDockerStatusTs < DOCKER_STATUS_CACHE_TTL_MS
+  ) {
+    return _cachedDockerStatus;
+  }
+  if (_resolveDockerStatusPromise) {
+    return _resolveDockerStatusPromise;
+  }
+
+  const generation = _dockerStatusCacheGeneration;
+  _resolveDockerStatusPromise = resolveDockerStatusUncached(options)
+    .then((status) => {
+      if (generation === _dockerStatusCacheGeneration) {
+        _cachedDockerStatus = status;
+        _cachedDockerStatusTs = Date.now();
+      }
+      return status;
+    })
+    .finally(() => {
+      if (generation === _dockerStatusCacheGeneration) {
+        _resolveDockerStatusPromise = null;
+      }
+    });
+
+  return _resolveDockerStatusPromise;
+}
+
 module.exports = {
   init,
   isValidDockerId,
@@ -888,5 +961,6 @@ module.exports = {
   restartWslDockerEngine,
   checkWslDockerStatus,
   resolveDockerStatus,
+  resetDockerStatusCache,
   getActiveWindowsInstallStatus,
 };

@@ -28,17 +28,18 @@ let lastContainersJson = "";
 let lastImagesJson = "";
 let dockerMonitorConsecutiveFailures = 0;
 const DOCKER_MONITOR_MAX_FAILURES = 3;
+const DOCKER_MONITOR_INTERVAL_MS = 15000;
 let dockerApiUnreachableFailures = 0;
 let wslRecoveryInProgress = false;
 let lastWslRecoveryTs = 0;
 let lastLargeDownloadCompletedTs = 0;
-// Trigger recovery after 6 consecutive DOCKER_API_UNREACHABLE polls (30 seconds
-// at 5s polling). Large image downloads (8-24 GB) temporarily saturate the
+// Trigger recovery after 6 consecutive DOCKER_API_UNREACHABLE polls. Large image
+// downloads (8-24 GB) temporarily saturate the
 // Docker daemon with overlay2 extraction work — the previous threshold of 2
 // (10 seconds) was too aggressive and fired recovery during normal post-download
 // I/O, stopping the Python client unnecessarily.
-// During the first 3 minutes after a large download, the threshold is raised
-// further to 18 polls (90 seconds) to give Docker extra settling time.
+// During the first 3 minutes after a large download, the threshold is raised to
+// 18 polls to give Docker extra settling time.
 const DOCKER_API_RECOVERY_FAILURES = 6;
 const DOCKER_API_RECOVERY_FAILURES_POST_DOWNLOAD = 18;
 const POST_DOWNLOAD_GRACE_MS = 3 * 60 * 1000;
@@ -50,6 +51,9 @@ let _lastKnownActiveEngine = null;
 // Cached Docker routing — avoids expensive resolveDockerStatus on every list call
 let _cachedRoutingResult = null;
 let _cachedRoutingTimestamp = 0;
+let _routingPromise = null;
+let _monitorPollInFlight = false;
+let _routingGeneration = 0;
 const ROUTING_CACHE_TTL_MS = 10000; // 10 seconds
 
 function isCompactionInProgress() {
@@ -90,6 +94,49 @@ function clearDockerLists() {
   if (lastImagesJson !== "") {
     lastImagesJson = "";
     mainWindow.webContents.send("docker:images-update", []);
+  }
+}
+
+function parseOpenForkImages(imagesOutput = "") {
+  return imagesOutput
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        const img = JSON.parse(line);
+        return {
+          id: img.ID,
+          repository: img.Repository,
+          tag: img.Tag,
+          size: img.Size,
+          created: img.CreatedAt || img.CreatedSince,
+        };
+      } catch (e) {
+        return null;
+      }
+    })
+    .filter((img) => {
+      if (!img) return false;
+      return `${img.repository}:${img.tag}`.toLowerCase().includes("openfork");
+    });
+}
+
+function sendImagesUpdate(mainWindow, imagesOutput) {
+  lastImagesJson = imagesOutput;
+  mainWindow.webContents.send(
+    "docker:images-update",
+    parseOpenForkImages(imagesOutput),
+  );
+}
+
+async function getDockerImagesOutput() {
+  try {
+    return await dockerEngine.execDockerCommand(
+      'docker images --format "{{json .}}"',
+    );
+  } catch (e) {
+    console.warn(`Failed to get image list: ${e?.message || e}`);
+    return "";
   }
 }
 
@@ -228,10 +275,20 @@ async function ensureDockerRouting() {
   ) {
     return _cachedRoutingResult;
   }
-  const status = await dockerEngine.resolveDockerStatus({
-    allowNativeStart: false,
-    wslHostTimeoutMs: 5000,
-  });
+  if (_routingPromise) return _routingPromise;
+
+  const generation = _routingGeneration;
+  _routingPromise = dockerEngine
+    .resolveDockerStatus({
+      allowNativeStart: false,
+      wslHostTimeoutMs: 5000,
+    })
+    .finally(() => {
+      if (generation === _routingGeneration) {
+        _routingPromise = null;
+      }
+    });
+  const status = await _routingPromise;
   if (isCompactionInProgress()) {
     resetDockerRoutingCache();
     return {
@@ -245,14 +302,18 @@ async function ensureDockerRouting() {
     resetDockerRoutingCache();
     return status;
   }
-  _cachedRoutingResult = status;
-  _cachedRoutingTimestamp = now;
+  if (generation === _routingGeneration) {
+    _cachedRoutingResult = status;
+    _cachedRoutingTimestamp = now;
+  }
   return status;
 }
 
 async function checkDockerUpdates() {
   const mainWindow = _getMainWindow();
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (_monitorPollInFlight) return;
+  _monitorPollInFlight = true;
 
   try {
     if (isCompactionInProgress()) {
@@ -266,6 +327,8 @@ async function checkDockerUpdates() {
       allowNativeStart: false,
       wslHostTimeoutMs: 5000,
     });
+    _cachedRoutingResult = dockerStatus;
+    _cachedRoutingTimestamp = Date.now();
 
     if (isCompactionInProgress()) {
       dockerMonitorConsecutiveFailures = 0;
@@ -316,6 +379,10 @@ async function checkDockerUpdates() {
       containersOutput = "";
     }
 
+    // Also try images via the WSL-side Docker CLI. The TCP health check can be
+    // flaky after large pulls, but the in-distro CLI often still works.
+    const imagesOutput = await getDockerImagesOutput();
+
     if (!dockerStatus.running) {
       if (
         process.platform === "win32" &&
@@ -329,7 +396,10 @@ async function checkDockerUpdates() {
 
       // If containers were found inside WSL, trust the listing over the
       // TCP-based status check and reset the failure counter.
-      if (containersOutput && containersOutput.trim().length > 0) {
+      if (
+        (containersOutput && containersOutput.trim().length > 0) ||
+        (imagesOutput && imagesOutput.trim().length > 0)
+      ) {
         dockerMonitorConsecutiveFailures = 0;
       } else {
         dockerMonitorConsecutiveFailures++;
@@ -351,7 +421,7 @@ async function checkDockerUpdates() {
           lastContainersJson = "";
           mainWindow.webContents.send("docker:containers-update", []);
         }
-        if (lastImagesJson !== "") {
+        if (!imagesOutput && lastImagesJson !== "") {
           lastImagesJson = "";
           mainWindow.webContents.send("docker:images-update", []);
         }
@@ -388,6 +458,9 @@ async function checkDockerUpdates() {
           mainWindow.webContents.send("docker:containers-update", containers);
         }
       }
+      if (imagesOutput && imagesOutput !== lastImagesJson) {
+        sendImagesUpdate(mainWindow, imagesOutput);
+      }
       return;
     }
 
@@ -420,42 +493,8 @@ async function checkDockerUpdates() {
       mainWindow.webContents.send("docker:containers-update", containers);
     }
 
-    // Check images
-    let imagesOutput = "";
-    try {
-      imagesOutput = await dockerEngine.execDockerCommand(
-        'docker images --format "{{json .}}"',
-      );
-    } catch (e) {
-      console.warn(`Failed to get image list: ${e?.message || e}`);
-      imagesOutput = "";
-    }
     if (imagesOutput !== lastImagesJson) {
-      lastImagesJson = imagesOutput;
-      const images = imagesOutput
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => {
-          try {
-            const img = JSON.parse(line);
-            return {
-              id: img.ID,
-              repository: img.Repository,
-              tag: img.Tag,
-              size: img.Size,
-              created: img.CreatedAt || img.CreatedSince,
-            };
-          } catch (e) {
-            return null;
-          }
-        })
-        .filter((img) => {
-          if (!img) return false;
-          return `${img.repository}:${img.tag}`
-            .toLowerCase()
-            .includes("openfork");
-        });
-      mainWindow.webContents.send("docker:images-update", images);
+      sendImagesUpdate(mainWindow, imagesOutput);
     }
   } catch (e) {
     console.warn(`Docker monitor update error: ${e?.message || e}`);
@@ -476,6 +515,8 @@ async function checkDockerUpdates() {
           `ERNIE-Image processor will continue working if containers are already running.`,
       );
     }
+  } finally {
+    _monitorPollInFlight = false;
   }
 }
 
@@ -483,7 +524,10 @@ function startDockerMonitoring() {
   if (dockerMonitorInterval) return;
   console.log("Starting Docker background monitoring...");
   checkDockerUpdates();
-  dockerMonitorInterval = setInterval(checkDockerUpdates, 5000);
+  dockerMonitorInterval = setInterval(
+    checkDockerUpdates,
+    DOCKER_MONITOR_INTERVAL_MS,
+  );
 }
 
 function stopDockerMonitoring() {
@@ -499,8 +543,11 @@ function isDockerMonitoringActive() {
 }
 
 function resetDockerRoutingCache() {
+  _routingGeneration++;
   _cachedRoutingResult = null;
   _cachedRoutingTimestamp = 0;
+  _routingPromise = null;
+  dockerEngine.resetDockerStatusCache?.();
 }
 
 module.exports = {

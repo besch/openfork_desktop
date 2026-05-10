@@ -64,8 +64,11 @@ function buildPowerShellFailureMessage(error, stdout = "", stderr = "") {
 class AutoCompactManager {
   static DEFAULT_THRESHOLD_BYTES = 75 * 1024 ** 3; // 75 GB
   static DEFAULT_HOST_FREE_GATE_BYTES = 30 * 1024 ** 3; // compact only when the host drive is low
+  static STALE_VHDX_BASE_ALLOWANCE_BYTES = 40 * 1024 ** 3;
+  static STALE_VHDX_MIN_SIZE_BYTES = 160 * 1024 ** 3;
   static IDLE_CHECK_INTERVAL_MS = 30 * 1000; // 30 seconds
   static MIN_COMPACT_GAP_MS = 60 * 60 * 1000; // 1 hour minimum between auto-compactions
+  static MIN_STALE_VHDX_COMPACT_GAP_MS = 24 * 60 * 60 * 1000;
   static RECOVERY_POLL_INTERVAL_MS = 5000;
 
   constructor({
@@ -119,6 +122,32 @@ class AutoCompactManager {
     this._currentProviderId = null;
     this._hostFreeBytes = null;
     this._deferredByHostFreeSpace = false;
+    this._engineFileBytes = Number(saved.engineFileBytes || 0) || null;
+    this._imageCacheBytes =
+      Number.isFinite(Number(saved.imageCacheBytes))
+        ? Number(saved.imageCacheBytes)
+        : null;
+    this._imageCacheCount =
+      Number.isFinite(Number(saved.imageCacheCount))
+        ? Number(saved.imageCacheCount)
+        : null;
+    this._buildCacheBytes =
+      Number.isFinite(Number(saved.buildCacheBytes))
+        ? Number(saved.buildCacheBytes)
+        : null;
+    this._buildCacheReclaimableBytes =
+      Number.isFinite(Number(saved.buildCacheReclaimableBytes))
+        ? Number(saved.buildCacheReclaimableBytes)
+        : null;
+    this._buildCacheCount =
+      Number.isFinite(Number(saved.buildCacheCount))
+        ? Number(saved.buildCacheCount)
+        : null;
+    this._estimatedReclaimableBytes =
+      Number(saved.estimatedReclaimableBytes || 0) || 0;
+    this._staleVhdxCompactPending = saved.staleVhdxCompactPending === true;
+    this._lastStaleVhdxCompactTs =
+      Number(saved.lastStaleVhdxCompactTs || 0) || 0;
 
     // If the app restarts while compact-wsl.ps1 or DiskPart is still holding
     // the VHDX, keep the state active until a host-side probe proves otherwise.
@@ -146,6 +175,94 @@ class AutoCompactManager {
     });
   }
 
+  /**
+   * Observe current WSL VHDX and OpenFork image-cache sizes.
+   *
+   * This catches the "large VHDX, no recent IMAGE_EVICTED event" case: for
+   * example, images were removed manually before this app session, or Docker
+   * accumulated dangling layers.
+   */
+  notifyStorageObserved({
+    engineFileBytes,
+    imageCacheBytes,
+    imageCacheCount,
+    buildCacheBytes,
+    buildCacheReclaimableBytes,
+    buildCacheCount,
+    hostFreeBytes,
+  } = {}) {
+    if (process.platform !== "win32") return;
+    if (!this._enabled) return;
+
+    let changed = false;
+
+    if (Number.isFinite(engineFileBytes) && engineFileBytes > 0) {
+      this._engineFileBytes = engineFileBytes;
+      changed = true;
+    }
+    if (Number.isFinite(imageCacheBytes) && imageCacheBytes >= 0) {
+      this._imageCacheBytes = imageCacheBytes;
+      changed = true;
+    }
+    if (Number.isFinite(imageCacheCount) && imageCacheCount >= 0) {
+      this._imageCacheCount = imageCacheCount;
+      changed = true;
+    }
+    if (Number.isFinite(buildCacheBytes) && buildCacheBytes >= 0) {
+      this._buildCacheBytes = buildCacheBytes;
+      changed = true;
+    }
+    if (
+      Number.isFinite(buildCacheReclaimableBytes) &&
+      buildCacheReclaimableBytes >= 0
+    ) {
+      this._buildCacheReclaimableBytes = buildCacheReclaimableBytes;
+      changed = true;
+    }
+    if (Number.isFinite(buildCacheCount) && buildCacheCount >= 0) {
+      this._buildCacheCount = buildCacheCount;
+      changed = true;
+    }
+    if (Number.isFinite(hostFreeBytes) && hostFreeBytes >= 0) {
+      this._hostFreeBytes = hostFreeBytes;
+      changed = true;
+    }
+
+    const hasVhdxAndCacheObservation =
+      Number.isFinite(this._engineFileBytes) &&
+      this._engineFileBytes > 0 &&
+      Number.isFinite(this._imageCacheBytes) &&
+      this._imageCacheBytes >= 0;
+
+    if (hasVhdxAndCacheObservation) {
+      this._estimatedReclaimableBytes = Math.max(
+        0,
+        this._engineFileBytes -
+          this._imageCacheBytes -
+          AutoCompactManager.STALE_VHDX_BASE_ALLOWANCE_BYTES,
+        this._buildCacheReclaimableBytes || 0,
+      );
+      this._staleVhdxCompactPending =
+        this._engineFileBytes >= AutoCompactManager.STALE_VHDX_MIN_SIZE_BYTES &&
+        this._estimatedReclaimableBytes >= this._thresholdBytes;
+      changed = true;
+    }
+
+    if (changed) {
+      this._persistState();
+      this._notify("auto-compact:status", {});
+    }
+
+    if (this._staleVhdxCompactPending) {
+      this._maybeStartIdleWatch().catch((err) => {
+        console.warn(
+          "AutoCompactManager: could not start stale-VHDX idle watch:",
+          err?.message || err,
+        );
+      });
+    }
+  }
+
   /** Wired to electron.cjs IPC `openfork_client:provider-id` so we know which row to flag. */
   setCurrentProviderId(providerId) {
     this._currentProviderId = providerId || null;
@@ -155,6 +272,12 @@ class AutoCompactManager {
   notifyManualCompactCompleted() {
     this._freedSinceLastCompact = 0;
     this._lastCompactTs = Date.now();
+    this._lastStaleVhdxCompactTs = this._lastCompactTs;
+    this._staleVhdxCompactPending = false;
+    this._estimatedReclaimableBytes = 0;
+    this._buildCacheBytes = 0;
+    this._buildCacheReclaimableBytes = 0;
+    this._buildCacheCount = 0;
     this._persistState();
   }
 
@@ -183,6 +306,14 @@ class AutoCompactManager {
       hostFreeGateBytes: AutoCompactManager.DEFAULT_HOST_FREE_GATE_BYTES,
       hostFreeBytes: this._hostFreeBytes,
       deferredByHostFreeSpace: this._deferredByHostFreeSpace,
+      engineFileBytes: this._engineFileBytes,
+      imageCacheBytes: this._imageCacheBytes,
+      imageCacheCount: this._imageCacheCount,
+      buildCacheBytes: this._buildCacheBytes,
+      buildCacheReclaimableBytes: this._buildCacheReclaimableBytes,
+      buildCacheCount: this._buildCacheCount,
+      estimatedReclaimableBytes: this._estimatedReclaimableBytes,
+      staleVhdxCompactPending: this._staleVhdxCompactPending,
       lastCompactTs: this._lastCompactTs,
       compactInProgress: this._compactInProgress,
       platformSupported: process.platform === "win32",
@@ -277,6 +408,15 @@ class AutoCompactManager {
       hostFreeGateBytes: AutoCompactManager.DEFAULT_HOST_FREE_GATE_BYTES,
       hostFreeBytes: this._hostFreeBytes,
       deferredByHostFreeSpace: this._deferredByHostFreeSpace,
+      engineFileBytes: this._engineFileBytes,
+      imageCacheBytes: this._imageCacheBytes,
+      imageCacheCount: this._imageCacheCount,
+      buildCacheBytes: this._buildCacheBytes,
+      buildCacheReclaimableBytes: this._buildCacheReclaimableBytes,
+      buildCacheCount: this._buildCacheCount,
+      estimatedReclaimableBytes: this._estimatedReclaimableBytes,
+      staleVhdxCompactPending: this._staleVhdxCompactPending,
+      lastStaleVhdxCompactTs: this._lastStaleVhdxCompactTs,
       compactInProgress: this._compactInProgress,
       phase: this._phase,
       error: this._lastError,
@@ -338,6 +478,12 @@ class AutoCompactManager {
     this._compactStartedTs = 0;
     this._freedSinceLastCompact = 0;
     this._lastCompactTs = Date.now();
+    this._lastStaleVhdxCompactTs = this._lastCompactTs;
+    this._staleVhdxCompactPending = false;
+    this._estimatedReclaimableBytes = 0;
+    this._buildCacheBytes = 0;
+    this._buildCacheReclaimableBytes = 0;
+    this._buildCacheCount = 0;
     this._lastError = undefined;
 
     const service = this._lastServiceForRestart;
@@ -554,7 +700,12 @@ class AutoCompactManager {
     if (process.platform !== "win32") return false;
     if (!this._enabled) return false;
     if (this._compactInProgress) return false;
-    if (this._freedSinceLastCompact < this._thresholdBytes) return false;
+    const evictedBytesReady = this._freedSinceLastCompact >= this._thresholdBytes;
+    const staleVhdxReady =
+      this._staleVhdxCompactPending &&
+      Date.now() - this._lastStaleVhdxCompactTs >=
+        AutoCompactManager.MIN_STALE_VHDX_COMPACT_GAP_MS;
+    if (!evictedBytesReady && !staleVhdxReady) return false;
     if (
       Date.now() - this._lastCompactTs <
       AutoCompactManager.MIN_COMPACT_GAP_MS
@@ -571,6 +722,14 @@ class AutoCompactManager {
 
     const freeBytes = await this._getHostFreeBytesForWslDistro();
     this._hostFreeBytes = Number.isFinite(freeBytes) ? freeBytes : null;
+
+    const staleVhdxOnly =
+      this._staleVhdxCompactPending &&
+      this._freedSinceLastCompact < this._thresholdBytes;
+    if (staleVhdxOnly) {
+      this._deferredByHostFreeSpace = false;
+      return true;
+    }
 
     // If the host free-space probe fails, fall back to the historical behavior
     // so disk pressure cleanup still works on unusual Windows installations.
@@ -681,6 +840,9 @@ class AutoCompactManager {
 
     let pausedSet = false;
     let flowFailed = false;
+    const staleVhdxOnly =
+      this._staleVhdxCompactPending &&
+      this._freedSinceLastCompact < this._thresholdBytes;
 
     this._ownedCompactionFlow = true;
     this._compactInProgress = true;
@@ -695,9 +857,18 @@ class AutoCompactManager {
 
     try {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        const logMessage = staleVhdxOnly
+          ? `Auto-compact: OpenFork Ubuntu disk is ${Math.round(
+              (this._engineFileBytes || 0) / 1024 ** 3,
+            )} GB with about ${Math.round(
+              this._estimatedReclaimableBytes / 1024 ** 3,
+            )} GB likely reclaimable. Pausing DGN client to compact...`
+          : `Auto-compact: ${Math.round(
+              this._freedSinceLastCompact / 1024 ** 3,
+            )} GB of Docker images evicted since last compaction. Pausing DGN client to reclaim disk space...`;
         this.mainWindow.webContents.send("openfork_client:log", {
           type: "stdout",
-          message: `Auto-compact: ${Math.round(this._freedSinceLastCompact / 1024 ** 3)} GB of Docker images evicted since last compaction. Pausing DGN client to reclaim disk space...`,
+          message: logMessage,
         });
       }
       // 1. Tell the orchestrator we are pausing job acceptance.
@@ -722,6 +893,20 @@ class AutoCompactManager {
       // 2. Stop Python so the VHDX is released.
       this._setPhase("stopping_client");
       await this.pythonManager.stop();
+
+      if (staleVhdxOnly) {
+        this._setPhase("pruning_cache");
+        try {
+          await this.dockerEngine.execDockerCommand(
+            "docker builder prune --force --all --filter until=24h",
+          );
+        } catch (pruneError) {
+          console.warn(
+            "AutoCompactManager: could not prune stale Docker build cache:",
+            pruneError?.message || pruneError,
+          );
+        }
+      }
 
       // 3. Run the existing compaction script. Reuses the manual flow.
       this._setPhase("compacting");
@@ -764,6 +949,12 @@ class AutoCompactManager {
       // 4. Reset counters.
       this._freedSinceLastCompact = 0;
       this._lastCompactTs = Date.now();
+      this._lastStaleVhdxCompactTs = this._lastCompactTs;
+      this._staleVhdxCompactPending = false;
+      this._estimatedReclaimableBytes = 0;
+      this._buildCacheBytes = 0;
+      this._buildCacheReclaimableBytes = 0;
+      this._buildCacheCount = 0;
       this._phase = "completed";
       this._persistState();
     } catch (err) {
@@ -789,6 +980,9 @@ class AutoCompactManager {
         Date.now() - this._lastCompactTs > 1000
       ) {
         this._lastCompactTs = Date.now();
+        if (this._staleVhdxCompactPending) {
+          this._lastStaleVhdxCompactTs = this._lastCompactTs;
+        }
         this._persistState();
       }
       this.pythonManager.setCompactionPending?.(false);
