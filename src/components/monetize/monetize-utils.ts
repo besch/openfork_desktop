@@ -13,6 +13,7 @@ export const DISPLAY_VRAM_GB = 8;
 export const TRANSACTIONS_PAGE_SIZE = 20;
 export const MIN_WITHDRAWAL_MILLICENTS = 5000;
 export const SETTLEMENT_HOLD_DAYS = 3;
+export const STRIPE_CENT_MILLICENTS = 10;
 
 export const ESTIMATOR_JOBS = [
   {
@@ -61,6 +62,16 @@ export function formatSignedCents(millicents: number): string {
   if (millicents === 0) return formatCents(0);
   const sign = millicents > 0 ? "+" : "-";
   return `${sign}${formatCents(Math.abs(millicents))}`;
+}
+
+export function getStripeWithdrawableMillicents(millicents: number): number {
+  if (!Number.isFinite(millicents) || millicents <= 0) {
+    return 0;
+  }
+
+  return (
+    Math.floor(millicents / STRIPE_CENT_MILLICENTS) * STRIPE_CENT_MILLICENTS
+  );
 }
 
 export function formatDate(iso: string): string {

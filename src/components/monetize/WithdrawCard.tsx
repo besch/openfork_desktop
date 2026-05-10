@@ -9,6 +9,7 @@ import {
   SETTLEMENT_HOLD_DAYS,
   formatCents,
   formatMillicents,
+  getStripeWithdrawableMillicents,
 } from "./monetize-utils";
 
 interface WithdrawCardProps {
@@ -30,17 +31,19 @@ export function WithdrawCard({
 }: WithdrawCardProps) {
   const pendingAmount = wallet?.pending_earnings_millicents ?? 0;
   const availableAmount = wallet?.available_to_withdraw_millicents ?? 0;
+  const withdrawableAmount = getStripeWithdrawableMillicents(availableAmount);
+  const fractionalRemainder = Math.max(0, availableAmount - withdrawableAmount);
   const withdrawShortfall = Math.max(
     0,
-    MIN_WITHDRAWAL_MILLICENTS - availableAmount,
+    MIN_WITHDRAWAL_MILLICENTS - withdrawableAmount,
   );
   const withdrawProgress = Math.min(
     100,
-    (availableAmount / MIN_WITHDRAWAL_MILLICENTS) * 100,
+    (withdrawableAmount / MIN_WITHDRAWAL_MILLICENTS) * 100,
   );
   const canWithdraw =
     Boolean(wallet?.stripe_account_verified) &&
-    availableAmount >= MIN_WITHDRAWAL_MILLICENTS;
+    withdrawableAmount >= MIN_WITHDRAWAL_MILLICENTS;
 
   return (
     <Card className="relative overflow-hidden bg-surface/40 border-white/20 shadow-xl group">
@@ -117,8 +120,8 @@ export function WithdrawCard({
             <Info size={14} className="mt-0.5 shrink-0 text-amber-300" />
             <p>
               Pending earnings move into available balance after the{" "}
-              {SETTLEMENT_HOLD_DAYS}-day hold during the settlement run. That
-              is why you can have {formatMillicents(pendingAmount)} pending and{" "}
+              {SETTLEMENT_HOLD_DAYS}-day hold during the settlement run. That is
+              why you can have {formatMillicents(pendingAmount)} pending and{" "}
               {formatMillicents(availableAmount)} available right now.
             </p>
           </div>
@@ -130,8 +133,11 @@ export function WithdrawCard({
           </p>
         ) : canWithdraw ? (
           <p className="text-sm text-muted-foreground">
-            You can withdraw your cleared balance now. Payout timing is handled
-            by Stripe after the request is created.
+            You can withdraw {formatMillicents(withdrawableAmount)} now. Payout
+            timing is handled by Stripe after the request is created.
+            {fractionalRemainder > 0
+              ? ` ${formatMillicents(fractionalRemainder)} stays available because Stripe transfers use whole cents.`
+              : ""}
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -170,7 +176,7 @@ export function WithdrawCard({
             ) : (
               <ArrowDownToLine size={14} className="mr-2 text-white" />
             )}
-            Withdraw {formatMillicents(availableAmount)}
+            Withdraw {formatMillicents(withdrawableAmount)}
           </Button>
         )}
       </CardContent>

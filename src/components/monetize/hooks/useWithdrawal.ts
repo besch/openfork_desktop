@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MonetizeWallet } from "@/types";
 import { supabase } from "@/supabase";
 import type { ApiErrorResponse } from "../monetize-types";
-import { getErrorMessage } from "../monetize-utils";
+import {
+  getErrorMessage,
+  getStripeWithdrawableMillicents,
+} from "../monetize-utils";
 
 interface UseWithdrawalOptions {
   wallet: MonetizeWallet | null;
@@ -23,7 +26,9 @@ export function useWithdrawal({
   const handleWithdraw = useCallback(async () => {
     if (!wallet) return;
 
-    const amount = Math.floor(wallet.available_to_withdraw_millicents);
+    const amount = getStripeWithdrawableMillicents(
+      wallet.available_to_withdraw_millicents,
+    );
     setWithdrawing(true);
     setWithdrawError(null);
     setWithdrawSuccess(false);
