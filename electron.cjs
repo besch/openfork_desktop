@@ -1205,7 +1205,7 @@ ipcMain.handle("get-session", async () => sessionForRenderer(session));
 
 // --- MONETIZE / STRIPE IPC HANDLERS ---
 
-function makeAuthenticatedPostRequest(url) {
+function makeAuthenticatedPostRequest(url, payload) {
   return new Promise((resolve) => {
     if (!session) {
       resolve({ error: "Not authenticated" });
@@ -1228,6 +1228,9 @@ function makeAuthenticatedPostRequest(url) {
       });
     });
     request.on("error", (err) => resolve({ error: err.message }));
+    if (payload !== undefined) {
+      request.write(JSON.stringify(payload));
+    }
     request.end();
   });
 }
@@ -1349,6 +1352,18 @@ ipcMain.handle("monetize:open-stripe-dashboard", async () => {
   } catch (err) {
     console.error("[Stripe] Error opening Stripe dashboard:", err);
     return { error: err.message };
+  }
+});
+
+ipcMain.handle("monetize:withdraw", async (event, amountMillicents) => {
+  try {
+    return await makeAuthenticatedPostRequest(
+      `${ORCHESTRATOR_API_URL}/api/monetize/withdraw`,
+      { amount_millicents: amountMillicents },
+    );
+  } catch (err) {
+    console.error("[Monetize] Error requesting withdrawal:", err);
+    return { error: err.message || "Failed to request withdrawal" };
   }
 });
 

@@ -196,6 +196,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openStripeOnboard: () => ipcRenderer.invoke("monetize:open-stripe-onboard"),
   openStripeDashboard: () =>
     ipcRenderer.invoke("monetize:open-stripe-dashboard"),
+  withdrawEarnings: (amountMillicents) =>
+    ipcRenderer.invoke("monetize:withdraw", amountMillicents),
   startMonetizeCleanup: () => ipcRenderer.send("monetize:start-cleanup"),
   stopMonetizeCleanup: () => ipcRenderer.send("monetize:stop-cleanup"),
   setMonetizeIdleTimeout: (minutes) =>

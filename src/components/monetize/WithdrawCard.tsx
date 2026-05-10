@@ -127,31 +127,6 @@ export function WithdrawCard({
           </div>
         )}
 
-        {!wallet?.stripe_account_verified ? (
-          <p className="text-sm text-muted-foreground">
-            Connect and verify your payout account before withdrawing.
-          </p>
-        ) : canWithdraw ? (
-          <p className="text-sm text-muted-foreground">
-            You can withdraw {formatMillicents(withdrawableAmount)} now. Payout
-            timing is handled by Stripe after the request is created.
-            {fractionalRemainder > 0
-              ? ` ${formatMillicents(fractionalRemainder)} stays available because Stripe transfers use whole cents.`
-              : ""}
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Minimum withdrawal is {formatMillicents(MIN_WITHDRAWAL_MILLICENTS)}.
-            Pending earnings become withdrawable after the{" "}
-            {SETTLEMENT_HOLD_DAYS}-day hold, when a settlement run moves them
-            into available balance. You have {formatMillicents(availableAmount)}{" "}
-            available
-            {withdrawShortfall > 0
-              ? ` and need ${formatMillicents(withdrawShortfall)} more available.`
-              : "."}
-          </p>
-        )}
-
         {withdrawError && (
           <div className="flex items-center gap-2 text-destructive-foreground text-sm">
             <AlertCircle size={14} className="text-white" />

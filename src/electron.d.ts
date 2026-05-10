@@ -121,6 +121,15 @@ interface ProviderRateInfo {
   error?: string;
 }
 
+interface WithdrawResult {
+  success?: boolean;
+  error?: string;
+  withdrawal_id?: string;
+  amount_millicents?: number;
+  requested_millicents?: number;
+  leftover_millicents?: number;
+}
+
 interface ElectronAPI {
   // Orchestrator API URL
   getOrchestratorApiUrl: () => Promise<string>;
@@ -312,6 +321,7 @@ interface ElectronAPI {
   // Monetize / Stripe
   openStripeOnboard: () => Promise<{ success?: boolean; error?: string }>;
   openStripeDashboard: () => Promise<{ success?: boolean; error?: string }>;
+  withdrawEarnings: (amountMillicents: number) => Promise<WithdrawResult>;
   startMonetizeCleanup: () => void;
   stopMonetizeCleanup: () => void;
   setMonetizeIdleTimeout: (minutes: number) => Promise<{ success: boolean }>;

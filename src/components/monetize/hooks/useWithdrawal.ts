@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MonetizeWallet } from "@/types";
-import { supabase } from "@/supabase";
-import type { ApiErrorResponse } from "../monetize-types";
 import {
   getErrorMessage,
   getStripeWithdrawableMillicents,
@@ -34,27 +32,8 @@ export function useWithdrawal({
     setWithdrawSuccess(false);
 
     try {
-      const {
-        data: { session: currentSession },
-      } = await supabase.auth.getSession();
-      const orchestratorUrl = await window.electronAPI.getOrchestratorApiUrl();
-      const resp = await fetch(`${orchestratorUrl}/api/monetize/withdraw`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${currentSession?.access_token || ""}`,
-        },
-        body: JSON.stringify({ amount_millicents: amount }),
-      });
-
-      let result: ApiErrorResponse | null = null;
-      try {
-        result = (await resp.json()) as ApiErrorResponse;
-      } catch (error) {
-        console.warn("Withdrawal response did not include JSON:", error);
-      }
-
-      if (!resp.ok) {
+      const result = await window.electronAPI.withdrawEarnings(amount);
+      if (result.error) {
         setWithdrawError(result?.error || "Withdrawal failed");
       } else {
         setWithdrawSuccess(true);
