@@ -412,7 +412,15 @@ class AutoCompactManager {
     }
     const wslDistro = await this.wslUtils?.getWslDistroName?.();
     if (!wslDistro) return false;
-    return await this._isWslAttachBlockedBySharingViolation(wslDistro);
+    const attachStatus = await this._probeWslAttachStatus(wslDistro);
+    if (attachStatus === "blocked") return true;
+    if (attachStatus === "ok") return false;
+
+    // On app restart while DiskPart is still compacting, `wsl.exe -d ... true`
+    // can time out instead of returning the usual sharing-violation text. Do
+    // not mark compaction complete from that ambiguous probe alone; fall back
+    // to a host-side VHDX lock check.
+    return await this._isWslVhdxLocked(wslDistro);
   }
 
   _isProcessRunning(pid) {
@@ -456,7 +464,7 @@ class AutoCompactManager {
     });
   }
 
-  _isWslAttachBlockedBySharingViolation(wslDistro) {
+  _probeWslAttachStatus(wslDistro) {
     return new Promise((resolve) => {
       execFile(
         "wsl.exe",
@@ -464,18 +472,54 @@ class AutoCompactManager {
         { windowsHide: true, timeout: 6000, encoding: "utf8" },
         (error, stdout, stderr) => {
           if (!error) {
-            resolve(false);
+            resolve("ok");
             return;
           }
           const combined = `${error.message}\n${stdout || ""}\n${
             stderr || ""
           }`.toLowerCase();
-          resolve(
+          const isSharingViolation =
             combined.includes("sharing_violation") ||
-              combined.includes("error_sharing_violation") ||
-              combined.includes("attach disk") ||
-              combined.includes("hcs/error_sharing_violation"),
-          );
+            combined.includes("error_sharing_violation") ||
+            combined.includes("attach disk") ||
+            combined.includes("hcs/error_sharing_violation");
+          resolve(isSharingViolation ? "blocked" : "unknown");
+        },
+      );
+    });
+  }
+
+  async _isWslVhdxLocked(wslDistro) {
+    const storagePath = await this.wslUtils?.resolveWslStoragePath?.(wslDistro);
+    if (!storagePath) return true;
+
+    const escapedPath = String(storagePath).replace(/'/g, "''");
+    const command = [
+      `$path = '${escapedPath}'`,
+      "if ((Test-Path -LiteralPath $path -PathType Container)) { $path = Join-Path $path 'ext4.vhdx' }",
+      "if (-not (Test-Path -LiteralPath $path)) { exit 2 }",
+      "$stream = $null",
+      "try {",
+      "  $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)",
+      "  'unlocked'",
+      "} catch {",
+      "  'locked'",
+      "} finally {",
+      "  if ($null -ne $stream) { $stream.Dispose() }",
+      "}",
+    ].join("; ");
+
+    return await new Promise((resolve) => {
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", command],
+        { windowsHide: true, timeout: 5000, encoding: "utf8" },
+        (error, stdout) => {
+          if (error) {
+            resolve(true);
+            return;
+          }
+          resolve(stdout.toString().trim().toLowerCase() !== "unlocked");
         },
       );
     });
