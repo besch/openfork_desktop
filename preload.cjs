@@ -140,7 +140,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getReclaimStatus: () => ipcRenderer.invoke("docker:get-reclaim-status"),
   cancelReclaimDiskSpace: () =>
     ipcRenderer.invoke("docker:cancel-reclaim-space"),
-  resetEngine: () => ipcRenderer.invoke("docker:reset-engine"),
   getAvailableDrives: () => ipcRenderer.invoke("get-available-drives"),
   onReclaimStatus: (callback) =>
     createListener("docker:reclaim-status", callback),

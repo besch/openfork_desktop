@@ -22,6 +22,8 @@ let _cachedDockerStatusTs = 0;
 let _dockerStatusCacheGeneration = 0;
 let _lastHardenedWslDistro = null;
 let _lastHardenCheckTs = 0;
+let _lastDockerApiMismatchWarningTs = 0;
+let _lastDockerApiEndpointMismatch = false;
 // On Linux, set when the user is in the docker group but hasn't re-logged in yet.
 // Commands are then wrapped with `sg docker -c "..."` to pick up the group mid-session.
 let useSgDocker = false;
@@ -486,15 +488,116 @@ function pingDockerApiHost(host, timeoutMs = 1500) {
   });
 }
 
-async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
+function getDockerApiInfo(host, timeoutMs = 1500) {
+  if (process.platform !== "win32") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const request = http.request(
+      {
+        host,
+        port: WINDOWS_DOCKER_API_PORT,
+        path: "/info",
+        method: "GET",
+        timeout: timeoutMs,
+      },
+      (response) => {
+        let body = "";
+        response.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        response.on("end", () => {
+          if (response.statusCode !== 200) {
+            resolve(null);
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    );
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(null);
+    });
+    request.on("error", () => {
+      resolve(null);
+    });
+    request.end();
+  });
+}
+
+function normalizeDockerDaemonId(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function warnDockerApiMismatch(message) {
+  const now = Date.now();
+  if (now - _lastDockerApiMismatchWarningTs < 30000) return;
+  _lastDockerApiMismatchWarningTs = now;
+  console.warn(message);
+}
+
+async function dockerApiMatchesExpectedDaemon(host, expectedDaemonId) {
+  const expectedId = normalizeDockerDaemonId(expectedDaemonId);
+  if (!expectedId) return true;
+
+  const info = await getDockerApiInfo(host);
+  const endpointId = normalizeDockerDaemonId(info?.ID || info?.Id);
+  if (!endpointId) {
+    warnDockerApiMismatch(
+      `Ignoring Docker API at ${host}:${WINDOWS_DOCKER_API_PORT}: could not verify daemon identity.`,
+    );
+    return false;
+  }
+  if (endpointId !== expectedId) {
+    warnDockerApiMismatch(
+      `Ignoring Docker API at ${host}:${WINDOWS_DOCKER_API_PORT}: it does not match the OpenFork WSL Docker daemon.`,
+    );
+    return false;
+  }
+  return true;
+}
+
+async function getWslDockerDaemonId(wslDistro, timeoutMs = 5000) {
+  if (process.platform !== "win32" || !wslDistro) return null;
+
+  const commands = [
+    'docker info --format "{{.ID}}"',
+    'DOCKER_HOST=tcp://127.0.0.1:2375 docker info --format "{{.ID}}"',
+  ];
+
+  for (const cmd of commands) {
+    const result = await runDockerCheckCommand(cmd, {
+      useWsl: true,
+      wslDistro,
+      timeoutMs,
+    });
+    if (result.success) {
+      const id = normalizeDockerDaemonId(result.output);
+      if (id) return id;
+    }
+  }
+
+  return null;
+}
+
+async function resolveWindowsDockerApiEndpoint(
+  timeoutMs = 20000,
+  { expectedDaemonId = null } = {},
+) {
   if (process.platform !== "win32") return null;
+  _lastDockerApiEndpointMismatch = false;
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
     const hosts = await wslUtils.getWindowsDockerApiHosts();
     for (const host of hosts) {
-      if (await pingDockerApiHost(host)) {
+      if (!(await pingDockerApiHost(host))) continue;
+      if (await dockerApiMatchesExpectedDaemon(host, expectedDaemonId)) {
         return `tcp://${host}:${WINDOWS_DOCKER_API_PORT}`;
       }
+      _lastDockerApiEndpointMismatch = true;
     }
     try {
       await runDockerCheckCommand("docker info > /dev/null 2>&1 || true", {
@@ -509,9 +612,11 @@ async function resolveWindowsDockerApiEndpoint(timeoutMs = 20000) {
   }
   const hosts = await wslUtils.getWindowsDockerApiHosts();
   for (const host of hosts) {
-    if (await pingDockerApiHost(host)) {
+    if (!(await pingDockerApiHost(host))) continue;
+    if (await dockerApiMatchesExpectedDaemon(host, expectedDaemonId)) {
       return `tcp://${host}:${WINDOWS_DOCKER_API_PORT}`;
     }
+    _lastDockerApiEndpointMismatch = true;
   }
   return null;
 }
@@ -724,6 +829,10 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
   }
 
   await hardenWslDockerDaemonBinding(wslDistro);
+  const expectedDaemonId = await getWslDockerDaemonId(
+    wslDistro,
+    Math.min(infoTimeoutMs ?? WSL_DOCKER_CHECK_TIMEOUT_MS, 10000),
+  );
 
   const infoResult = await runDockerCheckCommand("docker info", {
     useWsl: true,
@@ -737,7 +846,9 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       `Docker is installed in WSL distro '${wslDistro}' but docker info via ` +
         `Unix socket failed. Checking TCP endpoint before reporting not-ready.`,
     );
-    const quickHost = await resolveWindowsDockerApiEndpoint(3000);
+    const quickHost = await resolveWindowsDockerApiEndpoint(3000, {
+      expectedDaemonId,
+    });
     if (quickHost) {
       // TCP API is reachable — daemon is running, just not on the Unix socket.
       process.env.OPENFORK_DOCKER_HOST = quickHost;
@@ -754,13 +865,16 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
     // TCP also unreachable — Docker genuinely not ready.
     // Use DOCKER_API_UNREACHABLE as the catch-all so the monitor can trigger
     // the recovery flow even when docker info exits silently (empty stdout/stderr).
+    const endpointErrorCode = _lastDockerApiEndpointMismatch
+      ? "DOCKER_API_WRONG_DAEMON"
+      : "DOCKER_API_UNREACHABLE";
     const infoErrorCode =
       infoResult.code ||
       classifyDockerCheckError(
         `${infoResult.error}\n${infoResult.stdout || ""}`,
         infoResult.stderr,
       ) ||
-      "DOCKER_API_UNREACHABLE";
+      endpointErrorCode;
     if (infoErrorCode === "WSL_VHDX_LOCKED") {
       emitWslVhdxLocked({
         wslDistro,
@@ -784,7 +898,9 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
     };
   }
 
-  const dockerHost = await resolveWindowsDockerApiEndpoint(hostTimeoutMs);
+  const dockerHost = await resolveWindowsDockerApiEndpoint(hostTimeoutMs, {
+    expectedDaemonId,
+  });
   if (!dockerHost) {
     return {
       installed: true,
@@ -792,7 +908,9 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       isNative: false,
       installDrive,
       storagePath,
-      error: "DOCKER_API_UNREACHABLE",
+      error: _lastDockerApiEndpointMismatch
+        ? "DOCKER_API_WRONG_DAEMON"
+        : "DOCKER_API_UNREACHABLE",
       wslDistro,
     };
   }

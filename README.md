@@ -16,8 +16,8 @@ bundled client executable in production builds.
 - Lets users choose Private, Public, Trusted Group, or Monetize routing.
 - Shows job history, provider stats, running containers, downloaded model images,
   and disk pressure warnings.
-- Manages Docker image storage budgets, WSL storage location, engine reset, and
-  Windows VHDX compaction.
+- Manages Docker image storage budgets, WSL storage location, and Windows VHDX
+  compaction.
 - Provides Stripe Connect onboarding, provider pricing, earnings history, and
   withdrawals for monetize providers.
 
@@ -143,9 +143,6 @@ OpenFork Docker images are large. The desktop app exposes a Docker image cache
 budget and forwards it to the Python client. On Windows, image eviction can leave
 the WSL VHDX file large on the host drive, so the auto-compact manager can pause
 the provider, stop Python, trim/compact the VHDX, and resume the client.
-
-The Docker tab also supports fast engine reset for cases where clearing all
-images and reinstalling the OpenFork Ubuntu engine is quicker than compaction.
 
 ## Related Projects
 

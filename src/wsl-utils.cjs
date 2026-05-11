@@ -36,9 +36,7 @@ function listWslDistros() {
 }
 
 function choosePreferredWslDistro(distros) {
-  const userDistros = distros.filter(
-    (name) => !/^docker-desktop(?:-data)?$/i.test(name),
-  );
+  const userDistros = distros.filter((name) => !isDockerDesktopDistro(name));
   return (
     userDistros.find((name) => /^openfork$/i.test(name)) ||
     userDistros.find((name) => /^ubuntu$/i.test(name)) ||
@@ -46,24 +44,52 @@ function choosePreferredWslDistro(distros) {
   );
 }
 
+function isDockerDesktopDistro(name) {
+  return /^docker-desktop(?:-data)?$/i.test(String(name || ""));
+}
+
+function findOpenForkDistro(distros) {
+  return distros.find((name) => /^openfork$/i.test(name)) || null;
+}
+
 async function getWslDistroName() {
   if (_resolvedWslDistro) return _resolvedWslDistro;
 
   const stored = _store.get("wslDistro");
   const distros = await listWslDistros();
+  const openForkDistro = findOpenForkDistro(distros);
 
   if (stored) {
-    const stillExists = distros.some(
-      (name) => name.toLowerCase() === stored.toLowerCase(),
-    );
-    if (stillExists) {
-      _resolvedWslDistro = stored;
+    if (isDockerDesktopDistro(stored)) {
+      console.warn(
+        `Stored WSL distro '${stored}' is a Docker Desktop internal distro. Falling back to OpenFork auto-detect.`,
+      );
+      _store.delete("wslDistro");
+    } else if (
+      openForkDistro &&
+      stored.toLowerCase() !== openForkDistro.toLowerCase()
+    ) {
+      // Older builds could cache Ubuntu/docker-desktop before the dedicated
+      // OpenFork engine was installed. Prefer the managed engine once it exists.
+      console.warn(
+        `Stored WSL distro '${stored}' does not match the installed OpenFork engine. Using '${openForkDistro}'.`,
+      );
+      _store.set("wslDistro", openForkDistro);
+      _resolvedWslDistro = openForkDistro;
       return _resolvedWslDistro;
+    } else {
+      const stillExists = distros.some(
+        (name) => name.toLowerCase() === stored.toLowerCase(),
+      );
+      if (stillExists) {
+        _resolvedWslDistro = stored;
+        return _resolvedWslDistro;
+      }
+      console.warn(
+        `Stored WSL distro '${stored}' no longer exists. Falling back to auto-detect.`,
+      );
+      _store.delete("wslDistro");
     }
-    console.warn(
-      `Stored WSL distro '${stored}' no longer exists. Falling back to auto-detect.`,
-    );
-    _store.delete("wslDistro");
   }
 
   const detected = choosePreferredWslDistro(distros);

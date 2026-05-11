@@ -97,6 +97,10 @@ export const DockerManagement = memo(() => {
       return "OpenFork detected the Docker daemon inside its Ubuntu distro, but the API is not reachable from Windows yet.";
     }
 
+    if (nextStatus.error === "DOCKER_API_WRONG_DAEMON") {
+      return "Windows localhost Docker API is answering from another Docker engine. Disable Docker Desktop's TCP daemon or repair OpenFork Ubuntu.";
+    }
+
     if (nextStatus.error === "WSL_VHDX_LOCKED") {
       return "OpenFork Ubuntu disk is locked by Windows. Disk compaction may still be finishing.";
     }

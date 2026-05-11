@@ -22,7 +22,6 @@ import {
   Save,
   Info,
   Gauge,
-  Trash2,
 } from "lucide-react";
 
 interface StorageSettingsProps {
@@ -67,8 +66,6 @@ export function StorageSettings({
   } | null>(null);
   const [selectedDrive, setSelectedDrive] = useState<string>("");
   const [isReclaiming, setIsReclaiming] = useState(false);
-  const [isResettingEngine, setIsResettingEngine] = useState(false);
-  const [resetProgress, setResetProgress] = useState<{ phase: string; percent: number } | null>(null);
   const [reclaimStatus, setReclaimStatus] = useState<ReclaimStatus | null>(
     null,
   );
@@ -505,8 +502,7 @@ export function StorageSettings({
                     Disk Compaction
                   </Label>
                   <p className={copyMutedClassName}>
-                    Reclaim space slowly while keeping remaining images, or
-                    reset the engine quickly and redownload images later.
+                    Reclaim space while keeping remaining images cached.
                   </p>
                 </div>
                 {(diskInfo?.engine_file_gb || loading) && (
@@ -534,7 +530,6 @@ export function StorageSettings({
                     loading ||
                     reclaimBusy ||
                     isRelocating ||
-                    isResettingEngine ||
                     autoCompactInProgress
                   }
                 >
@@ -548,7 +543,7 @@ export function StorageSettings({
                   )}
                   {reclaimBusyLabel}
                 </Button>
-                {reclaimInProgress ? (
+                {reclaimInProgress && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -560,52 +555,12 @@ export function StorageSettings({
                       ? "Cancelling..."
                       : "Cancel"}
                   </Button>
-                ) : (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className={`${buttonTextClassName} h-auto min-h-9 whitespace-normal leading-tight`}
-                    onClick={handleResetEngine}
-                    disabled={
-                      loading ||
-                      reclaimBusy ||
-                      isRelocating ||
-                      isResettingEngine ||
-                      autoCompactInProgress
-                    }
-                  >
-                    {isResettingEngine ? (
-                      <Loader
-                        size="xs"
-                        className={`${buttonLoaderClassName} mr-2`}
-                      />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5 mr-2" />
-                    )}
-                    {isResettingEngine
-                      ? "Resetting..."
-                      : "Reset Engine (Fast, Deletes Images)"}
-                  </Button>
                 )}
               </div>
-              {isResettingEngine && (
-                <div className="space-y-1.5 pt-0.5">
-                  <div className="h-1 overflow-hidden rounded-full bg-white/5">
-                    <div
-                      className="h-full rounded-full bg-amber-500 transition-all duration-500"
-                      style={{ width: `${resetProgress?.percent ?? 0}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/45">
-                    {resetProgress?.phase ?? "Preparing..."}
-                  </p>
-                </div>
-              )}
-              {!isResettingEngine && diskInfo?.engine_file_sparse === false && (
+              {diskInfo?.engine_file_sparse === false && (
                 <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold leading-relaxed text-amber-200">
-                  This OpenFork VHDX is not marked sparse. Resetting the engine
-                  recreates it with sparse mode enabled, which should reduce the
-                  need for slow DiskPart compaction on recent WSL builds.
+                  This OpenFork VHDX is not marked sparse, so Windows may need
+                  the slower DiskPart compaction path after reclaiming space.
                 </p>
               )}
               {reclaimStatus?.phase === "completed" && (
@@ -681,8 +636,7 @@ export function StorageSettings({
                     !selectedDrive ||
                     selectedDrive === dockerStatus?.installDrive ||
                     isRelocating ||
-                    reclaimBusy ||
-                    isResettingEngine
+                    reclaimBusy
                   }
                 >
                   {isRelocating ? (
@@ -997,35 +951,6 @@ export function StorageSettings({
     const result = await window.electronAPI.cancelReclaimDiskSpace();
     if (!result.success) {
       setError(result.error || "Could not cancel compaction.");
-    }
-  }
-
-  async function handleResetEngine() {
-    if (isResettingEngine || reclaimInProgress || autoCompactInProgress) {
-      return;
-    }
-
-    setIsResettingEngine(true);
-    setResetProgress(null);
-    setError(null);
-    const cleanupProgress = window.electronAPI.onInstallProgress((data) => {
-      setResetProgress({ phase: data.phase, percent: data.percent });
-    });
-    try {
-      const result = await window.electronAPI.resetEngine();
-      if (!result.success) {
-        if (result.error !== "ACTION_CANCELLED") {
-          setError(result.message || result.error || "Engine reset failed");
-        }
-      } else {
-        await refreshData();
-        await refreshAutoCompactStatus();
-        await Promise.resolve(onSettingsChanged?.());
-      }
-    } finally {
-      cleanupProgress();
-      setIsResettingEngine(false);
-      setResetProgress(null);
     }
   }
 

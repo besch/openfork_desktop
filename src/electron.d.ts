@@ -273,11 +273,6 @@ interface ElectronAPI {
     status?: ReclaimStatus;
     error?: string;
   }>;
-  resetEngine: () => Promise<{
-    success: boolean;
-    error?: string;
-    message?: string;
-  }>;
   onReclaimStatus: (callback: (status: ReclaimStatus) => void) => CleanupFn;
   onCompactionSuggested: (callback: () => void) => CleanupFn;
   relocateStorage: (

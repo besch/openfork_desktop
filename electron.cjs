@@ -302,8 +302,7 @@ dockerMonitor.init({
   getPythonManager: () => pythonManager,
   getAutoCompactManager: () => autoCompactManager,
   getIsManualReclaimInProgress: () =>
-    ipcDocker.isReclaimInProgress?.() === true ||
-    ipcDocker.isEngineResetInProgress?.() === true,
+    ipcDocker.isReclaimInProgress?.() === true,
   getIsPostReclaimSettling: () =>
     ipcDocker.isInPostReclaimSettleWindow?.() === true,
 });
@@ -567,8 +566,7 @@ ipcDeps.init({
   getIsCompactionInProgress: () =>
     autoCompactManager?.isCompactionInProgress?.() === true ||
     ipcDocker.isReclaimInProgress?.() === true ||
-    ipcDocker.isInPostReclaimSettleWindow?.() === true ||
-    ipcDocker.isEngineResetInProgress?.() === true,
+    ipcDocker.isInPostReclaimSettleWindow?.() === true,
 });
 
 function handleSupabaseAuthStateChange(event, newSession) {
@@ -979,7 +977,6 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
   const reclaimStatus = ipcDocker.getReclaimStatus?.();
   const manualReclaimInProgress = reclaimStatus?.inProgress === true;
   const reclaimSettling = ipcDocker.isInPostReclaimSettleWindow?.() === true;
-  const engineResetInProgress = ipcDocker.isEngineResetInProgress?.() === true;
   if (compactStatus?.compactInProgress) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("auto-compact:status", compactStatus);
@@ -992,18 +989,16 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
     }
     return;
   }
-  if (manualReclaimInProgress || reclaimSettling || engineResetInProgress) {
+  if (manualReclaimInProgress || reclaimSettling) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (manualReclaimInProgress && reclaimStatus) {
         mainWindow.webContents.send("docker:reclaim-status", reclaimStatus);
       }
       mainWindow.webContents.send("openfork_client:log", {
         type: "stderr",
-        message: engineResetInProgress
-          ? "Cannot start DGN client: OpenFork Ubuntu reset is in progress."
-          : reclaimSettling
-            ? "Cannot start DGN client: OpenFork Ubuntu is reconnecting after disk compaction. Please wait a moment."
-            : "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
+        message: reclaimSettling
+          ? "Cannot start DGN client: OpenFork Ubuntu is reconnecting after disk compaction. Please wait a moment."
+          : "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
       });
       mainWindow.webContents.send("openfork_client:status", "stopped");
     }
@@ -1084,11 +1079,13 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
         const message =
           dockerStatus.error === "WSL_VHDX_LOCKED"
             ? "OpenFork Ubuntu disk is locked by another Windows process. Disk compaction is probably still finishing; please wait and retry."
-            : dockerStatus.error === "DOCKER_API_UNREACHABLE"
-              ? "OpenFork Ubuntu is running, but its Docker API is not reachable from Windows yet."
-              : dockerStatus.error === "WSL_DISTRO_MISSING"
-                ? "OpenFork Ubuntu is missing. Reinstall the local AI engine before starting OpenFork."
-                : "OpenFork Ubuntu is not ready yet. Please retry once the engine is running.";
+            : dockerStatus.error === "DOCKER_API_WRONG_DAEMON"
+              ? "Windows localhost Docker API is responding from another Docker engine, usually Docker Desktop. Disable Docker Desktop's TCP daemon or repair OpenFork Ubuntu before starting OpenFork."
+              : dockerStatus.error === "DOCKER_API_UNREACHABLE"
+                ? "OpenFork Ubuntu is running, but its Docker API is not reachable from Windows yet."
+                : dockerStatus.error === "WSL_DISTRO_MISSING"
+                  ? "OpenFork Ubuntu is missing. Reinstall the local AI engine before starting OpenFork."
+                  : "OpenFork Ubuntu is not ready yet. Please retry once the engine is running.";
 
         console.error(message);
 

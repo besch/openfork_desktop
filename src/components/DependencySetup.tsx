@@ -48,6 +48,8 @@ export function DependencySetup({
   const isBridgeStarting =
     status?.docker.error === "DOCKER_API_UNREACHABLE" ||
     !!status?.docker.isStarting;
+  const isWrongDockerDaemon =
+    status?.docker.error === "DOCKER_API_WRONG_DAEMON";
   const isInstallStateFromMain =
     !!status?.docker.isStarting && !status?.docker.installed && !isInstalling;
   const canChooseInstallDrive = !status?.docker.installed;
@@ -55,9 +57,11 @@ export function DependencySetup({
     ? status.docker.error === "DOCKER_PERMISSION_DENIED"
       ? "Docker access needs a permission refresh"
       : isWindows
-        ? isBridgeStarting
-          ? "OpenFork Ubuntu is starting…"
-          : "OpenFork Ubuntu is installed but not running"
+        ? isWrongDockerDaemon
+          ? "Docker API is routed to another engine"
+          : isBridgeStarting
+            ? "OpenFork Ubuntu is starting…"
+            : "OpenFork Ubuntu is installed but not running"
         : status.docker.isNative
           ? status.docker.isStarting
             ? "Docker is starting…"
@@ -70,9 +74,11 @@ export function DependencySetup({
     ? status.docker.error === "DOCKER_PERMISSION_DENIED"
       ? "Docker is installed, but your user cannot access it yet. If you just finished setup on Linux, log out and back in before retrying."
       : isWindows
-        ? isBridgeStarting
-          ? "OpenFork is waiting for the Docker API inside the dedicated Ubuntu distro to become reachable from Windows. This usually takes a few seconds after WSL boots."
-          : "Repair or restart the dedicated OpenFork Ubuntu engine to use local workflows."
+        ? isWrongDockerDaemon
+          ? "Windows localhost:2375 is responding from another Docker engine, usually Docker Desktop. Disable Docker Desktop's TCP daemon or repair OpenFork Ubuntu so downloads go to the OpenFork engine."
+          : isBridgeStarting
+            ? "OpenFork is waiting for the Docker API inside the dedicated Ubuntu distro to become reachable from Windows. This usually takes a few seconds after WSL boots."
+            : "Repair or restart the dedicated OpenFork Ubuntu engine to use local workflows."
         : isBridgeStarting
           ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
           : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."
