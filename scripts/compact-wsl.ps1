@@ -31,6 +31,52 @@ function Test-OpenForkManagedDistro {
     return $hasOpenForkUser -and $hasOpenForkSudoers -and $hasOpenForkDefaultUser -and $hasDockerTcpBinding
 }
 
+function Invoke-OpenForkDockerLayerCleanup {
+    param([string]$Name)
+
+    Write-Host "Cleaning dangling OpenFork Docker layers..."
+
+    $cleanupScript = @'
+set +e
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker CLI not found; skipping dangling layer cleanup."
+  exit 0
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl start docker >/dev/null 2>&1 || true
+  fi
+  if ! docker info >/dev/null 2>&1 && command -v service >/dev/null 2>&1; then
+    service docker start >/dev/null 2>&1 || true
+  fi
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker daemon is not reachable; skipping dangling layer cleanup."
+  exit 0
+fi
+
+# The OpenFork WSL distro is a dedicated Docker engine. These commands keep
+# tagged images but remove untagged/partial layers and old BuildKit cache that
+# can be left behind by interrupted or disk-full pulls/builds.
+docker image prune --force || true
+docker builder prune --force --all --filter until=24h || true
+
+exit 0
+'@
+
+    try {
+        & wsl.exe -d $Name --user root -- bash -lc $cleanupScript
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Docker dangling layer cleanup exited with code $LASTEXITCODE; continuing with compaction."
+        }
+    } catch {
+        Write-Host "Docker dangling layer cleanup skipped: $($_.Exception.Message)"
+    }
+}
+
 function Test-FileExclusiveAccess {
     param([string]$Path)
     $stream = $null
@@ -120,6 +166,8 @@ try {
     Write-Host "Found VHDX at: $vhdxPath"
 
     $isSparse = ([System.IO.File]::GetAttributes($vhdxPath) -band [System.IO.FileAttributes]::SparseFile) -ne 0
+
+    Invoke-OpenForkDockerLayerCleanup -Name $DistroName
 
     Write-Host "Trimming free space inside WSL..."
     try {
