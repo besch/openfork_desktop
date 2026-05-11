@@ -134,9 +134,14 @@ function Invoke-ElevatedDiskPart {
     }
 }
 
+function New-OpenForkTempFile {
+    $tempPath = [System.IO.Path]::GetTempFileName()
+    return Get-Item -LiteralPath $tempPath
+}
+
 function Invoke-BestEffortVhdxDetach {
     param([string]$Path)
-    $f = New-TemporaryFile
+    $f = New-OpenForkTempFile
     try {
         "select vdisk file=`"$Path`"`ndetach vdisk`nexit" | Out-File -FilePath $f -Encoding ascii
         $r = Invoke-ElevatedDiskPart -ScriptPath $f.FullName
@@ -189,7 +194,7 @@ try {
         exit 0
     }
 
-    $tempFile = New-TemporaryFile
+    $tempFile = New-OpenForkTempFile
     try {
         @"
 select vdisk file="$vhdxPath"

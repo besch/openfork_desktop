@@ -23,6 +23,7 @@ import { supabase } from "./supabase";
 const MAX_LOGS = 500;
 const SYSTEM_NOTICE_TTL_MS = 8000;
 const IMAGE_NOTICE_TTL_MS = 6000;
+const DISK_SPACE_ERROR_TTL_MS = 30000;
 
 // Simplified project type for search results
 interface SearchProject {
@@ -572,7 +573,14 @@ function initializeIpcListeners() {
 
   cleanupFns.push(window.electronAPI.onProviderId(setProviderId));
 
-  cleanupFns.push(window.electronAPI.onDockerProgress(setDockerPullProgress));
+  cleanupFns.push(
+    window.electronAPI.onDockerProgress((progress) => {
+      setDockerPullProgress(progress);
+      if (progress) {
+        setDiskSpaceError(null);
+      }
+    }),
+  );
 
   cleanupFns.push(
     window.electronAPI.onDockerContainersUpdate((containers) => {
@@ -601,6 +609,22 @@ function initializeIpcListeners() {
 
   cleanupFns.push(
     window.electronAPI.onAutoCompactStatus((status) => {
+      const previous = useClientStore.getState().autoCompactStatus;
+      const completedWithoutTransition =
+        status.phase === "completed" &&
+        !status.compactInProgress &&
+        !previous?.compactInProgress &&
+        (!previous?.phase || previous.phase === "completed");
+
+      if (completedWithoutTransition) {
+        setAutoCompactStatus({
+          ...status,
+          phase: undefined,
+          recoveredAfterRestart: undefined,
+        });
+        return;
+      }
+
       setAutoCompactStatus(status);
       if (
         (status.phase === "completed" || status.phase === "failed") &&
@@ -638,6 +662,20 @@ function initializeIpcListeners() {
 
   cleanupFns.push(
     window.electronAPI.onReclaimStatus((status) => {
+      const previous = useClientStore.getState().reclaimStatus;
+      const completedWithoutTransition =
+        status.phase === "completed" &&
+        !status.inProgress &&
+        !status.settling &&
+        !previous?.inProgress &&
+        !previous?.settling &&
+        (!previous?.phase || previous.phase === "completed");
+
+      if (completedWithoutTransition) {
+        setReclaimStatus(null);
+        return;
+      }
+
       setReclaimStatus(status);
       if (
         (status.phase === "completed" ||
@@ -673,7 +711,17 @@ function initializeIpcListeners() {
     }),
   );
 
-  cleanupFns.push(window.electronAPI.onDiskSpaceError(setDiskSpaceError));
+  cleanupFns.push(
+    window.electronAPI.onDiskSpaceError((error) => {
+      setDiskSpaceError(error);
+      scheduleNoticeClear(() => {
+        const current = useClientStore.getState().diskSpaceError;
+        if (current === error) {
+          setDiskSpaceError(null);
+        }
+      }, DISK_SPACE_ERROR_TTL_MS);
+    }),
+  );
 
   cleanupFns.push(
     window.electronAPI.onEngineSwitch((notice) => {
@@ -683,6 +731,7 @@ function initializeIpcListeners() {
 
   cleanupFns.push(
     window.electronAPI.onImageEvicted((payload) => {
+      setDiskSpaceError(null);
       setImageEvictedNotification(payload);
       scheduleNoticeClear(() => {
         const current = useClientStore.getState().imageEvictedNotification;

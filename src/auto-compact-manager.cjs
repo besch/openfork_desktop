@@ -115,6 +115,8 @@ class AutoCompactManager {
     this._estimatedReclaimableBytes =
       Number(saved.estimatedReclaimableBytes || 0) || 0;
     this._staleVhdxCompactPending = saved.staleVhdxCompactPending === true;
+    this._storageLimitCompactPending =
+      saved.storageLimitCompactPending === true;
     this._lastStaleVhdxCompactTs =
       Number(saved.lastStaleVhdxCompactTs || 0) || 0;
 
@@ -128,13 +130,16 @@ class AutoCompactManager {
   }
 
   /** Wired to PythonProcessManager via onImageEvicted. */
-  notifyImageEvicted({ freed_bytes }) {
+  notifyImageEvicted({ freed_bytes, reason }) {
     if (process.platform !== "win32") return;
     if (!this._enabled) return;
 
     if (!Number.isFinite(freed_bytes) || freed_bytes <= 0) return;
 
     this._freedSinceLastCompact += freed_bytes;
+    if (reason === "storage_limit") {
+      this._storageLimitCompactPending = true;
+    }
     this._persistState();
     this._maybeStartIdleWatch().catch((err) => {
       console.warn(
@@ -262,6 +267,7 @@ class AutoCompactManager {
     this._lastCompactTs = Date.now();
     this._lastStaleVhdxCompactTs = this._lastCompactTs;
     this._staleVhdxCompactPending = false;
+    this._storageLimitCompactPending = false;
     this._estimatedReclaimableBytes = 0;
     this._buildCacheBytes = 0;
     this._buildCacheReclaimableBytes = 0;
@@ -302,6 +308,7 @@ class AutoCompactManager {
       buildCacheCount: this._buildCacheCount,
       estimatedReclaimableBytes: this._estimatedReclaimableBytes,
       staleVhdxCompactPending: this._staleVhdxCompactPending,
+      storageLimitCompactPending: this._storageLimitCompactPending,
       lastCompactTs: this._lastCompactTs,
       compactInProgress: this._compactInProgress,
       platformSupported: process.platform === "win32",
@@ -444,6 +451,7 @@ class AutoCompactManager {
       buildCacheCount: this._buildCacheCount,
       estimatedReclaimableBytes: this._estimatedReclaimableBytes,
       staleVhdxCompactPending: this._staleVhdxCompactPending,
+      storageLimitCompactPending: this._storageLimitCompactPending,
       lastStaleVhdxCompactTs: this._lastStaleVhdxCompactTs,
       compactInProgress: this._compactInProgress,
       phase: this._phase,
@@ -511,6 +519,7 @@ class AutoCompactManager {
     this._lastCompactTs = Date.now();
     this._lastStaleVhdxCompactTs = this._lastCompactTs;
     this._staleVhdxCompactPending = false;
+    this._storageLimitCompactPending = false;
     this._estimatedReclaimableBytes = 0;
     this._buildCacheBytes = 0;
     this._buildCacheReclaimableBytes = 0;
@@ -800,8 +809,12 @@ class AutoCompactManager {
       this._staleVhdxCompactPending &&
       Date.now() - this._lastStaleVhdxCompactTs >=
         AutoCompactManager.MIN_STALE_VHDX_COMPACT_GAP_MS;
-    if (!evictedBytesReady && !staleVhdxReady) return false;
+    const storageLimitReady = this._storageLimitCompactPending;
+    if (!evictedBytesReady && !staleVhdxReady && !storageLimitReady) {
+      return false;
+    }
     if (
+      !storageLimitReady &&
       Date.now() - this._lastCompactTs <
       AutoCompactManager.MIN_COMPACT_GAP_MS
     )
@@ -821,7 +834,8 @@ class AutoCompactManager {
     const staleVhdxOnly =
       this._staleVhdxCompactPending &&
       this._freedSinceLastCompact < this._thresholdBytes;
-    if (staleVhdxOnly) {
+    const storageLimitTriggered = this._storageLimitCompactPending;
+    if (staleVhdxOnly || storageLimitTriggered) {
       this._deferredByHostFreeSpace = false;
       return true;
     }
@@ -870,7 +884,7 @@ class AutoCompactManager {
     return (
       this.pythonManager.isRunning() &&
       !this.pythonManager.hasActiveJob() &&
-      !this.pythonManager.hasQueuedDownloads()
+      !this.pythonManager.hasActiveDownload()
     );
   }
 
@@ -938,6 +952,7 @@ class AutoCompactManager {
     const staleVhdxOnly =
       this._staleVhdxCompactPending &&
       this._freedSinceLastCompact < this._thresholdBytes;
+    const storageLimitTriggered = this._storageLimitCompactPending;
 
     this._ownedCompactionFlow = true;
     this._compactInProgress = true;
@@ -958,6 +973,10 @@ class AutoCompactManager {
             )} GB with about ${Math.round(
               this._estimatedReclaimableBytes / 1024 ** 3,
             )} GB likely reclaimable. Pausing DGN client to compact...`
+          : storageLimitTriggered
+            ? `Auto-compact: storage-limit cleanup freed ${Math.round(
+                this._freedSinceLastCompact / 1024 ** 3,
+              )} GB. Pausing DGN client before the next queued job to compact...`
           : `Auto-compact: ${Math.round(
               this._freedSinceLastCompact / 1024 ** 3,
             )} GB of Docker images evicted since last compaction. Pausing DGN client to reclaim disk space...`;
@@ -1043,6 +1062,7 @@ class AutoCompactManager {
       this._lastCompactTs = Date.now();
       this._lastStaleVhdxCompactTs = this._lastCompactTs;
       this._staleVhdxCompactPending = false;
+      this._storageLimitCompactPending = false;
       this._estimatedReclaimableBytes = 0;
       this._buildCacheBytes = 0;
       this._buildCacheReclaimableBytes = 0;

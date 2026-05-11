@@ -54,9 +54,9 @@ export const StatusIndicator = memo(() => {
   const status = useClientStore((state) => state.status);
   const compactInProgress = useClientStore(
     (state) =>
-      (state.autoCompactStatus?.compactInProgress ||
-        state.reclaimStatus?.inProgress) ??
-      false,
+      state.autoCompactStatus?.compactInProgress === true ||
+      state.reclaimStatus?.inProgress === true ||
+      state.reclaimStatus?.settling === true,
   );
 
   if (compactInProgress) {
@@ -193,9 +193,9 @@ export const Dashboard = memo(() => {
   const jobState = useClientStore((state) => state.jobState);
   const compactInProgress = useClientStore(
     (state) =>
-      (state.autoCompactStatus?.compactInProgress ||
-        state.reclaimStatus?.inProgress) ??
-      false,
+      state.autoCompactStatus?.compactInProgress === true ||
+      state.reclaimStatus?.inProgress === true ||
+      state.reclaimStatus?.settling === true,
   );
 
   useEffect(() => {

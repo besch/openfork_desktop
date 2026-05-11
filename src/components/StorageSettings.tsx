@@ -492,8 +492,9 @@ export function StorageSettings({
             <p className={helperTextClassName}>
               Auto-compact runs after {autoCompactThresholdGb} GB of images
               have been evicted and the WSL drive has less than{" "}
-              {autoCompactHostGateGb} GB free. It can also compact a bloated
-              Ubuntu disk when image usage is low. Currently{" "}
+              {autoCompactHostGateGb} GB free. Storage-limit cleanup can also
+              compact before the next queued job, and OpenFork can compact a
+              bloated Ubuntu disk when image usage is low. Currently{" "}
               {(autoCompact.freedBytes / 1024 ** 3).toFixed(1)} GB freed since
               last compaction
               {autoCompactHostFreeGb

@@ -807,6 +807,20 @@ function createWindow() {
       if (cleanupManager) cleanupManager.notifyImageEvicted(payload);
       if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);
     },
+    onDockerDownloadState: (payload) => {
+      if (payload?.status !== "completed") return;
+      ipcDocker.resetOpenForkImageUsageCache?.();
+      setTimeout(() => {
+        ipcDocker.refreshOpenForkStorageObservation?.({ forceRefresh: true }).catch(
+          (error) => {
+            console.warn(
+              "Could not refresh OpenFork image cache usage after Docker download:",
+              error?.message || error,
+            );
+          },
+        );
+      }, 5000);
+    },
     onProviderRegistered: (providerId) => {
       if (autoCompactManager)
         autoCompactManager.setCurrentProviderId(providerId);
@@ -1671,9 +1685,17 @@ ipcMain.handle("schedule:get-idle-time", () => {
 
 // --- AUTO-COMPACT MANAGER IPC HANDLERS ---
 
-ipcMain.handle("auto-compact:get-status", () => {
+ipcMain.handle("auto-compact:get-status", async () => {
   if (!autoCompactManager) {
     return { enabled: false, platformSupported: process.platform === "win32" };
+  }
+  try {
+    await ipcDocker.refreshOpenForkStorageObservation?.();
+  } catch (error) {
+    console.warn(
+      "Could not refresh storage observation for auto-compact status:",
+      error?.message || error,
+    );
   }
   return autoCompactManager.getStatus();
 });

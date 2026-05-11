@@ -704,7 +704,7 @@ async function getOpenForkImageCacheUsageUncached() {
 
   const systemUsage = await getDockerSystemDiskUsage();
   const listOutput = await dockerEngine.execDockerCommand(
-    'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}"',
+    'docker images --format "{{.ID}}|{{.Repository}}:{{.Tag}}|{{.Size}}"',
   );
   if (!listOutput) {
     return {
@@ -717,15 +717,18 @@ async function getOpenForkImageCacheUsageUncached() {
 
   const uniqueImages = new Map();
   for (const line of listOutput.split("\n").filter(Boolean)) {
-    const [id, fullName] = line.split("|");
+    const [id, fullName, sizeText] = line.split("|");
     if (id && isOpenForkImageName(fullName) && dockerEngine.isValidDockerId(id)) {
-      uniqueImages.set(id, fullName);
+      uniqueImages.set(id, {
+        fullName,
+        sizeBytes: parseDockerSizeToBytes(sizeText),
+      });
     }
   }
 
   let totalBytes = 0;
-  for (const id of uniqueImages.keys()) {
-    totalBytes += await getDockerImageSizeBytes(id);
+  for (const [id, image] of uniqueImages.entries()) {
+    totalBytes += image.sizeBytes || (await getDockerImageSizeBytes(id));
   }
 
   return {
@@ -740,6 +743,20 @@ function resetOpenForkImageUsageCache() {
   cachedOpenForkImageUsage = null;
   cachedOpenForkImageUsageTs = 0;
   openForkImageUsagePromise = null;
+}
+
+async function refreshOpenForkStorageObservation({ forceRefresh = false } = {}) {
+  const imageUsage = await getOpenForkImageCacheUsage({ forceRefresh });
+  notifyStorageObserved({
+    imageCacheBytes: imageUsage.known ? imageUsage.totalBytes : null,
+    imageCacheCount: imageUsage.known ? imageUsage.imageCount : null,
+    buildCacheBytes: imageUsage.known ? imageUsage.buildCacheBytes : null,
+    buildCacheReclaimableBytes: imageUsage.known
+      ? imageUsage.buildCacheReclaimableBytes
+      : null,
+    buildCacheCount: imageUsage.known ? imageUsage.buildCacheCount : null,
+  });
+  return imageUsage;
 }
 
 async function pruneDockerBuildCache({ maxAgeHours = null } = {}) {
@@ -1527,16 +1544,7 @@ function register(ipcMain) {
 
   ipcMain.handle("docker:get-image-cache-usage", async () => {
     try {
-      const imageUsage = await getOpenForkImageCacheUsage();
-      notifyStorageObserved({
-        imageCacheBytes: imageUsage.known ? imageUsage.totalBytes : null,
-        imageCacheCount: imageUsage.known ? imageUsage.imageCount : null,
-        buildCacheBytes: imageUsage.known ? imageUsage.buildCacheBytes : null,
-        buildCacheReclaimableBytes: imageUsage.known
-          ? imageUsage.buildCacheReclaimableBytes
-          : null,
-        buildCacheCount: imageUsage.known ? imageUsage.buildCacheCount : null,
-      });
+      const imageUsage = await refreshOpenForkStorageObservation();
 
       return {
         success: true,
@@ -1817,4 +1825,6 @@ module.exports = {
   getReclaimStatus,
   isReclaimInProgress,
   isInPostReclaimSettleWindow,
+  refreshOpenForkStorageObservation,
+  resetOpenForkImageUsageCache,
 };

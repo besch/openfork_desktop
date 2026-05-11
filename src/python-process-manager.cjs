@@ -30,7 +30,15 @@ function isInvalidSupabaseRefreshTokenError(error) {
 }
 
 class PythonProcessManager {
-  constructor({ supabase, mainWindow, userDataPath, onJobEvent, onImageEvicted, onProviderRegistered }) {
+  constructor({
+    supabase,
+    mainWindow,
+    userDataPath,
+    onJobEvent,
+    onImageEvicted,
+    onDockerDownloadState,
+    onProviderRegistered,
+  }) {
     this.pythonProcess = null;
     this.shutdownServerPort = 8000;
     this.supabase = supabase;
@@ -42,6 +50,7 @@ class PythonProcessManager {
     this._downloadActivity = new Map(); // service_type/image -> queued/starting/downloading
     this.onJobEvent = onJobEvent || null; // Optional callback for job events (used by DockerCleanupManager)
     this.onImageEvicted = onImageEvicted || null; // Optional callback for IMAGE_EVICTED events (auto-compact + cleanup UI)
+    this.onDockerDownloadState = onDockerDownloadState || null; // Optional callback for image-cache refreshes
     this.onProviderRegistered = onProviderRegistered || null; // Optional callback when Python reports its provider_id
 
     // Auth refresh debouncing
@@ -153,18 +162,39 @@ class PythonProcessManager {
 
   getPythonCommand() {
     const isWin = process.platform === "win32";
+    const exeName = isWin ? "client.exe" : "client";
     
     // In production, always use the bundled executable
     if (app.isPackaged) {
-      const exeName = isWin ? "client.exe" : "client";
       return {
         command: path.join(process.resourcesPath, "bin", exeName),
         args: []
       };
     }
-    
+
+    // In local desktop development, prefer the compiled client when present.
+    // This matches the app test workflow: rebuild client.exe with PyInstaller,
+    // copy it into desktop/bin, then restart the DGN client from the desktop UI.
+    const binDir = path.join(__dirname, "..", "bin");
+    let binPath = path.join(binDir, exeName);
+    try {
+      const binStat = fs.statSync(binDir);
+      if (binStat.isFile()) {
+        // 'bin' is the executable itself, not a directory
+        binPath = binDir;
+      }
+    } catch (_) {}
+
+    if (fs.existsSync(binPath)) {
+      console.log(`Dev mode: Running bundled client from ${binPath}`);
+      return {
+        command: binPath,
+        args: []
+      };
+    }
+
     // In development, use the sibling client directory (../client from desktop)
-    // This ensures we always use the main client codebase
+    // when a compiled desktop/bin client has not been built yet.
     const siblingClientDir = path.resolve(__dirname, "..", "..", "client");
     
     const venvPython = isWin 
@@ -177,23 +207,10 @@ class PythonProcessManager {
        return {
          command: venvPython,
          args: [path.join(siblingClientDir, "dgn_client.py")]
-       };
+        };
     }
-    
-    // Fallback: Look for compiled executable in desktop/bin/client, or desktop/bin itself
-    // when the binary was placed directly at that path (not inside a bin/ subdirectory).
-    const exeName = isWin ? "client.exe" : "client";
-    const binDir = path.join(__dirname, "..", "bin");
-    let binPath = path.join(binDir, exeName);
-    try {
-      const binStat = fs.statSync(binDir);
-      if (binStat.isFile()) {
-        // 'bin' is the executable itself, not a directory
-        binPath = binDir;
-      }
-    } catch (_) {}
-
-    console.log("Dev mode: Python venv not found, falling back to compiled executable.");
+     
+    console.log("Dev mode: Python venv not found, falling back to compiled executable path.");
     return {
       command: binPath,
       args: []
@@ -758,6 +775,13 @@ class PythonProcessManager {
             const payload = message.payload || {};
             const key = payload.service_type || payload.image;
             const status = payload.status;
+            if (this.onDockerDownloadState) {
+              try {
+                this.onDockerDownloadState(payload);
+              } catch (err) {
+                console.error("onDockerDownloadState handler threw:", err);
+              }
+            }
             if (key) {
               if (["queued", "starting", "downloading"].includes(status)) {
                 this._downloadActivity.set(key, {
