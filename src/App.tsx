@@ -98,9 +98,13 @@ const TabTrigger = memo(
     const autoCompactStatus = useClientStore(
       (state) => state.autoCompactStatus,
     );
+    const reclaimInProgress = useClientStore(
+      (state) => state.reclaimStatus?.inProgress ?? false,
+    );
 
     const isDocker = value === "docker";
-    const isCompacting = isDocker && !!autoCompactStatus?.compactInProgress;
+    const isCompacting =
+      isDocker && (!!autoCompactStatus?.compactInProgress || reclaimInProgress);
     const isDownloading =
       isDocker &&
       dockerPullProgress !== null &&
@@ -152,6 +156,7 @@ function App() {
     setDependencyStatus,
     setAutoCompactStatus,
     autoCompactStatus,
+    reclaimStatus,
   } = useClientStore();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [, setForceRefreshKey] = useState(0);
@@ -274,7 +279,8 @@ function App() {
     if (
       checkingDeps ||
       !dependencyStatus?.allReady ||
-      autoCompactStatus?.compactInProgress
+      autoCompactStatus?.compactInProgress ||
+      reclaimStatus?.inProgress
     ) {
       return;
     }
@@ -284,7 +290,12 @@ function App() {
     return () => {
       window.electronAPI.stopDockerMonitoring();
     };
-  }, [autoCompactStatus?.compactInProgress, checkingDeps, dependencyStatus?.allReady]);
+  }, [
+    autoCompactStatus?.compactInProgress,
+    checkingDeps,
+    dependencyStatus?.allReady,
+    reclaimStatus?.inProgress,
+  ]);
 
   useEffect(() => {
     const fetchProfile = async () => {

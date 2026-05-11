@@ -976,6 +976,10 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
   const compactStatus = autoCompactManager
     ? await autoCompactManager.refreshCompactionStatus()
     : null;
+  const reclaimStatus = ipcDocker.getReclaimStatus?.();
+  const manualReclaimInProgress = reclaimStatus?.inProgress === true;
+  const reclaimSettling = ipcDocker.isInPostReclaimSettleWindow?.() === true;
+  const engineResetInProgress = ipcDocker.isEngineResetInProgress?.() === true;
   if (compactStatus?.compactInProgress) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("auto-compact:status", compactStatus);
@@ -983,6 +987,23 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
         type: "stderr",
         message:
           "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
+      });
+      mainWindow.webContents.send("openfork_client:status", "stopped");
+    }
+    return;
+  }
+  if (manualReclaimInProgress || reclaimSettling || engineResetInProgress) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (manualReclaimInProgress && reclaimStatus) {
+        mainWindow.webContents.send("docker:reclaim-status", reclaimStatus);
+      }
+      mainWindow.webContents.send("openfork_client:log", {
+        type: "stderr",
+        message: engineResetInProgress
+          ? "Cannot start DGN client: OpenFork Ubuntu reset is in progress."
+          : reclaimSettling
+            ? "Cannot start DGN client: OpenFork Ubuntu is reconnecting after disk compaction. Please wait a moment."
+            : "Cannot start DGN client: disk compaction is in progress. Please wait for it to complete.",
       });
       mainWindow.webContents.send("openfork_client:status", "stopped");
     }

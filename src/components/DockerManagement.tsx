@@ -121,6 +121,8 @@ export const DockerManagement = memo(() => {
         window.electronAPI.getAutoCompactStatus(),
         window.electronAPI.getReclaimStatus(),
       ]);
+      const reclaimCompleted =
+        !reclaimStatus?.inProgress && reclaimStatus?.phase === "completed";
       // Don't resurface a stale "completed" banner from a prior session —
       // same filter as store.ts hydration. Live events keep the store current.
       if (compactStatus.compactInProgress || compactStatus.phase !== "completed") {
@@ -157,6 +159,16 @@ export const DockerManagement = memo(() => {
         imagesResult.data.length > 0;
 
       if (!nextDockerStatus.running && !hasRunningContainers && !hasListedImages) {
+        if (diskResult.success) setDiskSpace(diskResult.data);
+
+        if (
+          nextDockerStatus.error === "WSL_COMPACTING" &&
+          reclaimCompleted
+        ) {
+          setError(null);
+          return;
+        }
+
         if (imagesResult.success && imagesResult.data) {
           setImages(imagesResult.data);
         } else {
@@ -164,7 +176,6 @@ export const DockerManagement = memo(() => {
         }
         setContainers([]);
         useClientStore.getState().setDockerContainers([]);
-        if (diskResult.success) setDiskSpace(diskResult.data);
         setError(describeDockerState(nextDockerStatus));
         return;
       }
@@ -245,15 +256,23 @@ export const DockerManagement = memo(() => {
 
   // Refresh the Docker tab when manual disk reclaim completes.
   useEffect(() => {
+    let completionRefreshTimer: number | undefined;
     const cleanup = window.electronAPI.onReclaimStatus((status) => {
       if (status.phase === "completed") {
+        setError(null);
         fetchData();
+        completionRefreshTimer = window.setTimeout(fetchData, 3000);
       }
       if (status.phase === "failed" && status.error) {
         setError(status.error);
       }
     });
-    return cleanup;
+    return () => {
+      cleanup();
+      if (completionRefreshTimer !== undefined) {
+        window.clearTimeout(completionRefreshTimer);
+      }
+    };
   }, [fetchData]);
 
   // Auto-refresh when the active Docker engine changes.

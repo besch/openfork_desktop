@@ -11,6 +11,7 @@ import type {
   DependencyStatus,
   MonetizeWallet,
   AutoCompactStatus,
+  ReclaimStatus,
   DiskSpaceError,
   EngineSwitchNotice,
   ImageEvictedNotification,
@@ -45,6 +46,7 @@ interface DGNClientState {
   dependencyStatus: DependencyStatus | null;
   dockerContainers: DockerContainer[];
   autoCompactStatus: AutoCompactStatus | null;
+  reclaimStatus: ReclaimStatus | null;
   wslRecoveryStatus: WslRecoveryStatus | null;
   diskSpaceError: DiskSpaceError | null;
   engineSwitchNotice: EngineSwitchNotice | null;
@@ -58,6 +60,7 @@ interface DGNClientState {
   setDockerContainers: (containers: DockerContainer[]) => void;
   setDependencyStatus: (status: DependencyStatus | null) => void;
   setAutoCompactStatus: (status: AutoCompactStatus | null) => void;
+  setReclaimStatus: (status: ReclaimStatus | null) => void;
   setWslRecoveryStatus: (status: WslRecoveryStatus | null) => void;
   setDiskSpaceError: (error: DiskSpaceError | null) => void;
   setEngineSwitchNotice: (notice: EngineSwitchNotice | null) => void;
@@ -156,6 +159,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   dependencyStatus: null,
   dockerContainers: [],
   autoCompactStatus: null,
+  reclaimStatus: null,
   wslRecoveryStatus: null,
   diskSpaceError: null,
   engineSwitchNotice: null,
@@ -167,6 +171,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     set({ dockerContainers: containers }),
   setDependencyStatus: (status) => set({ dependencyStatus: status }),
   setAutoCompactStatus: (status) => set({ autoCompactStatus: status }),
+  setReclaimStatus: (status) => set({ reclaimStatus: status }),
   setWslRecoveryStatus: (status) => set({ wslRecoveryStatus: status }),
   setDiskSpaceError: (error) => set({ diskSpaceError: error }),
   setEngineSwitchNotice: (notice) => set({ engineSwitchNotice: notice }),
@@ -530,6 +535,7 @@ function initializeIpcListeners() {
     setJobState,
     setProviderId,
     setAutoCompactStatus,
+    setReclaimStatus,
     setWslRecoveryStatus,
     setDiskSpaceError,
     setEngineSwitchNotice,
@@ -613,6 +619,40 @@ function initializeIpcListeners() {
               error: undefined,
               recoveredAfterRestart: undefined,
             });
+          }
+        }, SYSTEM_NOTICE_TTL_MS);
+      }
+    }),
+  );
+
+  window.electronAPI
+    .getReclaimStatus()
+    .then((status) => {
+      if (status.inProgress || status.phase === "failed") {
+        setReclaimStatus(status);
+      }
+    })
+    .catch((error) => {
+      console.error("Failed to hydrate manual reclaim status:", error);
+    });
+
+  cleanupFns.push(
+    window.electronAPI.onReclaimStatus((status) => {
+      setReclaimStatus(status);
+      if (
+        (status.phase === "completed" ||
+          status.phase === "failed" ||
+          status.phase === "cancelled") &&
+        !status.inProgress
+      ) {
+        scheduleNoticeClear(() => {
+          const current = useClientStore.getState().reclaimStatus;
+          if (
+            current &&
+            current.phase === status.phase &&
+            !current.inProgress
+          ) {
+            setReclaimStatus(null);
           }
         }, SYSTEM_NOTICE_TTL_MS);
       }

@@ -116,6 +116,15 @@ function describeCompactionPhase(phase?: string) {
   return "Disk compaction is in progress";
 }
 
+function describeManualReclaimPhase(phase?: string) {
+  if (phase === "pruning_cache") return "Cleaning Docker build cache";
+  if (phase === "compacting") return "Shrinking the OpenFork Ubuntu disk";
+  if (phase === "recovering_wsl") return "Reconnecting the WSL engine";
+  if (phase?.startsWith("recovering_")) return "Reconnecting the WSL engine";
+  if (phase === "cancelling") return "Cancelling disk compaction";
+  return "Disk compaction is in progress";
+}
+
 function describeWslRecoveryPhase(phase?: string, error?: string) {
   if (phase === "stopping_client") return "Stopping the DGN client";
   if (phase === "restarting_wsl") return "Restarting OpenFork Ubuntu";
@@ -136,6 +145,7 @@ export const SystemNotifications = memo(() => {
   const autoCompactStatus = useClientStore(
     (state) => state.autoCompactStatus,
   );
+  const reclaimStatus = useClientStore((state) => state.reclaimStatus);
   const wslRecoveryStatus = useClientStore(
     (state) => state.wslRecoveryStatus,
   );
@@ -149,6 +159,7 @@ export const SystemNotifications = memo(() => {
   const setAutoCompactStatus = useClientStore(
     (state) => state.setAutoCompactStatus,
   );
+  const setReclaimStatus = useClientStore((state) => state.setReclaimStatus);
   const setWslRecoveryStatus = useClientStore(
     (state) => state.setWslRecoveryStatus,
   );
@@ -230,6 +241,44 @@ export const SystemNotifications = memo(() => {
           });
           window.electronAPI.clearAutoCompactInterrupted?.();
         }}
+      />,
+    );
+  }
+
+  if (reclaimStatus?.inProgress) {
+    notices.push(
+      <NoticeBanner
+        key="manual-reclaim-active"
+        id="manual-reclaim-active"
+        tone="amber"
+        title="Disk Compaction"
+        message={describeManualReclaimPhase(reclaimStatus.phase)}
+        icon={<HardDrive className="h-4 w-4 text-amber-300" />}
+        isBusy
+      />,
+    );
+  } else if (reclaimStatus?.phase === "completed") {
+    notices.push(
+      <NoticeBanner
+        key="manual-reclaim-completed"
+        id="manual-reclaim-completed"
+        tone="emerald"
+        title="Disk Compaction"
+        message="Reclaimed disk space successfully"
+        icon={<CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+        onDismiss={() => setReclaimStatus(null)}
+      />,
+    );
+  } else if (reclaimStatus?.phase === "failed") {
+    notices.push(
+      <NoticeBanner
+        key="manual-reclaim-failed"
+        id="manual-reclaim-failed"
+        tone="destructive"
+        title="Disk Compaction Failed"
+        message={reclaimStatus.error || "Unknown error"}
+        icon={<AlertTriangle className="h-4 w-4 text-destructive" />}
+        onDismiss={() => setReclaimStatus(null)}
       />,
     );
   }

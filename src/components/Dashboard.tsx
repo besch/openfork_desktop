@@ -53,7 +53,10 @@ const StatCard = memo(
 export const StatusIndicator = memo(() => {
   const status = useClientStore((state) => state.status);
   const compactInProgress = useClientStore(
-    (state) => state.autoCompactStatus?.compactInProgress ?? false,
+    (state) =>
+      (state.autoCompactStatus?.compactInProgress ||
+        state.reclaimStatus?.inProgress) ??
+      false,
   );
 
   if (compactInProgress) {
@@ -189,7 +192,10 @@ export const Dashboard = memo(() => {
   } = useClientStore();
   const jobState = useClientStore((state) => state.jobState);
   const compactInProgress = useClientStore(
-    (state) => state.autoCompactStatus?.compactInProgress ?? false,
+    (state) =>
+      (state.autoCompactStatus?.compactInProgress ||
+        state.reclaimStatus?.inProgress) ??
+      false,
   );
 
   useEffect(() => {

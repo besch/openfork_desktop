@@ -1091,10 +1091,24 @@ class AutoCompactManager {
 
   _notify(channel, payload) {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send(channel, {
+      const status = {
         ...this.getStatus(),
         ...payload,
-      });
+      };
+
+      // "completed" is a transient notification phase. Routine status updates
+      // from storage observations must not resurface the completion banner.
+      if (
+        channel === "auto-compact:status" &&
+        !Object.prototype.hasOwnProperty.call(payload, "phase") &&
+        !status.compactInProgress &&
+        status.phase === "completed"
+      ) {
+        status.phase = undefined;
+        status.recoveredAfterRestart = undefined;
+      }
+
+      this.mainWindow.webContents.send(channel, status);
     }
   }
 }
