@@ -52,6 +52,7 @@ class PythonProcessManager {
     // Restart settings (stored when start() is called)
     this._lastService = null;
     this._lastRoutingConfig = null;
+    this._currentProviderId = null;
 
     // Cleanup synchronization
     this._cleanupPromise = null;
@@ -74,6 +75,21 @@ class PythonProcessManager {
   /** True if a Docker image download is currently in flight. */
   hasQueuedDownloads() {
     return this.currentDownloadImage !== null || this._downloadActivity.size > 0;
+  }
+
+  /** True if Docker is actively pulling/extracting, excluding idle queued items. */
+  hasActiveDownload() {
+    if (this.currentDownloadImage !== null) return true;
+    for (const activity of this._downloadActivity.values()) {
+      if (activity?.status && activity.status !== "queued") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  getCurrentProviderId() {
+    return this._currentProviderId;
   }
 
   getLastRoutingConfig() {
@@ -665,6 +681,7 @@ class PythonProcessManager {
           if (message.type === "PROVIDER_REGISTERED") {
             const providerId =
               message.payload?.provider_id || message.payload?.providerId;
+            this._currentProviderId = providerId || null;
             if (providerId && this.mainWindow && !this.mainWindow.isDestroyed()) {
               this.mainWindow.webContents.send(
                 "openfork_client:provider-id",
@@ -966,6 +983,7 @@ class PythonProcessManager {
         this._activeJobIds.clear();
         this.currentDownloadImage = null;
         this._downloadActivity.clear();
+        this._currentProviderId = null;
         if (this.onProviderRegistered) {
           try {
             this.onProviderRegistered(null);
@@ -984,6 +1002,7 @@ class PythonProcessManager {
         this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
         this._downloadActivity.clear();
+        this._currentProviderId = null;
       });
     } catch (err) {
       console.error(`Error spawning Python process: ${err}`);

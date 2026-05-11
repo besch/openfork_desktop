@@ -35,6 +35,8 @@ class AutoCompactManager {
   static MIN_COMPACT_GAP_MS = 60 * 60 * 1000; // 1 hour minimum between auto-compactions
   static MIN_STALE_VHDX_COMPACT_GAP_MS = 24 * 60 * 60 * 1000;
   static RECOVERY_POLL_INTERVAL_MS = 5000;
+  static EXTERNAL_LOCK_MIN_QUIET_MS = 20 * 1000;
+  static EXTERNAL_RECOVERY_STABLE_PROBES = 2;
 
   constructor({
     app,
@@ -80,6 +82,8 @@ class AutoCompactManager {
     this._lastError = saved.error || undefined;
     this._compactPid = Number(saved.compactPid || 0) || null;
     this._compactStartedTs = Number(saved.compactStartedTs || 0) || 0;
+    this._lastExternalLockTs = Number(saved.lastExternalLockTs || 0) || 0;
+    this._externalStableProbeCount = 0;
     this._restartAfterCompact = !!saved.restartAfterCompact;
     this._lastServiceForRestart = saved.lastService || null;
     this._lastRoutingConfigForRestart = saved.lastRoutingConfig || null;
@@ -337,6 +341,8 @@ class AutoCompactManager {
   adoptExternalCompaction(details = {}) {
     if (process.platform !== "win32") return this.getStatus();
 
+    const now = Date.now();
+    let shouldPauseProvider = false;
     const lastService =
       this.pythonManager?.getLastService?.() || this._lastServiceForRestart;
     const lastRoutingConfig =
@@ -349,11 +355,14 @@ class AutoCompactManager {
       this._interruptedCompaction = false;
       this._phase = "external_compacting";
       this._lastError = undefined;
-      this._compactStartedTs = Date.now();
+      this._compactStartedTs = now;
+      this._lastExternalLockTs = now;
+      this._externalStableProbeCount = 0;
       this._restartAfterCompact = !!lastService;
       this._lastServiceForRestart = lastService || null;
       this._lastRoutingConfigForRestart = lastRoutingConfig || null;
       this._pausedProviderId = this._currentProviderId || this._pausedProviderId;
+      shouldPauseProvider = !!this._pausedProviderId;
       this._persistState();
       this._notify("auto-compact:status", {
         phase: this._phase,
@@ -369,14 +378,49 @@ class AutoCompactManager {
       }
     } else if (this._phase === "waiting_for_compaction") {
       this._phase = "external_compacting";
+      this._lastExternalLockTs = now;
+      this._externalStableProbeCount = 0;
+      this._pausedProviderId = this._currentProviderId || this._pausedProviderId;
+      shouldPauseProvider = !!this._pausedProviderId;
       this._persistState();
       this._notify("auto-compact:status", {
         phase: this._phase,
         external: true,
         source: details.source,
       });
+    } else if (this._phase === "external_compacting") {
+      this._lastExternalLockTs = now;
+      this._externalStableProbeCount = 0;
+      this._persistState();
     }
 
+    if (this.pythonManager?.isRunning?.()) {
+      this.pythonManager.setCompactionPending?.(true);
+    }
+    if (
+      shouldPauseProvider &&
+      this._pausedProviderId &&
+      typeof this.setProviderPausedForCompaction === "function"
+    ) {
+      this.setProviderPausedForCompaction(this._pausedProviderId, true).then(
+        (result) => {
+          if (!result?.success) {
+            console.warn(
+              "AutoCompactManager: could not pause provider for external compaction:",
+              result?.error || "unknown error",
+            );
+          }
+        },
+        (err) => {
+          console.warn(
+            "AutoCompactManager: provider pause request failed:",
+            err?.message || err,
+          );
+        },
+      );
+    }
+    this.dockerMonitor?.stopDockerMonitoring?.();
+    this.dockerMonitor?.resetDockerRoutingCache?.();
     this._startRecoveryWatch();
     return this.getStatus();
   }
@@ -406,6 +450,7 @@ class AutoCompactManager {
       error: this._lastError,
       compactPid: this._compactPid,
       compactStartedTs: this._compactStartedTs,
+      lastExternalLockTs: this._lastExternalLockTs,
       restartAfterCompact: this._restartAfterCompact,
       lastService: this._lastServiceForRestart,
       lastRoutingConfig: this._lastRoutingConfigForRestart,
@@ -460,6 +505,8 @@ class AutoCompactManager {
     this._ownedCompactionFlow = false;
     this._compactPid = null;
     this._compactStartedTs = 0;
+    this._lastExternalLockTs = 0;
+    this._externalStableProbeCount = 0;
     this._freedSinceLastCompact = 0;
     this._lastCompactTs = Date.now();
     this._lastStaleVhdxCompactTs = this._lastCompactTs;
@@ -481,6 +528,9 @@ class AutoCompactManager {
       phase: "completed",
       recoveredAfterRestart: true,
     });
+    if (this.pythonManager?.isRunning?.()) {
+      this.pythonManager.setCompactionPending?.(false);
+    }
 
     if (providerId) {
       try {
@@ -546,7 +596,13 @@ class AutoCompactManager {
     const wslDistro = await this.wslUtils?.getWslDistroName?.();
     if (!wslDistro) return false;
     const attachStatus = await this._probeWslAttachStatus(wslDistro);
-    if (attachStatus === "blocked") return true;
+    if (attachStatus === "blocked") {
+      this._noteExternalLockObserved();
+      return true;
+    }
+    if (this._phase === "external_compacting") {
+      return this._isExternalCompactionStillActive(wslDistro, attachStatus);
+    }
     if (attachStatus === "ok") return false;
 
     // On app restart while DiskPart is still compacting, `wsl.exe -d ... true`
@@ -561,6 +617,61 @@ class AutoCompactManager {
     // probe should not keep the app blocked forever. Docker recovery can handle
     // any remaining WSL service trouble after compaction is cleared.
     return false;
+  }
+
+  _noteExternalLockObserved() {
+    if (this._phase !== "external_compacting") return;
+    this._lastExternalLockTs = Date.now();
+    this._externalStableProbeCount = 0;
+    this._persistState();
+  }
+
+  async _isExternalCompactionStillActive(wslDistro, attachStatus) {
+    const now = Date.now();
+    const lastLockTs = this._lastExternalLockTs || this._compactStartedTs || now;
+    if (now - lastLockTs < AutoCompactManager.EXTERNAL_LOCK_MIN_QUIET_MS) {
+      return true;
+    }
+
+    let dockerStatus = null;
+    try {
+      dockerStatus = await this.dockerEngine?.resolveDockerStatus?.({
+        allowNativeStart: false,
+        wslHostTimeoutMs: 5000,
+      });
+    } catch (err) {
+      console.warn(
+        "AutoCompactManager: external compaction Docker probe failed:",
+        err?.message || err,
+      );
+    }
+
+    if (dockerStatus?.error === "WSL_VHDX_LOCKED") {
+      this._noteExternalLockObserved();
+      return true;
+    }
+
+    if (attachStatus !== "ok") {
+      const distroState = await this._getWslDistroState(wslDistro);
+      if (distroState !== "running" && !dockerStatus?.running) {
+        // With no host compaction process and no VHDX lock left, this is most
+        // likely normal WSL recovery work. Require a second matching probe so a
+        // transient timeout cannot flip the UI back and forth.
+        this._externalStableProbeCount += 1;
+        this._persistState();
+        return (
+          this._externalStableProbeCount <
+          AutoCompactManager.EXTERNAL_RECOVERY_STABLE_PROBES
+        );
+      }
+    }
+
+    this._externalStableProbeCount += 1;
+    this._persistState();
+    return (
+      this._externalStableProbeCount <
+      AutoCompactManager.EXTERNAL_RECOVERY_STABLE_PROBES
+    );
   }
 
   _isProcessRunning(pid) {
@@ -1013,15 +1124,12 @@ class AutoCompactManager {
           );
         }
       }
-      // 7. Restart Docker monitoring if it was active.
-      this.dockerMonitor?.resetDockerRoutingCache?.();
-      if (wasMonitoring) {
-        this.dockerMonitor?.startDockerMonitoring?.();
-      }
       this._compactInProgress = false;
       this._ownedCompactionFlow = false;
       this._compactPid = null;
       this._compactStartedTs = 0;
+      this._lastExternalLockTs = 0;
+      this._externalStableProbeCount = 0;
       this._restartAfterCompact = false;
       this._lastServiceForRestart = null;
       this._lastRoutingConfigForRestart = null;
@@ -1035,6 +1143,12 @@ class AutoCompactManager {
         phase: this._phase,
         error: this._lastError,
       });
+      // 7. Restart Docker monitoring after the compaction flag is cleared so
+      // the monitor does not immediately defer itself.
+      this.dockerMonitor?.resetDockerRoutingCache?.();
+      if (wasMonitoring) {
+        this.dockerMonitor?.startDockerMonitoring?.();
+      }
     }
   }
 

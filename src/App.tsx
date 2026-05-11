@@ -16,8 +16,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Auth } from "@/components/Auth";
 import { ShutdownOverlay } from "@/components/ShutdownOverlay";
 import { DependencySetup } from "@/components/DependencySetup";
-import { UpdateNotification } from "@/components/UpdateNotification";
-import { CudaUpdateNotification } from "@/components/CudaUpdateNotification";
 import { SystemNotifications } from "@/components/SystemNotifications";
 import { Loader } from "@/components/ui/loader";
 import {
@@ -99,7 +97,10 @@ const TabTrigger = memo(
       (state) => state.autoCompactStatus,
     );
     const reclaimInProgress = useClientStore(
-      (state) => state.reclaimStatus?.inProgress ?? false,
+      (state) =>
+        (state.reclaimStatus?.inProgress ||
+          state.reclaimStatus?.settling) ??
+        false,
     );
 
     const isDocker = value === "docker";
@@ -280,7 +281,8 @@ function App() {
       checkingDeps ||
       !dependencyStatus?.allReady ||
       autoCompactStatus?.compactInProgress ||
-      reclaimStatus?.inProgress
+      reclaimStatus?.inProgress ||
+      reclaimStatus?.settling
     ) {
       return;
     }
@@ -295,6 +297,7 @@ function App() {
     checkingDeps,
     dependencyStatus?.allReady,
     reclaimStatus?.inProgress,
+    reclaimStatus?.settling,
   ]);
 
   useEffect(() => {
@@ -527,8 +530,6 @@ function App() {
           </Tabs>
         </div>
       </div>
-      <UpdateNotification />
-      <CudaUpdateNotification />
     </>
   );
 }

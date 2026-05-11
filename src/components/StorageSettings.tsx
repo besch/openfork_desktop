@@ -63,6 +63,9 @@ export function StorageSettings({
     build_cache_count: number;
     docker_system_image_bytes: number;
     docker_system_image_gb: string;
+    known: boolean;
+    stale?: boolean;
+    reason?: string;
   } | null>(null);
   const [selectedDrive, setSelectedDrive] = useState<string>("");
   const [isReclaiming, setIsReclaiming] = useState(false);
@@ -318,15 +321,39 @@ export function StorageSettings({
   }, [cacheLimitGb, totalDiskGb]);
   const cacheSliderValue = Math.max(50, cacheLimitGb);
   const imageCacheUsedGb = Number.parseFloat(imageCacheUsage?.total_gb || "0");
+  const imageUsageKnown = imageCacheUsage?.known !== false;
+  const imageUsageStale = imageCacheUsage?.stale === true;
   const cacheUsedPercent =
-    cacheLimitGb > 0
+    cacheLimitGb > 0 && (imageUsageKnown || imageUsageStale)
       ? Math.min(100, Math.round((imageCacheUsedGb / cacheLimitGb) * 100))
       : 0;
+  const imageUsageDisplay =
+    imageCacheUsage && (imageUsageKnown || imageUsageStale)
+      ? `${imageCacheUsage.total_gb} GB`
+      : imageCacheUsage
+        ? "Unknown"
+        : "--";
+  const imageUsageQualifier = imageUsageStale
+    ? "Last known"
+    : imageUsageKnown
+      ? "Current"
+      : "Unavailable";
   const reclaimInProgress = !!reclaimStatus?.inProgress;
-  const reclaimBusy = isReclaiming || reclaimInProgress;
+  const reclaimSettling = reclaimStatus?.settling === true;
+  const reclaimBusy = isReclaiming || reclaimInProgress || reclaimSettling;
   const autoCompactInProgress = autoCompact?.compactInProgress === true;
   const reclaimBusyLabel = reclaimStatus?.phase?.startsWith("recovering")
     ? "Reconnecting..."
+    : reclaimStatus?.phase === "waiting_for_idle"
+      ? reclaimStatus.waitingForActiveDownload
+        ? "Waiting for download..."
+        : reclaimStatus.waitingForActiveJob
+          ? "Waiting for job..."
+          : "Waiting for idle..."
+    : reclaimStatus?.phase === "stopping_client"
+      ? "Pausing engine..."
+    : reclaimSettling
+      ? "Reconnecting..."
     : reclaimStatus?.phase === "pruning_cache"
       ? "Cleaning cache..."
     : reclaimBusy
@@ -518,8 +545,8 @@ export function StorageSettings({
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <p className={helperTextClassName}>
-                  Stop the engine first. Compaction runs in the background and
-                  Windows may ask for admin permission.
+                  New jobs and image downloads pause first. Current work is
+                  allowed to finish before compaction starts.
                 </p>
                 <Button
                   variant="primary"
@@ -706,15 +733,22 @@ export function StorageSettings({
                   Used by Images
                 </p>
                 <p className="mt-1 text-xl font-black text-white tabular-nums">
-                  {imageCacheUsage ? `${imageCacheUsage.total_gb} GB` : "--"}
+                  {imageUsageDisplay}
                 </p>
+                {imageCacheUsage && (
+                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/35">
+                    {imageUsageQualifier}
+                  </p>
+                )}
               </div>
               <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
                   Image Count
                 </p>
                 <p className="mt-1 text-xl font-black text-white tabular-nums">
-                  {imageCacheUsage ? imageCacheUsage.image_count : "--"}
+                  {imageCacheUsage && (imageUsageKnown || imageUsageStale)
+                    ? imageCacheUsage.image_count
+                    : "--"}
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-3">
@@ -722,7 +756,7 @@ export function StorageSettings({
                   Build Cache
                 </p>
                 <p className="mt-1 text-xl font-black text-white tabular-nums">
-                  {imageCacheUsage
+                  {imageCacheUsage && (imageUsageKnown || imageUsageStale)
                     ? `${imageCacheUsage.build_cache_reclaimable_gb} GB`
                     : "--"}
                 </p>
@@ -746,7 +780,9 @@ export function StorageSettings({
               <div className="flex items-center justify-between gap-3">
                 <Label className={labelClassName}>Storage Budget</Label>
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/45">
-                  {cacheUsedPercent}% used
+                  {imageUsageKnown || imageUsageStale
+                    ? `${cacheUsedPercent}% used`
+                    : "Usage unknown"}
                 </span>
               </div>
               <Slider
@@ -769,8 +805,16 @@ export function StorageSettings({
               />
               <div className="h-2 overflow-hidden rounded-full bg-white/5">
                 <div
-                  className="h-full rounded-full bg-amber-500 transition-all"
-                  style={{ width: `${cacheUsedPercent}%` }}
+                  className={`h-full rounded-full transition-all ${
+                    imageUsageStale ? "bg-amber-300/60" : "bg-amber-500"
+                  }`}
+                  style={{
+                    width: `${cacheUsedPercent}%`,
+                    minWidth:
+                      cacheUsedPercent > 0 && cacheUsedPercent < 2
+                        ? "0.5rem"
+                        : undefined,
+                  }}
                 />
               </div>
               <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-white/35">

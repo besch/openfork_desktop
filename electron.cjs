@@ -544,10 +544,13 @@ dockerEngine.init({
 
 ipcDocker.init({
   app,
+  store,
   getMainWindow: () => mainWindow,
   getPythonManager: () => pythonManager,
   getAutoCompactInProgress: () =>
     autoCompactManager?.isCompactionInProgress?.() === true,
+  getCurrentProviderId: () => pythonManager?.getCurrentProviderId?.() || null,
+  setProviderPausedForCompaction,
   onImageRemoved: (payload) => {
     if (cleanupManager) cleanupManager.notifyImageEvicted(payload);
     if (autoCompactManager) autoCompactManager.notifyImageEvicted(payload);

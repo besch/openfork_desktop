@@ -127,13 +127,15 @@ export const DockerManagement = memo(() => {
       ]);
       const reclaimCompleted =
         !reclaimStatus?.inProgress && reclaimStatus?.phase === "completed";
+      const reclaimBlocked =
+        reclaimStatus?.inProgress || reclaimStatus?.settling;
       // Don't resurface a stale "completed" banner from a prior session —
       // same filter as store.ts hydration. Live events keep the store current.
       if (compactStatus.compactInProgress || compactStatus.phase !== "completed") {
         setAutoCompactStatus(compactStatus);
       }
 
-      if (compactStatus?.compactInProgress || reclaimStatus?.inProgress) {
+      if (compactStatus?.compactInProgress || reclaimBlocked) {
         const diskResult = await window.electronAPI.getDiskSpace();
         if (diskResult.success) setDiskSpace(diskResult.data);
         setImages([]);

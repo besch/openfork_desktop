@@ -17,40 +17,57 @@ const {
 } = require("./compaction-utils.cjs");
 
 let _app;
+let _store;
 let _getMainWindow;
 let _getPythonManager;
 let _getAutoCompactInProgress;
+let _getCurrentProviderId;
+let _setProviderPausedForCompaction;
 let _onImageRemoved;
 let _onManualCompactCompleted;
 let _onStorageObserved;
 
 function init({
   app,
+  store,
   getMainWindow,
   getPythonManager,
   getAutoCompactInProgress,
+  getCurrentProviderId,
+  setProviderPausedForCompaction,
   onImageRemoved,
   onManualCompactCompleted,
   onStorageObserved,
 }) {
   _app = app;
+  _store = store || null;
   _getMainWindow = getMainWindow || null;
   _getPythonManager = getPythonManager;
   _getAutoCompactInProgress = getAutoCompactInProgress || null;
+  _getCurrentProviderId = getCurrentProviderId || null;
+  _setProviderPausedForCompaction = setProviderPausedForCompaction || null;
   _onImageRemoved = onImageRemoved || null;
   _onManualCompactCompleted = onManualCompactCompleted || null;
   _onStorageObserved = onStorageObserved || null;
+
+  hydrateReclaimState();
 }
 
 let reclaimProcess = null;
 let reclaimCancelRequested = false;
 let reclaimWasMonitoring = false;
+let reclaimRecoveryTimer = null;
+let reclaimRecoveryProbeInFlight = false;
 let lastSuccessfulReclaimTs = 0;
 let cachedOpenForkImageUsage = null;
 let cachedOpenForkImageUsageTs = 0;
 let openForkImageUsagePromise = null;
 const POST_RECLAIM_WSL_SETTLE_MS = 60 * 1000;
 const IMAGE_CACHE_USAGE_TTL_MS = 60 * 1000;
+const RECLAIM_IDLE_WAIT_TIMEOUT_MS = 30 * 60 * 1000;
+const RECLAIM_IDLE_POLL_MS = 1000;
+const RECLAIM_RECOVERY_POLL_MS = 5000;
+const MANUAL_RECLAIM_STATE_KEY = "manualReclaimState";
 const reclaimState = {
   inProgress: false,
   phase: undefined,
@@ -61,7 +78,14 @@ const reclaimState = {
 };
 
 function getReclaimStatus() {
-  return { ...reclaimState };
+  const settling = isInPostReclaimSettleWindow();
+  return {
+    ...reclaimState,
+    settling,
+    settleUntilTs: settling
+      ? lastSuccessfulReclaimTs + POST_RECLAIM_WSL_SETTLE_MS
+      : undefined,
+  };
 }
 
 function isReclaimInProgress() {
@@ -79,8 +103,60 @@ function isAutoCompactInProgress() {
   return _getAutoCompactInProgress?.() === true;
 }
 
+function persistReclaimState() {
+  if (!_store) return;
+  try {
+    _store.set(MANUAL_RECLAIM_STATE_KEY, {
+      ...reclaimState,
+      lastSuccessfulReclaimTs,
+    });
+  } catch (error) {
+    console.warn("Could not persist manual reclaim state:", error.message);
+  }
+}
+
+function hydrateReclaimState() {
+  if (!_store) return;
+  try {
+    const saved = _store.get(MANUAL_RECLAIM_STATE_KEY) || {};
+    lastSuccessfulReclaimTs =
+      Number(saved.lastSuccessfulReclaimTs || 0) || 0;
+    if (process.platform === "win32" && saved.inProgress === true) {
+      const savedPhase = saved.phase || "external_compacting";
+      const mayHaveLockedDisk =
+        savedPhase === "compacting" ||
+        savedPhase === "external_compacting" ||
+        savedPhase.startsWith?.("recovering_");
+      if (mayHaveLockedDisk) {
+        Object.assign(reclaimState, {
+          inProgress: true,
+          phase: savedPhase,
+          error: undefined,
+          startedTs: Number(saved.startedTs || Date.now()) || Date.now(),
+          pid: Number(saved.pid || 0) || null,
+          cancelRequested: false,
+        });
+        setTimeout(() => startManualReclaimRecoveryWatch(), 0);
+      } else {
+        Object.assign(reclaimState, {
+          inProgress: false,
+          phase: "cancelled",
+          error: "Manual compaction was interrupted before disk shrink started.",
+          startedTs: Number(saved.startedTs || 0) || 0,
+          pid: null,
+          cancelRequested: false,
+        });
+        persistReclaimState();
+      }
+    }
+  } catch (error) {
+    console.warn("Could not hydrate manual reclaim state:", error.message);
+  }
+}
+
 function notifyReclaimStatus(patch = {}) {
   Object.assign(reclaimState, patch);
+  persistReclaimState();
   const mainWindow = _getMainWindow?.();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("docker:reclaim-status", getReclaimStatus());
@@ -89,13 +165,24 @@ function notifyReclaimStatus(patch = {}) {
 
 function resetReclaimRouting() {
   dockerMonitor.resetDockerRoutingCache();
-  if (reclaimWasMonitoring) {
+  if (isInPostReclaimSettleWindow()) {
+    const remainingMs = Math.max(
+      0,
+      lastSuccessfulReclaimTs + POST_RECLAIM_WSL_SETTLE_MS - Date.now(),
+    );
+    setTimeout(() => {
+      if (!isReclaimInProgress() && !isAutoCompactInProgress()) {
+        dockerMonitor.startDockerMonitoring();
+      }
+    }, remainingMs + 250);
+  } else if (reclaimWasMonitoring) {
     dockerMonitor.startDockerMonitoring();
   }
   reclaimWasMonitoring = false;
 }
 
 function finishReclaim({ phase, error } = {}) {
+  stopManualReclaimRecoveryWatch();
   const completed = phase === "completed";
   if (completed) {
     lastSuccessfulReclaimTs = Date.now();
@@ -137,6 +224,312 @@ async function recoverWslAfterSuccessfulReclaim(wslDistro) {
       notifyReclaimStatus({ phase: `recovering_${phase}` });
     },
   });
+}
+
+function stopManualReclaimRecoveryWatch() {
+  if (reclaimRecoveryTimer) {
+    clearInterval(reclaimRecoveryTimer);
+    reclaimRecoveryTimer = null;
+  }
+}
+
+function startManualReclaimRecoveryWatch() {
+  if (!reclaimState.inProgress || reclaimRecoveryTimer) return;
+  reclaimRecoveryTimer = setInterval(
+    () => tickManualReclaimRecoveryWatch(),
+    RECLAIM_RECOVERY_POLL_MS,
+  );
+  tickManualReclaimRecoveryWatch();
+}
+
+async function tickManualReclaimRecoveryWatch() {
+  if (reclaimRecoveryProbeInFlight) return;
+  reclaimRecoveryProbeInFlight = true;
+  try {
+    const active = await isHostManualReclaimActive();
+    if (active) return;
+
+    const wslDistro = await wslUtils.getWslDistroName();
+    if (wslDistro) {
+      await recoverWslAfterSuccessfulReclaim(wslDistro);
+    }
+    finishReclaim({ phase: "completed" });
+  } catch (error) {
+    console.warn(
+      "Manual compaction recovery probe failed:",
+      error?.message || error,
+    );
+  } finally {
+    reclaimRecoveryProbeInFlight = false;
+  }
+}
+
+async function isHostManualReclaimActive() {
+  if (reclaimProcess) return true;
+  if (reclaimState.pid && (await isProcessRunning(reclaimState.pid))) {
+    return true;
+  }
+  if (await hasCompactHostProcess()) {
+    return true;
+  }
+  try {
+    const status = await dockerEngine.resolveDockerStatus({
+      allowNativeStart: false,
+      wslHostTimeoutMs: 5000,
+    });
+    return status?.error === "WSL_VHDX_LOCKED";
+  } catch {
+    return true;
+  }
+}
+
+function isProcessRunning(pid) {
+  return new Promise((resolve) => {
+    execFile(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `if (Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue) { '1' }`,
+      ],
+      { windowsHide: true, timeout: 5000 },
+      (error, stdout) => {
+        resolve(!error && stdout.toString().trim() === "1");
+      },
+    );
+  });
+}
+
+function hasCompactHostProcess() {
+  return new Promise((resolve) => {
+    const command = [
+      "$needle = 'compact' + '-wsl.ps1';",
+      "$optimize = 'Optimize' + '-VHD';",
+      "Get-CimInstance Win32_Process |",
+      "Where-Object { $_.ProcessId -ne $PID -and (",
+      "($_.CommandLine -and ($_.CommandLine -like \"*$needle*\" -or",
+      "$_.CommandLine -like \"*$optimize*\")) -or",
+      "$_.Name -ieq 'diskpart.exe'",
+      ") } | Select-Object -First 1 -ExpandProperty ProcessId",
+    ].join(" ");
+
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", command],
+      { windowsHide: true, timeout: 8000 },
+      (error, stdout) => {
+        resolve(!error && stdout.toString().trim().length > 0);
+      },
+    );
+  });
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createReclaimCancelledError() {
+  const error = new Error("Disk compaction was cancelled.");
+  error.code = "RECLAIM_CANCELLED";
+  return error;
+}
+
+function throwIfReclaimCancelled() {
+  if (reclaimCancelRequested) {
+    throw createReclaimCancelledError();
+  }
+}
+
+async function setProviderPausedForManualReclaim(providerId, paused) {
+  if (!providerId || typeof _setProviderPausedForCompaction !== "function") {
+    return false;
+  }
+
+  try {
+    const result = await _setProviderPausedForCompaction(providerId, paused);
+    if (!result?.success) {
+      console.warn(
+        `Manual compaction could not ${paused ? "set" : "clear"} provider pause:`,
+        result?.error || "unknown error",
+      );
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn(
+      `Manual compaction provider pause ${paused ? "set" : "clear"} failed:`,
+      error?.message || error,
+    );
+    return false;
+  }
+}
+
+async function waitForPythonIdleForReclaim(pythonManager) {
+  const deadline = Date.now() + RECLAIM_IDLE_WAIT_TIMEOUT_MS;
+  let lastNotifyTs = 0;
+
+  while (pythonManager?.isRunning?.()) {
+    throwIfReclaimCancelled();
+
+    const activeJob = pythonManager.hasActiveJob?.() === true;
+    const activeDownload = pythonManager.hasActiveDownload?.() === true;
+    if (!activeJob && !activeDownload) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastNotifyTs > 2500) {
+      notifyReclaimStatus({
+        phase: "waiting_for_idle",
+        waitingForActiveJob: activeJob,
+        waitingForActiveDownload: activeDownload,
+      });
+      lastNotifyTs = now;
+    }
+
+    if (now >= deadline) {
+      throw new Error(
+        "Timed out waiting for the current job or Docker image download to finish.",
+      );
+    }
+
+    await delay(RECLAIM_IDLE_POLL_MS);
+  }
+}
+
+async function runManualReclaimFlow({
+  wslDistro,
+  wasClientRunning,
+  lastService,
+  lastRoutingConfig,
+  providerId,
+}) {
+  const pythonManager = _getPythonManager?.();
+  let providerPaused = false;
+  let compactionPendingSet = false;
+  let stoppedPython = false;
+  let finalPhase = "completed";
+  let finalError;
+
+  try {
+    if (wasClientRunning && pythonManager) {
+      notifyReclaimStatus({
+        phase: "waiting_for_idle",
+        error: undefined,
+      });
+      compactionPendingSet =
+        pythonManager.setCompactionPending?.(true) === true;
+      if (!compactionPendingSet && pythonManager.isRunning?.()) {
+        throw new Error("Could not pause the DGN client for compaction.");
+      }
+      providerPaused = await setProviderPausedForManualReclaim(
+        providerId,
+        true,
+      );
+      await waitForPythonIdleForReclaim(pythonManager);
+
+      throwIfReclaimCancelled();
+      notifyReclaimStatus({ phase: "stopping_client" });
+      await pythonManager.stop();
+      stoppedPython = true;
+    }
+
+    throwIfReclaimCancelled();
+    notifyReclaimStatus({
+      inProgress: true,
+      phase: "pruning_cache",
+      error: undefined,
+      pid: null,
+      cancelRequested: false,
+    });
+
+    try {
+      const pruneResult = await pruneDockerBuildCache();
+      notifyStorageObserved({
+        buildCacheBytes: pruneResult.after.buildCacheBytes,
+        buildCacheReclaimableBytes:
+          pruneResult.after.buildCacheReclaimableBytes,
+        buildCacheCount: pruneResult.after.buildCacheCount,
+      });
+      if (pruneResult.freedBytes > 0) {
+        console.log(
+          `Pruned ${(pruneResult.freedBytes / 1024 ** 3).toFixed(1)} GB of Docker build cache before WSL compaction.`,
+        );
+      }
+    } catch (pruneError) {
+      console.warn(
+        "Could not prune Docker build cache before WSL compaction:",
+        pruneError?.message || pruneError,
+      );
+    }
+
+    throwIfReclaimCancelled();
+    notifyReclaimStatus({
+      inProgress: true,
+      phase: "compacting",
+      error: undefined,
+      startedTs: reclaimState.startedTs || Date.now(),
+      pid: null,
+      cancelRequested: false,
+    });
+
+    await runCompactWslScript({
+      app: _app,
+      wslDistro,
+      timeoutMs: 30 * 60 * 1000,
+      onProcess: (child) => {
+        reclaimProcess = child;
+        notifyReclaimStatus({ pid: child.pid || null });
+      },
+    });
+
+    throwIfReclaimCancelled();
+    await recoverWslAfterSuccessfulReclaim(wslDistro);
+  } catch (error) {
+    if (reclaimCancelRequested || error?.code === "RECLAIM_CANCELLED") {
+      finalPhase = "cancelled";
+    } else {
+      finalPhase = "failed";
+      finalError = error?.message || "Compaction failed.";
+      console.error("Compaction failed:", error);
+    }
+  } finally {
+    if (compactionPendingSet && pythonManager?.isRunning?.()) {
+      pythonManager.setCompactionPending?.(false);
+    }
+
+    if (
+      wasClientRunning &&
+      stoppedPython &&
+      lastService &&
+      pythonManager &&
+      !pythonManager.isRunning?.()
+    ) {
+      try {
+        notifyReclaimStatus({ phase: "restarting_client" });
+        await pythonManager.start(lastService, lastRoutingConfig);
+      } catch (restartError) {
+        if (finalPhase === "completed") {
+          finalPhase = "failed";
+          finalError = `Failed to restart DGN client after compaction: ${
+            restartError?.message || restartError
+          }`;
+        } else {
+          console.warn(
+            "Manual compaction could not restart the DGN client:",
+            restartError?.message || restartError,
+          );
+        }
+      }
+    }
+
+    if (providerPaused) {
+      await setProviderPausedForManualReclaim(providerId, false);
+    }
+
+    finishReclaim({ phase: finalPhase, error: finalError });
+  }
 }
 
 async function tryTrimWslFilesystem() {
@@ -269,14 +662,34 @@ async function getOpenForkImageCacheUsage({ forceRefresh = false } = {}) {
 
   openForkImageUsagePromise = getOpenForkImageCacheUsageUncached()
     .then((usage) => {
-      cachedOpenForkImageUsage = usage;
-      cachedOpenForkImageUsageTs = Date.now();
+      if (usage.known) {
+        cachedOpenForkImageUsage = usage;
+        cachedOpenForkImageUsageTs = Date.now();
+      }
       return usage;
     })
     .finally(() => {
       openForkImageUsagePromise = null;
     });
   return openForkImageUsagePromise;
+}
+
+function getUnknownOpenForkImageCacheUsage(reason) {
+  const lastKnown = cachedOpenForkImageUsage?.known
+    ? cachedOpenForkImageUsage
+    : null;
+  return {
+    totalBytes: lastKnown?.totalBytes || 0,
+    imageCount: lastKnown?.imageCount || 0,
+    buildCacheBytes: lastKnown?.buildCacheBytes || 0,
+    buildCacheReclaimableBytes:
+      lastKnown?.buildCacheReclaimableBytes || 0,
+    buildCacheCount: lastKnown?.buildCacheCount || 0,
+    systemImageBytes: lastKnown?.systemImageBytes || 0,
+    known: false,
+    stale: !!lastKnown,
+    reason,
+  };
 }
 
 async function getOpenForkImageCacheUsageUncached() {
@@ -286,7 +699,7 @@ async function getOpenForkImageCacheUsageUncached() {
     routingStatus?.error === "WSL_COMPACTING" ||
     routingStatus?.error === "WSL_VHDX_LOCKED"
   ) {
-    return { totalBytes: 0, imageCount: 0, known: false };
+    return getUnknownOpenForkImageCacheUsage(routingStatus.error);
   }
 
   const systemUsage = await getDockerSystemDiskUsage();
@@ -1128,36 +1541,27 @@ function register(ipcMain) {
       return {
         success: true,
         data: {
-          total_bytes: imageUsage.known ? imageUsage.totalBytes : 0,
-          total_gb: (
-            (imageUsage.known ? imageUsage.totalBytes : 0) /
-            1024 ** 3
-          ).toFixed(1),
-          image_count: imageUsage.known ? imageUsage.imageCount : 0,
-          build_cache_bytes: imageUsage.known
-            ? imageUsage.buildCacheBytes
-            : 0,
+          total_bytes: imageUsage.totalBytes || 0,
+          total_gb: ((imageUsage.totalBytes || 0) / 1024 ** 3).toFixed(1),
+          image_count: imageUsage.imageCount || 0,
+          build_cache_bytes: imageUsage.buildCacheBytes || 0,
           build_cache_gb: (
-            (imageUsage.known ? imageUsage.buildCacheBytes : 0) /
-            1024 ** 3
+            (imageUsage.buildCacheBytes || 0) / 1024 ** 3
           ).toFixed(1),
-          build_cache_reclaimable_bytes: imageUsage.known
-            ? imageUsage.buildCacheReclaimableBytes
-            : 0,
+          build_cache_reclaimable_bytes:
+            imageUsage.buildCacheReclaimableBytes || 0,
           build_cache_reclaimable_gb: (
-            (imageUsage.known ? imageUsage.buildCacheReclaimableBytes : 0) /
+            (imageUsage.buildCacheReclaimableBytes || 0) /
             1024 ** 3
           ).toFixed(1),
-          build_cache_count: imageUsage.known
-            ? imageUsage.buildCacheCount
-            : 0,
-          docker_system_image_bytes: imageUsage.known
-            ? imageUsage.systemImageBytes
-            : 0,
+          build_cache_count: imageUsage.buildCacheCount || 0,
+          docker_system_image_bytes: imageUsage.systemImageBytes || 0,
           docker_system_image_gb: (
-            (imageUsage.known ? imageUsage.systemImageBytes : 0) /
-            1024 ** 3
+            (imageUsage.systemImageBytes || 0) / 1024 ** 3
           ).toFixed(1),
+          known: imageUsage.known === true,
+          stale: imageUsage.stale === true,
+          reason: imageUsage.reason,
         },
       };
     } catch (error) {
@@ -1193,13 +1597,12 @@ function register(ipcMain) {
           "Wait for automatic disk compaction to finish before starting another compaction.",
       };
     }
-
-    // Refuse to compact while the DGN client is running
-    if (_getPythonManager()?.isRunning()) {
+    if (isInPostReclaimSettleWindow()) {
       return {
         success: false,
-        error: "CLIENT_RUNNING",
-        message: "Stop the DGN engine before compacting disk space.",
+        error: "COMPACTION_SETTLING",
+        message:
+          "OpenFork Ubuntu is reconnecting after disk compaction. Try again in a moment.",
       };
     }
 
@@ -1219,38 +1622,18 @@ function register(ipcMain) {
         };
       }
 
-      notifyReclaimStatus({
-        inProgress: true,
-        phase: "pruning_cache",
-        error: undefined,
-        startedTs: Date.now(),
-        pid: null,
-        cancelRequested: false,
-      });
-
-      try {
-        const pruneResult = await pruneDockerBuildCache();
-        notifyStorageObserved({
-          buildCacheBytes: pruneResult.after.buildCacheBytes,
-          buildCacheReclaimableBytes:
-            pruneResult.after.buildCacheReclaimableBytes,
-          buildCacheCount: pruneResult.after.buildCacheCount,
-        });
-        if (pruneResult.freedBytes > 0) {
-          console.log(
-            `Pruned ${(pruneResult.freedBytes / 1024 ** 3).toFixed(1)} GB of Docker build cache before WSL compaction.`,
-          );
-        }
-      } catch (pruneError) {
-        console.warn(
-          "Could not prune Docker build cache before WSL compaction:",
-          pruneError?.message || pruneError,
-        );
-      }
+      const pythonManager = _getPythonManager?.();
+      const wasClientRunning = pythonManager?.isRunning?.() === true;
+      const lastService = pythonManager?.getLastService?.() || null;
+      const lastRoutingConfig = pythonManager?.getLastRoutingConfig?.() || null;
+      const providerId =
+        _getCurrentProviderId?.() ||
+        pythonManager?.getCurrentProviderId?.() ||
+        null;
 
       notifyReclaimStatus({
         inProgress: true,
-        phase: "compacting",
+        phase: wasClientRunning ? "waiting_for_idle" : "pruning_cache",
         error: undefined,
         startedTs: Date.now(),
         pid: null,
@@ -1258,44 +1641,19 @@ function register(ipcMain) {
       });
 
       reclaimCancelRequested = false;
-      runCompactWslScript({
-        app: _app,
+      runManualReclaimFlow({
         wslDistro,
-        timeoutMs: 30 * 60 * 1000,
-        onProcess: (child) => {
-          reclaimProcess = child;
-          notifyReclaimStatus({ pid: child.pid || null });
-        },
-      })
-        .then(() => {
-          if (reclaimCancelRequested) {
-            finishReclaim({ phase: "cancelled" });
-            return;
-          }
-
-          recoverWslAfterSuccessfulReclaim(wslDistro)
-            .catch((recoveryError) => {
-              console.warn(
-                "Post-compaction WSL recovery failed:",
-                recoveryError?.message || recoveryError,
-              );
-            })
-            .finally(() => {
-              finishReclaim({ phase: "completed" });
-            });
-        })
-        .catch((error) => {
-          if (reclaimCancelRequested) {
-            finishReclaim({ phase: "cancelled" });
-            return;
-          }
-
-          console.error("Compaction failed:", error);
-          finishReclaim({
-            phase: "failed",
-            error: error?.message || "Compaction failed.",
-          });
+        wasClientRunning,
+        lastService,
+        lastRoutingConfig,
+        providerId,
+      }).catch((error) => {
+        console.error("Manual compaction flow failed unexpectedly:", error);
+        finishReclaim({
+          phase: "failed",
+          error: error?.message || "Compaction failed.",
         });
+      });
 
       return { success: true, started: true, status: getReclaimStatus() };
     } catch (error) {
@@ -1309,12 +1667,16 @@ function register(ipcMain) {
   });
 
   ipcMain.handle("docker:cancel-reclaim-space", async () => {
-    if (!reclaimState.inProgress || !reclaimProcess) {
+    if (!reclaimState.inProgress) {
       return { success: true, status: getReclaimStatus() };
     }
 
     reclaimCancelRequested = true;
     notifyReclaimStatus({ phase: "cancelling", cancelRequested: true });
+
+    if (!reclaimProcess) {
+      return { success: true, status: getReclaimStatus() };
+    }
 
     const pid = reclaimProcess.pid;
     try {

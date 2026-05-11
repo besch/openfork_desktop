@@ -1,9 +1,12 @@
-import { memo, type ReactNode } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   CheckCircle2,
+  Download,
+  ExternalLink,
   HardDrive,
+  RefreshCcw,
   RefreshCw,
   X,
 } from "lucide-react";
@@ -12,6 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/loader";
 
 type NoticeTone = "amber" | "blue" | "emerald" | "destructive";
+const MIN_CUDA_VERSION = "12.8";
+
+interface UpdateInfo {
+  version: string;
+  releaseNotes?: string;
+}
+
+interface UpdateProgress {
+  percent: number;
+}
 
 interface NoticeBannerProps {
   id: string;
@@ -21,6 +34,8 @@ interface NoticeBannerProps {
   icon: ReactNode;
   isBusy?: boolean;
   onDismiss?: () => void;
+  details?: ReactNode;
+  actions?: ReactNode;
 }
 
 const toneClassNames: Record<
@@ -58,6 +73,8 @@ const NoticeBanner = memo(
     icon,
     isBusy,
     onDismiss,
+    details,
+    actions,
   }: NoticeBannerProps) => {
     const toneClasses = toneClassNames[tone];
 
@@ -67,13 +84,13 @@ const NoticeBanner = memo(
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
-        className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-white shadow-lg backdrop-blur-md ${toneClasses.shell}`}
+        className={`flex items-start justify-between gap-3 rounded-lg border p-3 text-white shadow-lg backdrop-blur-md ${toneClasses.shell}`}
       >
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div className="shrink-0">
             {isBusy ? <Loader size="sm" variant="primary" /> : icon}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p
               className={`text-[10px] font-black uppercase tracking-[0.18em] ${toneClasses.title}`}
             >
@@ -82,6 +99,12 @@ const NoticeBanner = memo(
             <div className="mt-0.5 text-xs font-semibold text-white/85">
               {message}
             </div>
+            {details && (
+              <div className="mt-2 text-[11px] font-medium leading-relaxed text-white/60">
+                {details}
+              </div>
+            )}
+            {actions && <div className="mt-3">{actions}</div>}
           </div>
         </div>
         {onDismiss && (
@@ -117,6 +140,8 @@ function describeCompactionPhase(phase?: string) {
 }
 
 function describeManualReclaimPhase(phase?: string) {
+  if (phase === "waiting_for_idle") return "Waiting for current work to finish";
+  if (phase === "stopping_client") return "Pausing the DGN client";
   if (phase === "pruning_cache") return "Cleaning Docker build cache";
   if (phase === "compacting") return "Shrinking the OpenFork Ubuntu disk";
   if (phase === "recovering_wsl") return "Reconnecting the WSL engine";
@@ -141,10 +166,23 @@ function describeEngine(engine: string) {
   return "Unavailable";
 }
 
+function normalizeReleaseNotes(releaseNotes: string) {
+  const parsed = new DOMParser().parseFromString(releaseNotes, "text/html");
+  return (parsed.body.textContent || releaseNotes).trim();
+}
+
 export const SystemNotifications = memo(() => {
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateProgress, setUpdateProgress] =
+    useState<UpdateProgress | null>(null);
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [cudaDismissed, setCudaDismissed] = useState(false);
+
   const autoCompactStatus = useClientStore(
     (state) => state.autoCompactStatus,
   );
+  const dependencyStatus = useClientStore((state) => state.dependencyStatus);
   const reclaimStatus = useClientStore((state) => state.reclaimStatus);
   const wslRecoveryStatus = useClientStore(
     (state) => state.wslRecoveryStatus,
@@ -171,7 +209,160 @@ export const SystemNotifications = memo(() => {
     (state) => state.setImageEvictedNotification,
   );
 
+  useEffect(() => {
+    const cleanupAvailable = window.electronAPI.onUpdateAvailable((info) => {
+      setUpdateInfo(info);
+      setUpdateDownloaded(false);
+      setUpdateProgress(null);
+      setUpdateDismissed(false);
+    });
+
+    const cleanupProgress = window.electronAPI.onUpdateProgress((progress) => {
+      setUpdateProgress(progress);
+    });
+
+    const cleanupDownloaded = window.electronAPI.onUpdateDownloaded((info) => {
+      setUpdateInfo(info);
+      setUpdateDownloaded(true);
+      setUpdateProgress(null);
+      setUpdateDismissed(false);
+    });
+
+    return () => {
+      cleanupAvailable();
+      cleanupProgress();
+      cleanupDownloaded();
+    };
+  }, []);
+
   const notices: ReactNode[] = [];
+  const nvidia = dependencyStatus?.nvidia;
+  const showCudaNotice =
+    nvidia?.available &&
+    nvidia.isOutdated &&
+    nvidia.cudaVersion &&
+    !cudaDismissed;
+
+  if (updateInfo && !updateDismissed) {
+    const releaseNotes = updateInfo.releaseNotes
+      ? normalizeReleaseNotes(updateInfo.releaseNotes)
+      : null;
+    const progressPercent = Math.max(
+      0,
+      Math.min(100, Math.round(updateProgress?.percent ?? 0)),
+    );
+
+    notices.push(
+      <NoticeBanner
+        key="app-update"
+        id="app-update"
+        tone={updateDownloaded ? "emerald" : "blue"}
+        title="App Update"
+        message={
+          updateDownloaded
+            ? `Version ${updateInfo.version} is ready to install.`
+            : `Version ${updateInfo.version} is available.`
+        }
+        icon={
+          updateDownloaded ? (
+            <RefreshCcw className="h-4 w-4 text-emerald-300" />
+          ) : (
+            <Download className="h-4 w-4 text-blue-300" />
+          )
+        }
+        isBusy={!!updateProgress && !updateDownloaded}
+        details={
+          releaseNotes && !updateDownloaded && !updateProgress ? (
+            <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-white/10 bg-black/20 p-2 font-sans">
+              {releaseNotes}
+            </pre>
+          ) : undefined
+        }
+        actions={
+          updateDownloaded ? (
+            <Button
+              size="sm"
+              variant="primary"
+              className="h-8 px-3 text-[11px] font-bold"
+              onClick={() => window.electronAPI.installUpdate()}
+            >
+              <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+              Restart & Install
+            </Button>
+          ) : updateProgress ? (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/45">
+                <span>Downloading</span>
+                <span>{progressPercent}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <motion.div
+                  className="h-full rounded-full bg-blue-400"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercent}%` }}
+                  transition={{ duration: 0.2 }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-3 text-[11px] font-bold"
+                onClick={() => setUpdateDismissed(true)}
+              >
+                Later
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                className="h-8 px-3 text-[11px] font-bold"
+                onClick={() => {
+                  window.electronAPI.downloadUpdate();
+                  setUpdateProgress({ percent: 0 });
+                }}
+              >
+                <Download className="mr-2 h-3.5 w-3.5" />
+                Download
+              </Button>
+            </div>
+          )
+        }
+        onDismiss={
+          updateDownloaded ? undefined : () => setUpdateDismissed(true)
+        }
+      />,
+    );
+  }
+
+  if (showCudaNotice) {
+    notices.push(
+      <NoticeBanner
+        key="cuda-update"
+        id="cuda-update"
+        tone="amber"
+        title="CUDA Outdated"
+        message={`CUDA ${nvidia.cudaVersion} is below the required ${MIN_CUDA_VERSION}.`}
+        icon={<AlertTriangle className="h-4 w-4 text-amber-300" />}
+        details={nvidia.gpu ? `GPU: ${nvidia.gpu}` : undefined}
+        actions={
+          <Button
+            size="sm"
+            variant="primary"
+            className="h-8 px-3 text-[11px] font-bold"
+            onClick={() =>
+              window.electronAPI.openExternal("https://www.nvidia.com/drivers")
+            }
+          >
+            <ExternalLink className="mr-2 h-3.5 w-3.5" />
+            Update Drivers
+          </Button>
+        }
+        onDismiss={() => setCudaDismissed(true)}
+      />,
+    );
+  }
 
   if (autoCompactStatus?.compactInProgress) {
     notices.push(
@@ -245,14 +436,18 @@ export const SystemNotifications = memo(() => {
     );
   }
 
-  if (reclaimStatus?.inProgress) {
+  if (reclaimStatus?.inProgress || reclaimStatus?.settling) {
     notices.push(
       <NoticeBanner
         key="manual-reclaim-active"
         id="manual-reclaim-active"
         tone="amber"
         title="Disk Compaction"
-        message={describeManualReclaimPhase(reclaimStatus.phase)}
+        message={
+          reclaimStatus.settling
+            ? "Reconnecting the WSL engine"
+            : describeManualReclaimPhase(reclaimStatus.phase)
+        }
         icon={<HardDrive className="h-4 w-4 text-amber-300" />}
         isBusy
       />,

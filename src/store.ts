@@ -628,7 +628,7 @@ function initializeIpcListeners() {
   window.electronAPI
     .getReclaimStatus()
     .then((status) => {
-      if (status.inProgress || status.phase === "failed") {
+      if (status.inProgress || status.settling || status.phase === "failed") {
         setReclaimStatus(status);
       }
     })

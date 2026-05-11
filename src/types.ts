@@ -160,6 +160,10 @@ export interface ReclaimStatus {
   startedTs?: number;
   pid?: number | null;
   cancelRequested?: boolean;
+  settling?: boolean;
+  settleUntilTs?: number;
+  waitingForActiveJob?: boolean;
+  waitingForActiveDownload?: boolean;
 }
 
 export interface WslRecoveryStatus {

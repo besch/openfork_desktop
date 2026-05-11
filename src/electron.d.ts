@@ -223,6 +223,9 @@ interface ElectronAPI {
       build_cache_count: number;
       docker_system_image_bytes: number;
       docker_system_image_gb: string;
+      known: boolean;
+      stale?: boolean;
+      reason?: string;
     };
   }>;
 

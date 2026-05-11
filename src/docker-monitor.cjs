@@ -522,6 +522,10 @@ async function checkDockerUpdates() {
 
 function startDockerMonitoring() {
   if (dockerMonitorInterval) return;
+  if (isCompactionInProgress()) {
+    resetDockerRoutingCache();
+    return;
+  }
   console.log("Starting Docker background monitoring...");
   checkDockerUpdates();
   dockerMonitorInterval = setInterval(
