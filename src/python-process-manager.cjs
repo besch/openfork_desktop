@@ -4,6 +4,7 @@ const fs = require("fs");
 const { app } = require("electron");
 const http = require("http");
 const dockerMonitor = require("./docker-monitor.cjs");
+const dockerEngine = require("./docker-engine.cjs");
 
 const PROCESS_MARKER = "openfork_dgn_client_v1_marker";
 const RENDERER_REFRESH_TOKEN_SENTINEL =
@@ -38,6 +39,7 @@ class PythonProcessManager {
     onImageEvicted,
     onDockerDownloadState,
     onProviderRegistered,
+    orchestratorApiUrl,
   }) {
     this.pythonProcess = null;
     this.shutdownServerPort = 8000;
@@ -52,6 +54,8 @@ class PythonProcessManager {
     this.onImageEvicted = onImageEvicted || null; // Optional callback for IMAGE_EVICTED events (auto-compact + cleanup UI)
     this.onDockerDownloadState = onDockerDownloadState || null; // Optional callback for image-cache refreshes
     this.onProviderRegistered = onProviderRegistered || null; // Optional callback when Python reports its provider_id
+    this.orchestratorApiUrl =
+      orchestratorApiUrl || process.env.ORCHESTRATOR_API_URL || "https://www.openfork.video";
 
     // Auth refresh debouncing
     this._lastRefreshAttempt = 0;
@@ -69,6 +73,8 @@ class PythonProcessManager {
     // Idle predicates: number of jobs currently in flight as reported by Python.
     // Used by AutoCompactManager to gate compaction on a fully idle window.
     this._activeJobIds = new Set();
+    this._activeJobs = new Map();
+    this._stopRequestedByManager = false;
 
   }
 
@@ -158,6 +164,161 @@ class PythonProcessManager {
     });
 
     return this._cleanupPromise;
+  }
+
+  async _cleanupActiveJobContainers(activeJobs) {
+    const serviceTypes = [
+      ...new Set(
+        activeJobs
+          .map((job) => job?.service_type)
+          .filter((serviceType) => typeof serviceType === "string" && serviceType.length > 0),
+      ),
+    ];
+
+    for (const serviceType of serviceTypes) {
+      const containerName = `dgn-client-${serviceType}`;
+      if (!/^[A-Za-z0-9_.-]+$/.test(containerName)) {
+        console.warn(`Skipping unsafe container name during crash cleanup: ${containerName}`);
+        continue;
+      }
+
+      try {
+        await dockerEngine.execDockerCommand(
+          `docker rm -f ${dockerEngine.escapeShellArg(containerName)} >/dev/null 2>&1 || true`,
+        );
+      } catch (error) {
+        console.warn(
+          `Could not clean up container ${containerName} after client exit:`,
+          error?.message || error,
+        );
+      }
+    }
+  }
+
+  async _resetInterruptedJobsAfterExit(activeJobs, defaultProviderId) {
+    if (!activeJobs.length) return;
+
+    let session = null;
+    try {
+      const { data, error } = await this.supabase.auth.getSession();
+      if (error) throw error;
+      session = data?.session || null;
+    } catch (error) {
+      console.warn(
+        "Could not read auth session for interrupted-job recovery:",
+        error?.message || error,
+      );
+    }
+
+    if (!session?.access_token) {
+      this.mainWindow?.webContents?.send?.("openfork_client:log", {
+        type: "stderr",
+        message:
+          "DGN client exited during a job, but no auth session was available to reset the job lease.",
+      });
+      return;
+    }
+
+    for (const job of activeJobs) {
+      const jobId = job?.id;
+      const providerId = job?.provider_id || defaultProviderId;
+      const executionToken = job?.execution_token;
+      if (!jobId || !providerId || !executionToken) {
+        console.warn("Skipping interrupted-job reset with incomplete lease data:", {
+          jobId,
+          providerId,
+          hasExecutionToken: !!executionToken,
+        });
+        continue;
+      }
+
+      try {
+        const url = new URL("/api/dgn/job/reset", this.orchestratorApiUrl);
+        url.searchParams.set("jobId", jobId);
+        url.searchParams.set("providerId", providerId);
+        url.searchParams.set("executionToken", executionToken);
+        url.searchParams.set("reason", "provider_shutdown");
+
+        const response = await fetch(url, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          throw new Error(`HTTP ${response.status}${text ? ` ${text}` : ""}`);
+        }
+
+        this.mainWindow?.webContents?.send?.("openfork_client:log", {
+          type: "stdout",
+          message: `Recovered interrupted job ${jobId}; it was returned to the queue.`,
+        });
+      } catch (error) {
+        console.warn(
+          `Could not reset interrupted job ${jobId} after client exit:`,
+          error?.message || error,
+        );
+        this.mainWindow?.webContents?.send?.("openfork_client:log", {
+          type: "stderr",
+          message: `Could not reset interrupted job ${jobId}: ${error?.message || error}`,
+        });
+      }
+    }
+  }
+
+  async _deregisterProviderAfterExit(providerId) {
+    if (!providerId) return;
+
+    let session = null;
+    try {
+      const { data, error } = await this.supabase.auth.getSession();
+      if (error) throw error;
+      session = data?.session || null;
+    } catch (error) {
+      console.warn(
+        "Could not read auth session for provider deregistration:",
+        error?.message || error,
+      );
+    }
+
+    if (!session?.access_token) return;
+
+    try {
+      const url = new URL("/api/dgn/register", this.orchestratorApiUrl);
+      url.searchParams.set("providerId", providerId);
+
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`HTTP ${response.status}${text ? ` ${text}` : ""}`);
+      }
+    } catch (error) {
+      console.warn(
+        `Could not mark provider ${providerId} offline after client exit:`,
+        error?.message || error,
+      );
+    }
+  }
+
+  async _recoverAfterUnexpectedExit(activeJobs, providerId, code) {
+    if (!activeJobs.length) return;
+
+    this.mainWindow?.webContents?.send?.("openfork_client:log", {
+      type: "stderr",
+      message: `DGN client exited unexpectedly during ${activeJobs.length} job(s) (code ${code ?? "unknown"}). Cleaning up and returning work to the queue...`,
+    });
+
+    await this._cleanupActiveJobContainers(activeJobs);
+    await this._resetInterruptedJobsAfterExit(activeJobs, providerId);
+    await this._deregisterProviderAfterExit(providerId);
   }
 
   getPythonCommand() {
@@ -882,8 +1043,19 @@ class PythonProcessManager {
             if (jobId) {
               if (message.type === "JOB_START") {
                 this._activeJobIds.add(jobId);
+                this._activeJobs.set(jobId, {
+                  id: jobId,
+                  service_type:
+                    message.payload?.service_type ||
+                    message.payload?.workflow_type ||
+                    null,
+                  workflow_type: message.payload?.workflow_type || null,
+                  execution_token: message.payload?.execution_token || null,
+                  provider_id: this._currentProviderId || null,
+                });
               } else {
                 this._activeJobIds.delete(jobId);
+                this._activeJobs.delete(jobId);
               }
             }
             // Notify cleanup manager (if registered) about job lifecycle
@@ -1001,13 +1173,22 @@ class PythonProcessManager {
 
       this.pythonProcess.on("close", (code) => {
         console.log(`Python process exited with code ${code}`);
+        const activeJobs = Array.from(this._activeJobs.values());
+        const providerId = this._currentProviderId;
+        const expectedCleanStop = this._stopRequestedByManager || this.isQuitting;
+        const exitedCleanly = code === 0;
+        const shouldRecover =
+          activeJobs.length > 0 && (!expectedCleanStop || !exitedCleanly);
+
         this.mainWindow.webContents.send("openfork_client:status", "stopped");
         this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
         this._activeJobIds.clear();
+        this._activeJobs.clear();
         this.currentDownloadImage = null;
         this._downloadActivity.clear();
         this._currentProviderId = null;
+        this._stopRequestedByManager = false;
         if (this.onProviderRegistered) {
           try {
             this.onProviderRegistered(null);
@@ -1018,6 +1199,15 @@ class PythonProcessManager {
 
         // Auto-cleanup zombies on exit
         this.cleanupRogueProcesses();
+
+        if (shouldRecover) {
+          this._recoverAfterUnexpectedExit(activeJobs, providerId, code).catch((err) => {
+            console.warn(
+              "Unexpected-exit recovery failed:",
+              err?.message || err,
+            );
+          });
+        }
       });
 
       this.pythonProcess.on("error", (err) => {
@@ -1025,8 +1215,11 @@ class PythonProcessManager {
         this.mainWindow.webContents.send("openfork_client:status", "error");
         this.mainWindow.webContents.send("openfork_client:provider-id", null);
         this.pythonProcess = null;
+        this._activeJobIds.clear();
+        this._activeJobs.clear();
         this._downloadActivity.clear();
         this._currentProviderId = null;
+        this._stopRequestedByManager = false;
       });
     } catch (err) {
       console.error(`Error spawning Python process: ${err}`);
@@ -1041,15 +1234,36 @@ class PythonProcessManager {
         return resolve();
       }
 
+      this._stopRequestedByManager = true;
       this.mainWindow.webContents.send("openfork_client:status", "stopping");
 
       let resolved = false;
       const cleanup = () => {
         if (resolved) return;
         resolved = true;
+        const activeJobs = Array.from(this._activeJobs.values());
+        const providerId = this._currentProviderId;
         console.log("Python process stopped. Setting status to 'stopped'.");
         this.pythonProcess = null;
+        this._activeJobIds.clear();
+        this._activeJobs.clear();
+        this.currentDownloadImage = null;
+        this._downloadActivity.clear();
+        this._currentProviderId = null;
+        this._stopRequestedByManager = false;
         this.mainWindow.webContents.send("openfork_client:status", "stopped");
+        if (activeJobs.length > 0) {
+          this._recoverAfterUnexpectedExit(
+            activeJobs,
+            providerId,
+            "forced-stop-timeout",
+          ).catch((err) => {
+            console.warn(
+              "Forced-stop recovery failed:",
+              err?.message || err,
+            );
+          });
+        }
         resolve();
       };
 

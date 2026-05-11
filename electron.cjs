@@ -825,6 +825,7 @@ function createWindow() {
       if (autoCompactManager)
         autoCompactManager.setCurrentProviderId(providerId);
     },
+    orchestratorApiUrl: ORCHESTRATOR_API_URL,
   });
 
   scheduleManager = new ScheduleManager({ pythonManager, store, mainWindow });
