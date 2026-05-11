@@ -16,6 +16,7 @@ import { Loader } from "@/components/ui/loader";
 
 type NoticeTone = "amber" | "blue" | "emerald" | "destructive";
 const MIN_CUDA_VERSION = "12.8";
+const NOTICE_AUTO_DISMISS_MS = 8000;
 
 interface UpdateInfo {
   version: string;
@@ -208,6 +209,10 @@ export const SystemNotifications = memo(() => {
   const setImageEvictedNotification = useClientStore(
     (state) => state.setImageEvictedNotification,
   );
+  const reclaimPhase = reclaimStatus?.phase;
+  const reclaimInProgress = reclaimStatus?.inProgress;
+  const reclaimSettling = reclaimStatus?.settling;
+  const reclaimStartedTs = reclaimStatus?.startedTs;
 
   useEffect(() => {
     const cleanupAvailable = window.electronAPI.onUpdateAvailable((info) => {
@@ -234,6 +239,38 @@ export const SystemNotifications = memo(() => {
       cleanupDownloaded();
     };
   }, []);
+
+  useEffect(() => {
+    const isTerminalReclaim =
+      reclaimPhase === "completed" ||
+      reclaimPhase === "failed" ||
+      reclaimPhase === "cancelled";
+    if (!isTerminalReclaim || reclaimInProgress || reclaimSettling) {
+      return;
+    }
+
+    const phase = reclaimPhase;
+    const startedTs = reclaimStartedTs;
+    const timeoutId = window.setTimeout(() => {
+      const current = useClientStore.getState().reclaimStatus;
+      if (
+        current?.phase === phase &&
+        current?.startedTs === startedTs &&
+        !current?.inProgress &&
+        !current?.settling
+      ) {
+        setReclaimStatus(null);
+      }
+    }, NOTICE_AUTO_DISMISS_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    reclaimPhase,
+    reclaimInProgress,
+    reclaimSettling,
+    reclaimStartedTs,
+    setReclaimStatus,
+  ]);
 
   const notices: ReactNode[] = [];
   const nvidia = dependencyStatus?.nvidia;

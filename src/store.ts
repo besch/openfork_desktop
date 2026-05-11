@@ -552,6 +552,29 @@ function initializeIpcListeners() {
     timeoutIds.push(timeoutId);
   };
 
+  const scheduleReclaimTerminalClear = (
+    status: ReclaimStatus,
+    delayMs = SYSTEM_NOTICE_TTL_MS,
+  ) => {
+    scheduleNoticeClear(() => {
+      window.electronAPI
+        .getReclaimStatus()
+        .then((latest) => {
+          const sameReclaim =
+            latest.phase === status.phase &&
+            latest.startedTs === status.startedTs;
+          if (sameReclaim && !latest.inProgress && !latest.settling) {
+            setReclaimStatus(null);
+          } else {
+            setReclaimStatus(latest);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to refresh reclaim status:", error);
+        });
+    }, delayMs);
+  };
+
   cleanupFns.push(
     window.electronAPI.onStatusChange((status) => {
       setStatus(status);
@@ -683,16 +706,30 @@ function initializeIpcListeners() {
           status.phase === "cancelled") &&
         !status.inProgress
       ) {
-        scheduleNoticeClear(() => {
-          const current = useClientStore.getState().reclaimStatus;
-          if (
-            current &&
-            current.phase === status.phase &&
-            !current.inProgress
-          ) {
-            setReclaimStatus(null);
-          }
-        }, SYSTEM_NOTICE_TTL_MS);
+        if (status.settling && status.settleUntilTs) {
+          const refreshDelayMs = Math.max(0, status.settleUntilTs - Date.now());
+          scheduleNoticeClear(() => {
+            window.electronAPI
+              .getReclaimStatus()
+              .then((latest) => {
+                setReclaimStatus(latest);
+                if (
+                  (latest.phase === "completed" ||
+                    latest.phase === "failed" ||
+                    latest.phase === "cancelled") &&
+                  !latest.inProgress &&
+                  !latest.settling
+                ) {
+                  scheduleReclaimTerminalClear(latest);
+                }
+              })
+              .catch((error) => {
+                console.error("Failed to refresh reclaim status:", error);
+              });
+          }, refreshDelayMs);
+        } else {
+          scheduleReclaimTerminalClear(status);
+        }
       }
     }),
   );
