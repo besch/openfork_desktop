@@ -67,13 +67,33 @@ docker builder prune --force --all --filter until=24h || true
 exit 0
 '@
 
+    $tempCleanupScript = $null
     try {
-        & wsl.exe -d $Name --user root -- bash -lc $cleanupScript
+        $tempCleanupScript = New-OpenForkTempFile
+        $cleanupScriptForBash = $cleanupScript.TrimStart([char]0xFEFF) -replace "`r", ""
+        Set-Content -LiteralPath $tempCleanupScript.FullName -Value $cleanupScriptForBash -Encoding ascii -NoNewline
+
+        $cleanupWindowsPath = [System.IO.Path]::GetFullPath($tempCleanupScript.FullName)
+        if ($cleanupWindowsPath -notmatch '^([A-Za-z]):\\(.*)$') {
+            throw "Temporary cleanup script path is not a drive-letter Windows path: $cleanupWindowsPath"
+        }
+        $drive = $Matches[1].ToLowerInvariant()
+        $relativePath = $Matches[2] -replace '\\', '/'
+        $wslCleanupPath = "/mnt/$drive/$relativePath"
+        if (-not $wslCleanupPath) {
+            throw "Could not translate temporary cleanup script path for WSL."
+        }
+
+        & wsl.exe -d $Name --user root -- bash $wslCleanupPath
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Docker dangling layer cleanup exited with code $LASTEXITCODE; continuing with compaction."
         }
     } catch {
         Write-Host "Docker dangling layer cleanup skipped: $($_.Exception.Message)"
+    } finally {
+        if ($null -ne $tempCleanupScript) {
+            Remove-Item -LiteralPath $tempCleanupScript.FullName -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
