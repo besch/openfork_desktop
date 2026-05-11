@@ -95,6 +95,36 @@ npm run dev
 npm run start
 ```
 
+For debugging, many local runs use two terminals:
+
+Terminal 1:
+
+```powershell
+cd D:\openfork\desktop
+npm run dev
+```
+
+Terminal 2:
+
+```powershell
+cd D:\openfork\desktop
+npm run start
+```
+
+If `bin/client.exe` exists on Windows, the desktop app uses it before falling
+back to the sibling `../client` Python source. After changing Python client code,
+rebuild and copy the executable, then stop/start the DGN client inside the
+desktop UI:
+
+```powershell
+cd D:\openfork\client
+pyinstaller client.spec
+Move-Item -Force dist\client.exe ..\desktop\bin\client.exe
+```
+
+To force source-mode execution from `../client/venv`, remove or rename
+`desktop/bin/client.exe` before starting the DGN client.
+
 ## Packaging
 
 ```powershell
