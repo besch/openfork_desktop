@@ -1,43 +1,8 @@
 const { execFile } = require("child_process");
-const path = require("path");
-
-function getPowerShellDiagnosticLines(output = "") {
-  return output
-    .replace(/\0/g, "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter(
-      (line) =>
-        !/^At line:/i.test(line) &&
-        !/^At .+:\d+ char:\d+/i.test(line) &&
-        !/^\+/.test(line) &&
-        !/^~+$/.test(line) &&
-        !/^CategoryInfo/i.test(line) &&
-        !/^FullyQualifiedErrorId/i.test(line),
-    );
-}
-
-function buildPowerShellFailureMessage(error, stdout = "", stderr = "") {
-  const lines = [
-    ...getPowerShellDiagnosticLines(stderr),
-    ...getPowerShellDiagnosticLines(stdout),
-  ];
-  const compactionError = lines.find((line) =>
-    /Error during compaction:/i.test(line),
-  );
-  if (compactionError) {
-    return compactionError.replace(/^.*?:\s*(Error during compaction:)/i, "$1");
-  }
-  const prioritized = lines.filter((line) =>
-    /(error|failed|denied|timed out|canceled|cancelled|in use|requires elevation|not found)/i.test(
-      line,
-    ),
-  );
-  if (prioritized.length > 0) return prioritized[prioritized.length - 1];
-  if (lines.length > 0) return lines[lines.length - 1];
-  return error?.message || "compact-wsl.ps1 failed";
-}
+const {
+  recoverWslDockerAfterCompaction,
+  runCompactWslScript,
+} = require("./compaction-utils.cjs");
 
 /**
  * AutoCompactManager — Windows-only orchestrator for automatic VHDX compaction.
@@ -195,38 +160,49 @@ class AutoCompactManager {
     if (!this._enabled) return;
 
     let changed = false;
+    const updateNumber = (key, value, isValid) => {
+      if (!isValid(value)) return;
+      if (this[key] !== value) {
+        this[key] = value;
+        changed = true;
+      }
+    };
 
-    if (Number.isFinite(engineFileBytes) && engineFileBytes > 0) {
-      this._engineFileBytes = engineFileBytes;
-      changed = true;
-    }
-    if (Number.isFinite(imageCacheBytes) && imageCacheBytes >= 0) {
-      this._imageCacheBytes = imageCacheBytes;
-      changed = true;
-    }
-    if (Number.isFinite(imageCacheCount) && imageCacheCount >= 0) {
-      this._imageCacheCount = imageCacheCount;
-      changed = true;
-    }
-    if (Number.isFinite(buildCacheBytes) && buildCacheBytes >= 0) {
-      this._buildCacheBytes = buildCacheBytes;
-      changed = true;
-    }
-    if (
-      Number.isFinite(buildCacheReclaimableBytes) &&
-      buildCacheReclaimableBytes >= 0
-    ) {
-      this._buildCacheReclaimableBytes = buildCacheReclaimableBytes;
-      changed = true;
-    }
-    if (Number.isFinite(buildCacheCount) && buildCacheCount >= 0) {
-      this._buildCacheCount = buildCacheCount;
-      changed = true;
-    }
-    if (Number.isFinite(hostFreeBytes) && hostFreeBytes >= 0) {
-      this._hostFreeBytes = hostFreeBytes;
-      changed = true;
-    }
+    updateNumber(
+      "_engineFileBytes",
+      engineFileBytes,
+      (value) => Number.isFinite(value) && value > 0,
+    );
+    updateNumber(
+      "_imageCacheBytes",
+      imageCacheBytes,
+      (value) => Number.isFinite(value) && value >= 0,
+    );
+    updateNumber(
+      "_imageCacheCount",
+      imageCacheCount,
+      (value) => Number.isFinite(value) && value >= 0,
+    );
+    updateNumber(
+      "_buildCacheBytes",
+      buildCacheBytes,
+      (value) => Number.isFinite(value) && value >= 0,
+    );
+    updateNumber(
+      "_buildCacheReclaimableBytes",
+      buildCacheReclaimableBytes,
+      (value) => Number.isFinite(value) && value >= 0,
+    );
+    updateNumber(
+      "_buildCacheCount",
+      buildCacheCount,
+      (value) => Number.isFinite(value) && value >= 0,
+    );
+    updateNumber(
+      "_hostFreeBytes",
+      hostFreeBytes,
+      (value) => Number.isFinite(value) && value >= 0,
+    );
 
     const hasVhdxAndCacheObservation =
       Number.isFinite(this._engineFileBytes) &&
@@ -235,17 +211,25 @@ class AutoCompactManager {
       this._imageCacheBytes >= 0;
 
     if (hasVhdxAndCacheObservation) {
-      this._estimatedReclaimableBytes = Math.max(
+      const nextEstimatedReclaimableBytes = Math.max(
         0,
         this._engineFileBytes -
           this._imageCacheBytes -
           AutoCompactManager.STALE_VHDX_BASE_ALLOWANCE_BYTES,
         this._buildCacheReclaimableBytes || 0,
       );
-      this._staleVhdxCompactPending =
+      const nextStaleVhdxCompactPending =
         this._engineFileBytes >= AutoCompactManager.STALE_VHDX_MIN_SIZE_BYTES &&
-        this._estimatedReclaimableBytes >= this._thresholdBytes;
-      changed = true;
+        nextEstimatedReclaimableBytes >= this._thresholdBytes;
+
+      if (this._estimatedReclaimableBytes !== nextEstimatedReclaimableBytes) {
+        this._estimatedReclaimableBytes = nextEstimatedReclaimableBytes;
+        changed = true;
+      }
+      if (this._staleVhdxCompactPending !== nextStaleVhdxCompactPending) {
+        this._staleVhdxCompactPending = nextStaleVhdxCompactPending;
+        changed = true;
+      }
     }
 
     if (changed) {
@@ -917,34 +901,31 @@ class AutoCompactManager {
       if (!wslDistro) {
         throw new Error("WSL distro not found; aborting auto-compact.");
       }
-      const scriptPath = this.app.isPackaged
-        ? path.join(process.resourcesPath, "scripts", "compact-wsl.ps1")
-        : path.join(__dirname, "..", "scripts", "compact-wsl.ps1");
-
-      await this._runPowerShell(scriptPath, wslDistro);
+      await runCompactWslScript({
+        app: this.app,
+        wslDistro,
+        timeoutMs: 10 * 60 * 1000,
+        onPid: (pid) => {
+          this._compactPid = pid;
+          this._persistState();
+        },
+      });
 
       // Ensure WSL Docker is reachable before restarting Python.
       // Compaction can leave the VHDX briefly locked or WSL stopped.
-      try {
-        const dockerStatus = await this.dockerEngine.resolveDockerStatus({
-          allowNativeStart: false,
-          wslHostTimeoutMs: 10000,
-        });
-        if (!dockerStatus.running) {
+      await recoverWslDockerAfterCompaction({
+        dockerEngine: this.dockerEngine,
+        dockerMonitor: this.dockerMonitor,
+        wslDistro,
+        restartOnAnyNotRunning: true,
+        logPrefix: "Auto-compact",
+        onBeforeRestart: () => {
           this._setPhase("recovering_wsl");
-          await this.dockerEngine.restartWslDockerEngine({
-            wslDistro,
-            onPhase: (phase) => {
-              this._setPhase(`recovering_${phase}`);
-            },
-          });
-        }
-      } catch (recoveryErr) {
-        console.error(
-          "AutoCompactManager: post-compaction WSL recovery failed:",
-          recoveryErr,
-        );
-      }
+        },
+        onPhase: (phase) => {
+          this._setPhase(`recovering_${phase}`);
+        },
+      });
 
       // 4. Reset counters.
       this._freedSinceLastCompact = 0;
@@ -1055,38 +1036,6 @@ class AutoCompactManager {
         error: this._lastError,
       });
     }
-  }
-
-  _runPowerShell(scriptPath, wslDistro) {
-    return new Promise((resolve, reject) => {
-      const child = execFile(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
-          scriptPath,
-          "-DistroName",
-          wslDistro,
-        ],
-        { windowsHide: true, timeout: 10 * 60 * 1000 },
-        (error, stdout, stderr) => {
-          if (error) {
-            const detail = buildPowerShellFailureMessage(
-              error,
-              stdout?.toString?.() || "",
-              stderr?.toString?.() || "",
-            );
-            reject(new Error(detail || "compact-wsl.ps1 failed"));
-          } else {
-            resolve();
-          }
-        },
-      );
-      this._compactPid = child.pid || null;
-      this._persistState();
-    });
   }
 
   _notify(channel, payload) {

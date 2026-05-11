@@ -11,6 +11,10 @@ const dockerStorage = require("./docker-storage.cjs");
 const wslUtils = require("./wsl-utils.cjs");
 const settings = require("./settings.cjs");
 const engineInstall = require("./engine-install.cjs");
+const {
+  recoverWslDockerAfterCompaction,
+  runCompactWslScript,
+} = require("./compaction-utils.cjs");
 
 let _app;
 let _getMainWindow;
@@ -120,89 +124,19 @@ function finishReclaim({ phase, error } = {}) {
 }
 
 async function recoverWslAfterSuccessfulReclaim(wslDistro) {
-  if (process.platform !== "win32" || !wslDistro) return;
-
-  notifyReclaimStatus({ phase: "recovering_wsl" });
-  dockerMonitor.resetDockerRoutingCache();
-
-  try {
-    let dockerStatus = await dockerEngine.resolveDockerStatus({
-      allowNativeStart: false,
-      wslHostTimeoutMs: 10000,
-    });
-    if (dockerStatus.running) return;
-
-    if (
-      dockerStatus.error === "WSL_VHDX_LOCKED" ||
-      dockerStatus.error === "DOCKER_API_UNREACHABLE"
-    ) {
-      dockerStatus = await dockerEngine.restartWslDockerEngine({
-        wslDistro,
-        waitTimeoutMs: 120000,
-        onPhase: (phase) => {
-          notifyReclaimStatus({ phase: `recovering_${phase}` });
-        },
-      });
-      if (dockerStatus?.running) return;
-    }
-
-    console.warn(
-      `Manual compaction finished, but WSL Docker is not ready yet (${dockerStatus.error || "unknown"}). It may recover on the next monitor poll.`,
-    );
-  } catch (error) {
-    console.warn(
-      "Manual compaction finished, but post-compaction WSL recovery did not complete:",
-      error?.message || error,
-    );
-  } finally {
-    dockerMonitor.resetDockerRoutingCache();
-  }
-}
-
-function getPowerShellDiagnosticLines(output = "") {
-  return output
-    .replace(/\0/g, "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter(
-      (line) =>
-        !/^At line:/i.test(line) &&
-        !/^At .+:\d+ char:\d+/i.test(line) &&
-        !/^\+/.test(line) &&
-        !/^~+$/.test(line) &&
-        !/^CategoryInfo/i.test(line) &&
-        !/^FullyQualifiedErrorId/i.test(line),
-    );
-}
-
-function buildCompactionFailureMessage(error, stdout = "", stderr = "") {
-  const stderrLines = getPowerShellDiagnosticLines(stderr);
-  const stdoutLines = getPowerShellDiagnosticLines(stdout);
-  const lines = [...stderrLines, ...stdoutLines];
-  const compactionError = lines.find((line) =>
-    /Error during compaction:/i.test(line),
-  );
-  if (compactionError) {
-    return compactionError.replace(/^.*?:\s*(Error during compaction:)/i, "$1");
-  }
-
-  const prioritized = lines.filter((line) =>
-    /(error|failed|denied|timed out|canceled|cancelled|in use|requires elevation|not found)/i.test(
-      line,
-    ),
-  );
-
-  if (prioritized.length > 0) {
-    return prioritized[prioritized.length - 1];
-  }
-  if (stderrLines.length > 0) {
-    return stderrLines[stderrLines.length - 1];
-  }
-  if (stdoutLines.length > 0) {
-    return stdoutLines[stdoutLines.length - 1];
-  }
-  return error?.message || "Compaction failed.";
+  await recoverWslDockerAfterCompaction({
+    dockerEngine,
+    dockerMonitor,
+    wslDistro,
+    waitTimeoutMs: 120000,
+    logPrefix: "Manual compaction",
+    onBeforeRestart: () => {
+      notifyReclaimStatus({ phase: "recovering_wsl" });
+    },
+    onPhase: (phase) => {
+      notifyReclaimStatus({ phase: `recovering_${phase}` });
+    },
+  });
 }
 
 async function tryTrimWslFilesystem() {
@@ -1275,10 +1209,6 @@ function register(ipcMain) {
       dockerMonitor.stopDockerMonitoring();
       dockerMonitor.resetDockerRoutingCache();
 
-      const scriptPath = _app.isPackaged
-        ? path.join(process.resourcesPath, "scripts", "compact-wsl.ps1")
-        : path.join(__dirname, "..", "scripts", "compact-wsl.ps1");
-
       const wslDistro = await wslUtils.getWslDistroName();
       if (!wslDistro) {
         resetReclaimRouting();
@@ -1327,43 +1257,19 @@ function register(ipcMain) {
         cancelRequested: false,
       });
 
-      const args = [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        scriptPath,
-        "-DistroName",
-        wslDistro,
-      ];
-
       reclaimCancelRequested = false;
-      reclaimProcess = execFile(
-        "powershell.exe",
-        args,
-        {
-          windowsHide: true,
-          timeout: 30 * 60 * 1000,
-          encoding: "utf8",
+      runCompactWslScript({
+        app: _app,
+        wslDistro,
+        timeoutMs: 30 * 60 * 1000,
+        onProcess: (child) => {
+          reclaimProcess = child;
+          notifyReclaimStatus({ pid: child.pid || null });
         },
-        (error, stdout, stderr) => {
+      })
+        .then(() => {
           if (reclaimCancelRequested) {
             finishReclaim({ phase: "cancelled" });
-            return;
-          }
-
-          if (error) {
-            const message = buildCompactionFailureMessage(
-              error,
-              stdout,
-              stderr,
-            );
-            console.error("Compaction failed:", {
-              message: error.message,
-              stdout,
-              stderr,
-            });
-            finishReclaim({ phase: "failed", error: message });
             return;
           }
 
@@ -1377,10 +1283,20 @@ function register(ipcMain) {
             .finally(() => {
               finishReclaim({ phase: "completed" });
             });
-        },
-      );
+        })
+        .catch((error) => {
+          if (reclaimCancelRequested) {
+            finishReclaim({ phase: "cancelled" });
+            return;
+          }
 
-      notifyReclaimStatus({ pid: reclaimProcess.pid || null });
+          console.error("Compaction failed:", error);
+          finishReclaim({
+            phase: "failed",
+            error: error?.message || "Compaction failed.",
+          });
+        });
+
       return { success: true, started: true, status: getReclaimStatus() };
     } catch (error) {
       finishReclaim({ phase: "failed", error: error.message });
