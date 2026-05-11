@@ -156,6 +156,7 @@ function App() {
     dependencyStatus,
     setDependencyStatus,
     setAutoCompactStatus,
+    setReclaimStatus,
     autoCompactStatus,
     reclaimStatus,
   } = useClientStore();
@@ -175,23 +176,52 @@ function App() {
   useEffect(() => {
     const checkDependencies = async () => {
       try {
+        const checkDockerWithCompactionStatus = async () => {
+          const [compactStatus, manualReclaimStatus] = await Promise.all([
+            window.electronAPI.getAutoCompactStatus().catch((error) => {
+              console.error("Failed to check auto-compact status:", error);
+              return null;
+            }),
+            window.electronAPI.getReclaimStatus().catch((error) => {
+              console.error("Failed to check reclaim status:", error);
+              return null;
+            }),
+          ]);
+
+          if (
+            compactStatus &&
+            (compactStatus.compactInProgress ||
+              compactStatus.phase !== "completed")
+          ) {
+            setAutoCompactStatus(compactStatus);
+          }
+
+          if (
+            manualReclaimStatus &&
+            (manualReclaimStatus.inProgress ||
+              manualReclaimStatus.settling ||
+              manualReclaimStatus.phase === "failed")
+          ) {
+            setReclaimStatus(manualReclaimStatus);
+          }
+
+          if (
+            compactStatus?.compactInProgress ||
+            manualReclaimStatus?.inProgress ||
+            manualReclaimStatus?.settling
+          ) {
+            return {
+              installed: true,
+              running: false,
+              error: "WSL_COMPACTING",
+            };
+          }
+
+          return window.electronAPI.checkDocker();
+        };
+
         const [dockerResult, nvidiaResult] = await Promise.all([
-          window.electronAPI
-            .getAutoCompactStatus()
-            .then(async (compactStatus) => {
-              if (compactStatus.compactInProgress || compactStatus.phase !== "completed") {
-                setAutoCompactStatus(compactStatus);
-              }
-              if (compactStatus?.compactInProgress) {
-                return {
-                  installed: true,
-                  running: false,
-                  error: "WSL_COMPACTING",
-                };
-              }
-              return window.electronAPI.checkDocker();
-            })
-            .catch(() => window.electronAPI.checkDocker()),
+          checkDockerWithCompactionStatus(),
           window.electronAPI.checkNvidia(),
         ]);
 
@@ -216,7 +246,7 @@ function App() {
     };
 
     checkDependencies();
-  }, [setAutoCompactStatus, setDependencyStatus]);
+  }, [setAutoCompactStatus, setDependencyStatus, setReclaimStatus]);
 
   // Handle force refresh from main process
   useEffect(() => {
