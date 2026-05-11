@@ -40,17 +40,17 @@ const primaryModes: {
   {
     value: "private",
     label: "Private",
-    description: "Only your own jobs",
+    description: "Process only your own jobs",
   },
   {
     value: "public",
     label: "Public",
-    description: "Earn credits from the network",
+    description: "Earn credits from the network and use it for your own jobs",
   },
   {
     value: "monetize",
     label: "Monetize",
-    description: "Earn real money from paid jobs",
+    description: "Earn money from processing paid jobs",
   },
 ];
 
@@ -70,7 +70,7 @@ export function JobPolicySettings({
   >(() =>
     config.communityMode === "trusted_projects"
       ? "trusted_projects"
-      : "trusted_users"
+      : "trusted_users",
   );
 
   const primaryMode = getPrimaryMode(config);
@@ -120,11 +120,23 @@ export function JobPolicySettings({
       setLastTrustedMode(config.communityMode);
     }
     if (mode === "private") {
-      update({ communityMode: "none", processOwnJobs: true, monetizeMode: false });
+      update({
+        communityMode: "none",
+        processOwnJobs: true,
+        monetizeMode: false,
+      });
     } else if (mode === "public") {
-      update({ communityMode: "all", processOwnJobs: true, monetizeMode: false });
+      update({
+        communityMode: "all",
+        processOwnJobs: true,
+        monetizeMode: false,
+      });
     } else {
-      update({ communityMode: "none", processOwnJobs: true, monetizeMode: true });
+      update({
+        communityMode: "none",
+        processOwnJobs: true,
+        monetizeMode: true,
+      });
     }
   }
 
