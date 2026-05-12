@@ -89,17 +89,14 @@ const TabTrigger = memo(
     const dockerPullProgress = useClientStore(
       (state) => state.dockerPullProgress,
     );
-    const dockerContainers = useClientStore(
-      (state) => state.dockerContainers,
-    );
+    const dockerContainers = useClientStore((state) => state.dockerContainers);
     const status = useClientStore((state) => state.status);
     const autoCompactStatus = useClientStore(
       (state) => state.autoCompactStatus,
     );
     const reclaimInProgress = useClientStore(
       (state) =>
-        (state.reclaimStatus?.inProgress ||
-          state.reclaimStatus?.settling) ??
+        (state.reclaimStatus?.inProgress || state.reclaimStatus?.settling) ??
         false,
     );
 
@@ -411,7 +408,8 @@ function App() {
     return <Auth />;
   }
 
-  const avatarInitial = (profile?.username ?? session.user.email)?.[0]?.toUpperCase() ?? "?";
+  const avatarInitial =
+    (profile?.username ?? session.user.email)?.[0]?.toUpperCase() ?? "?";
 
   return (
     <>
@@ -432,7 +430,7 @@ function App() {
               />
               <div>
                 <h1 className="text-2xl md:text-3xl font-black text-white leading-none">
-                  Openfork Client
+                  Openfork Desktop
                 </h1>
                 <p className="text-[10px] md:text-xs text-white/70 mt-1 font-bold uppercase tracking-widest">
                   Open-Source Peer-to-peer Engine for Video Collaboration
@@ -443,21 +441,21 @@ function App() {
             {/* Status dot + avatar profile menu */}
             <div className="relative z-10 flex items-center gap-4">
               <Popover>
-              <PopoverTrigger asChild>
-                {avatarUrl ? (
-                  <button className="h-8 w-8 rounded-full border border-white/20 overflow-hidden hover:border-white/40 transition-colors">
-                    <img
-                      src={avatarUrl}
-                      alt="User avatar"
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                ) : (
-                  <Button className="h-8 w-8 rounded-full p-0 text-sm font-bold">
-                    {avatarInitial}
-                  </Button>
-                )}
-              </PopoverTrigger>
+                <PopoverTrigger asChild>
+                  {avatarUrl ? (
+                    <button className="h-8 w-8 rounded-full border border-white/20 overflow-hidden hover:border-white/40 transition-colors">
+                      <img
+                        src={avatarUrl}
+                        alt="User avatar"
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <Button className="h-8 w-8 rounded-full p-0 text-sm font-bold">
+                      {avatarInitial}
+                    </Button>
+                  )}
+                </PopoverTrigger>
                 <PopoverContent
                   align="end"
                   className="w-56 p-2 bg-surface-secondary/95 backdrop-blur-xl border-white/10 shadow-3xl"

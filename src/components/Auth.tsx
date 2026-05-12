@@ -25,7 +25,7 @@ export function Auth() {
               />
             </div>
             <CardTitle className="text-3xl font-black text-white mb-2">
-              Openfork Client
+              Openfork Desktop
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pb-10 relative z-10 px-8 text-center">
