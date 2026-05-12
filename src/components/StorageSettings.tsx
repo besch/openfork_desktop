@@ -75,7 +75,9 @@ export function StorageSettings({
   const [isRelocating, setIsRelocating] = useState(false);
   const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [autoCompact, setAutoCompact] = useState<AutoCompactStatus | null>(null);
+  const [autoCompact, setAutoCompact] = useState<AutoCompactStatus | null>(
+    null,
+  );
 
   // Python advanced config overrides
   const [pythonConfig, setPythonConfig] = useState<{
@@ -223,9 +225,11 @@ export function StorageSettings({
       .getReclaimStatus()
       .then(setReclaimStatus)
       .catch((e) => console.error("Failed to get reclaim status:", e));
-    const cleanupAutoCompact = window.electronAPI.onAutoCompactStatus((status) => {
-      setAutoCompact(status);
-    });
+    const cleanupAutoCompact = window.electronAPI.onAutoCompactStatus(
+      (status) => {
+        setAutoCompact(status);
+      },
+    );
     const cleanupReclaim = window.electronAPI.onReclaimStatus((status) => {
       setReclaimStatus(status);
       if (!status.inProgress && status.phase === "completed") {
@@ -350,15 +354,15 @@ export function StorageSettings({
         : reclaimStatus.waitingForActiveJob
           ? "Waiting for job…"
           : "Waiting for idle…"
-    : reclaimStatus?.phase === "stopping_client"
-      ? "Pausing engine…"
-    : reclaimSettling
-      ? "Reconnecting…"
-    : reclaimStatus?.phase === "pruning_cache"
-      ? "Cleaning cache…"
-    : reclaimBusy
-      ? "Reclaiming…"
-      : "Reclaim Space (Slow, Keeps Images)";
+      : reclaimStatus?.phase === "stopping_client"
+        ? "Pausing engine…"
+        : reclaimSettling
+          ? "Reconnecting…"
+          : reclaimStatus?.phase === "pruning_cache"
+            ? "Cleaning cache…"
+            : reclaimBusy
+              ? "Reclaiming…"
+              : "Reclaim Space";
   const autoCompactThresholdGb = Math.round(
     (autoCompact?.thresholdBytes || 0) / 1024 ** 3,
   );
@@ -492,8 +496,8 @@ export function StorageSettings({
         {isWindows && autoCompact?.platformSupported && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <p className={helperTextClassName}>
-              Auto-compact runs after {autoCompactThresholdGb} GB of images
-              have been evicted and the WSL drive has less than{" "}
+              Auto-compact runs after {autoCompactThresholdGb} GB of images have
+              been evicted and the WSL drive has less than{" "}
               {autoCompactHostGateGb} GB free. Storage-limit cleanup can also
               compact before the next queued job, and OpenFork can compact a
               bloated Ubuntu disk when image usage is low. Currently{" "}
@@ -701,8 +705,8 @@ export function StorageSettings({
               Docker Image Storage Limit
             </Label>
             <p className={copyMutedClassName}>
-              OpenFork downloads Docker images for local AI models. These can
-              be tens or hundreds of GB because they include model runtimes and
+              OpenFork downloads Docker images for local AI models. These can be
+              tens or hundreds of GB because they include model runtimes and
               dependencies. Set how much disk space OpenFork may use for those
               images.
             </p>
@@ -771,10 +775,9 @@ export function StorageSettings({
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
                   <Info className="h-3 w-3 text-amber-300 shrink-0" />
                   <span className="text-[11px] font-semibold leading-relaxed text-amber-200">
-                    Docker reports{" "}
-                    {imageCacheUsage.build_cache_reclaimable_gb} GB of
-                    reclaimable build cache. Reclaim Space clears this cache
-                    before compacting the Ubuntu disk.
+                    Docker reports {imageCacheUsage.build_cache_reclaimable_gb}{" "}
+                    GB of reclaimable build cache. Reclaim Space clears this
+                    cache before compacting the Ubuntu disk.
                   </span>
                 </div>
               )}
@@ -933,7 +936,8 @@ export function StorageSettings({
                   >
                     <Sparkles className="h-3 w-3 shrink-0" />
                     <span className="text-[10px] font-bold uppercase tracking-widest">
-                      Storage settings saved. Cache limit sent to the running client.
+                      Storage settings saved. Cache limit sent to the running
+                      client.
                     </span>
                   </motion.div>
                 )}
