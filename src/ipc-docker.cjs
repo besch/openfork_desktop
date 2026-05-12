@@ -1734,7 +1734,7 @@ function register(ipcMain) {
 
       const setupScriptPath = _app.isPackaged
         ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
-        : path.join(__dirname, "..", "..", "client", "setup-wsl.ps1");
+        : path.join(__dirname, "..", "scripts", "setup-wsl.ps1");
 
       console.log(
         `Cleaning up old distribution before relocation to: ${safeNewDrivePath}`,

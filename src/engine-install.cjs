@@ -248,10 +248,10 @@ async function handleInstallEngine(installPath) {
     process.platform === "win32"
       ? _app.isPackaged
         ? path.join(process.resourcesPath, "bin", "setup-wsl.ps1")
-        : path.join(desktopDir, "..", "client", "setup-wsl.ps1")
+        : path.join(desktopDir, "scripts", "setup-wsl.ps1")
       : _app.isPackaged
         ? path.join(process.resourcesPath, "bin", "setup-linux.sh")
-        : path.join(desktopDir, "..", "client", "setup-linux.sh");
+        : path.join(desktopDir, "scripts", "setup-linux.sh");
 
   if (process.platform === "win32") {
     let safeInstallPath = null;

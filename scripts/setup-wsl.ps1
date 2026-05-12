@@ -28,6 +28,63 @@ function Check-IsAdmin {
     return $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-DistroVhdxPath {
+    param([string]$Name)
+
+    $registryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss"
+    $distroKey = Get-ChildItem $registryPath -ErrorAction SilentlyContinue | Where-Object {
+        (Get-ItemProperty $_.PsPath).DistributionName -eq $Name
+    } | Select-Object -First 1
+
+    if (-not $distroKey) { return $null }
+
+    $basePath = (Get-ItemProperty $distroKey.PsPath).BasePath
+    if (-not $basePath) { return $null }
+
+    return Join-Path $basePath "ext4.vhdx"
+}
+
+function Test-SparseFile {
+    param([string]$Path)
+
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $null }
+    return (([System.IO.File]::GetAttributes($Path) -band [System.IO.FileAttributes]::SparseFile) -ne 0)
+}
+
+function Enable-SparseVhd {
+    param([string]$Name)
+
+    Write-Log "Enabling Sparse VHD for automatic disk space reclamation..."
+    try {
+        # This requires WSL 2.0.0 or higher. Native command failures do not
+        # throw in Windows PowerShell, so check $LASTEXITCODE explicitly.
+        $output = & wsl.exe --manage $Name --set-sparse true 2>&1
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            $detail = ($output | Out-String).Trim()
+            if ($detail) {
+                throw "wsl --manage exited with code $exitCode. $detail"
+            }
+            throw "wsl --manage exited with code $exitCode."
+        }
+
+        $vhdxPath = Get-DistroVhdxPath -Name $Name
+        $isSparse = Test-SparseFile -Path $vhdxPath
+        if ($isSparse -eq $false) {
+            throw "wsl --manage completed, but '$vhdxPath' is still not marked sparse."
+        }
+
+        if ($isSparse -eq $true) {
+            Write-Log "Sparse VHD enabled successfully."
+        } else {
+            Write-Log "Sparse VHD command completed; VHDX attribute could not be verified."
+        }
+    } catch {
+        Write-Log "Warning: Could not enable Sparse VHD: $($_.Exception.Message)"
+        Write-Log "If Storage Settings still reports a non-sparse VHDX, run 'wsl --update' and then Repair OpenFork Ubuntu."
+    }
+}
+
 if (-not (Check-IsAdmin)) {
     Write-Log "Need Administrator privileges to install WSL features. Please re-run as Administrator."
     Exit 1
@@ -183,13 +240,7 @@ echo "managed-by=openfork" > /etc/openfork-managed
     Exit 1
 }
 
-Write-Log "Enabling Sparse VHD for automatic disk space reclamation..."
-try {
-    wsl --manage $DistroName --set-sparse true
-    Write-Log "Sparse VHD enabled successfully."
-} catch {
-    Write-Log "Warning: Could not enable sparse VHD. Your Windows version may be too old to support automatic disk reclamation."
-}
+Enable-SparseVhd -Name $DistroName
 
 Write-Log "Ensuring WSL is running and executing setup script..."
 
