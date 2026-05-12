@@ -42,7 +42,7 @@ export function PayoutAccountCard({
         {wallet?.stripe_account_verified ? (
           <>
             <div className="w-full">
-              <Badge variant="success" className="gap-1.5">
+              <Badge variant="success" className="h-auto whitespace-normal text-left gap-1.5">
                 <CheckCircle2 size={12} />
                 Bank account connected &amp; verified
               </Badge>
@@ -52,6 +52,7 @@ export function PayoutAccountCard({
               size="sm"
               onClick={onStripeDashboard}
               disabled={stripeLoading}
+              className="h-auto min-h-7 whitespace-normal"
             >
               {stripeLoading ? (
                 <Loader size="xs" className="mr-2 animate-spin" />
@@ -77,7 +78,7 @@ export function PayoutAccountCard({
               size="sm"
               onClick={onStripeDashboard}
               disabled={stripeLoading}
-              className="w-full"
+              className="h-auto min-h-7 w-full whitespace-normal"
             >
               {stripeLoading ? (
                 <Loader size="xs" className="mr-2 animate-spin text-white" />
@@ -102,6 +103,7 @@ export function PayoutAccountCard({
               onClick={onStripeOnboard}
               disabled={stripeLoading}
               variant="primary"
+              className="h-auto min-h-8 whitespace-normal"
             >
               {stripeLoading ? (
                 <Loader size="xs" className="mr-2 animate-spin text-white" />

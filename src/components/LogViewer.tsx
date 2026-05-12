@@ -47,13 +47,14 @@ export const LogViewer = () => {
   const displayedLogs = newestOnTop ? logs : logs.slice().reverse();
 
   return (
-    <div className="h-full flex flex-col bg-card/50 backdrop-blur-sm border border-white/10 rounded-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-end items-center mb-6">
-        <div className="flex gap-2">
+    <div className="flex h-full min-h-0 flex-col bg-card/50 backdrop-blur-sm border border-white/10 rounded-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="mb-6 flex items-center justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant="primary"
             size="sm"
             onClick={() => setNewestOnTop(!newestOnTop)}
+            className="whitespace-normal"
           >
             {newestOnTop ? (
               <ArrowDown className="h-4 w-4 mr-2" />
@@ -62,10 +63,14 @@ export const LogViewer = () => {
             )}
             {newestOnTop ? "Newest First" : "Oldest First"}
           </Button>
-          <Button variant="destructive" size="sm" onClick={() => {
-            clearLogs();
-            setShouldAutoScroll(true);
-          }}>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              clearLogs();
+              setShouldAutoScroll(true);
+            }}
+          >
             Clear Logs
           </Button>
         </div>
@@ -73,7 +78,7 @@ export const LogViewer = () => {
       <div
         ref={logContainerRef}
         onScroll={handleScroll}
-        className="flex-grow overflow-y-auto bg-background/50 rounded p-2 font-mono text-sm h-[calc(100vh-300px)] border border-white/5"
+        className="h-[calc(100vh-300px)] min-h-[320px] flex-grow overflow-y-auto bg-background/50 rounded p-2 font-mono text-xs sm:text-sm border border-white/5"
         style={{ overflowAnchor: "auto" }}
       >
         {displayedLogs.length === 0 ? (
@@ -84,11 +89,11 @@ export const LogViewer = () => {
           displayedLogs.map((log, index) => (
             <div
               key={index}
-              className={`whitespace-pre-wrap ${
+              className={`whitespace-pre-wrap break-words ${
                 log.type === "stderr" ? "text-destructive" : "text-foreground"
               }`}
             >
-              <span className="text-muted-foreground mr-4">
+              <span className="mr-2 text-muted-foreground sm:mr-4">
                 [{log.timestamp}]
               </span>
               {log.message}

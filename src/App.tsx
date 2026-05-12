@@ -114,7 +114,7 @@ const TabTrigger = memo(
     return (
       <TabsTrigger
         value={value}
-        className="relative h-9 px-4 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-all duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5 cursor-pointer"
+        className="relative h-9 flex-none px-3 sm:px-4 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg transition-[background-color,color,box-shadow,transform] duration-300 text-[10px] font-black uppercase tracking-widest group active:scale-95 hover:bg-white/5 cursor-pointer"
       >
         {isCompacting ? (
           <HardDrive className="mr-2 animate-pulse text-inherit" size={14} />
@@ -377,7 +377,7 @@ function App() {
       <div className="flex flex-col items-center justify-center h-screen bg-background">
         <Loader size="xl" variant="primary" />
         <p className="mt-4 text-muted-foreground animate-pulse">
-          Checking system requirements...
+          Checking system requirements…
         </p>
       </div>
     );
@@ -398,7 +398,7 @@ function App() {
       <div className="flex flex-col items-center justify-center h-screen bg-background">
         <Loader size="xl" variant="primary" />
         <p className="mt-4 text-muted-foreground animate-pulse">
-          Loading Openfork Client...
+          Loading Openfork Client…
         </p>
       </div>
     );
@@ -419,39 +419,50 @@ function App() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_600px_at_80%_-10%,color-mix(in_oklab,var(--color-primary)_25%,transparent),transparent_60%),radial-gradient(900px_500px_at_10%_20%,color-mix(in_oklab,var(--color-primary)_18%,transparent),transparent_60%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-background)_96%,var(--color-foreground)_4%),var(--color-background))]" />
 
-        <div className="relative container mx-auto px-4 py-6 max-w-7xl">
-          <header className="relative z-20 flex items-center justify-between mb-6 p-4 rounded-lg border border-white/20 bg-surface/60 backdrop-blur-md shadow-2xl overflow-hidden shadow-black/20">
+        <div className="relative container mx-auto px-3 py-4 sm:px-4 sm:py-6 max-w-7xl">
+          <header className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 p-4 rounded-lg border border-white/20 bg-surface/60 backdrop-blur-md shadow-2xl overflow-hidden shadow-black/20">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
-            <div className="relative z-10 flex items-center gap-4">
+            <div className="relative z-10 flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
               <img
                 src="./logo.png"
-                alt="logo"
-                className="h-10 drop-shadow-2xl"
+                alt="Openfork logo"
+                width={40}
+                height={40}
+                className="h-10 w-10 shrink-0 drop-shadow-2xl"
               />
-              <div>
-                <h1 className="text-2xl md:text-3xl font-black text-white leading-none">
+              <div className="min-w-0">
+                <h1 className="truncate text-2xl md:text-3xl font-black text-white leading-none">
                   Openfork Desktop
                 </h1>
-                <p className="text-[10px] md:text-xs text-white/70 mt-1 font-bold uppercase tracking-widest">
+                <p className="mt-1 line-clamp-2 text-[10px] md:text-xs text-white/70 font-bold uppercase tracking-widest sm:truncate">
                   Open-Source Peer-to-peer Engine for Video Collaboration
                 </p>
               </div>
             </div>
 
             {/* Status dot + avatar profile menu */}
-            <div className="relative z-10 flex items-center gap-4">
+            <div className="relative z-10 flex shrink-0 items-center gap-4">
               <Popover>
                 <PopoverTrigger asChild>
                   {avatarUrl ? (
-                    <button className="h-8 w-8 rounded-full border border-white/20 overflow-hidden hover:border-white/40 transition-colors">
+                    <button
+                      type="button"
+                      aria-label="Open profile menu"
+                      className="h-8 w-8 rounded-full border border-white/20 overflow-hidden hover:border-white/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    >
                       <img
                         src={avatarUrl}
                         alt="User avatar"
+                        width={32}
+                        height={32}
                         className="h-full w-full object-cover"
                       />
                     </button>
                   ) : (
-                    <Button className="h-8 w-8 rounded-full p-0 text-sm font-bold">
+                    <Button
+                      aria-label="Open profile menu"
+                      className="h-8 w-8 rounded-full p-0 text-sm font-bold"
+                    >
                       {avatarInitial}
                     </Button>
                   )}
@@ -481,8 +492,9 @@ function App() {
                   </div>
                   <div className="h-px bg-white/5 my-2" />
                   <button
+                    type="button"
                     onClick={handleLogout}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-xs font-bold rounded-lg bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive hover:text-white transition-all duration-300 group"
+                    className="flex items-center gap-2.5 w-full px-3 py-2.5 text-xs font-bold rounded-lg bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive hover:text-white transition-[background-color,color,border-color,transform] duration-300 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
                   >
                     <LogOut
                       size={14}
@@ -502,7 +514,7 @@ function App() {
             onValueChange={setActiveTab}
             className="relative z-10"
           >
-            <TabsList className="bg-surface/40 backdrop-blur-xl border border-white/20 p-1 rounded-lg h-11 overflow-x-auto no-scrollbar justify-start shadow-lg">
+            <TabsList className="max-w-full bg-surface/40 backdrop-blur-xl border border-white/20 p-1 rounded-lg h-11 overflow-x-auto no-scrollbar justify-start shadow-lg">
               <TabTrigger
                 value="dashboard"
                 icon={LayoutDashboard}

@@ -150,6 +150,9 @@ const PowerButton = memo(
 
     return (
       <motion.button
+        type="button"
+        aria-label={isRunning ? "Stop Openfork client" : "Start Openfork client"}
+        title={isRunning ? "Stop Openfork client" : "Start Openfork client"}
         onClick={() => onToggle(!isRunning)}
         disabled={isDisabled}
         className="relative w-16 h-16 rounded-full flex items-center justify-center text-primary-foreground shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:ring-ring cursor-pointer"
@@ -262,7 +265,7 @@ export const Dashboard = memo(() => {
 
       {/* Routing config panel — always visible, not disabled while running */}
       <Card className="bg-card/50 backdrop-blur-sm border-white/10">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <JobPolicySettings
             config={routingConfig}
             onChange={handleRoutingConfigChange}

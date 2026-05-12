@@ -44,16 +44,16 @@ export function WithdrawCard({
     <Card className="relative overflow-hidden bg-surface/40 border-white/20 shadow-xl group">
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-amber-500/5" />
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <CardTitle className="flex flex-col gap-3 text-base sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/20 text-amber-500">
               <ArrowDownToLine size={16} />
             </div>
-            Withdraw Earnings
+            <span className="truncate">Withdraw Earnings</span>
           </div>
           <Badge
             variant={canWithdraw ? "success" : "muted"}
-            className="text-[10px]"
+            className="w-fit text-[10px]"
           >
             {canWithdraw ? "Ready" : "Not ready"}
           </Badge>
@@ -61,16 +61,16 @@ export function WithdrawCard({
       </CardHeader>
       <CardContent className="relative z-10 space-y-4">
         <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-          <div className="flex items-end justify-between gap-4">
-            <div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.18em] text-white/45 font-black">
                 Available balance
               </p>
-              <p className="mt-1 text-2xl font-black tabular-nums text-emerald-400">
+              <p className="mt-1 break-words text-2xl font-black tabular-nums text-emerald-400">
                 {formatMillicents(availableAmount)}
               </p>
             </div>
-            <div className="text-right">
+            <div className="sm:text-right">
               <p className="text-[10px] text-muted-foreground">Minimum</p>
               <p className="font-mono text-xs text-white/70">
                 {formatCents(MIN_WITHDRAWAL_MILLICENTS)}
@@ -85,7 +85,7 @@ export function WithdrawCard({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
             <p className="text-[10px] uppercase tracking-[0.16em] text-amber-300/70 font-black">
               Pending settlement
@@ -139,7 +139,7 @@ export function WithdrawCard({
           <Button
             onClick={onWithdraw}
             disabled={!canWithdraw || withdrawing}
-            className="w-full"
+            className="h-auto min-h-8 w-full whitespace-normal"
           >
             {withdrawing ? (
               <Loader size="xs" className="mr-2 animate-spin text-white" />

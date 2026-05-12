@@ -465,17 +465,20 @@ export const DockerManagement = memo(() => {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="bg-destructive text-white rounded-lg p-4 flex items-center justify-between shadow-lg border border-white/10"
+          className="bg-destructive text-white rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shadow-lg border border-white/10"
         >
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5" />
-            <span className="text-sm font-bold uppercase">{error}</span>
+          <div className="flex min-w-0 items-center gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span className="break-words text-sm font-bold uppercase">
+              {error}
+            </span>
           </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setError(null)}
-            className="text-white hover:bg-white/20 h-8 w-8 p-0 transition-colors"
+            aria-label="Dismiss Docker error"
+            className="self-end text-white hover:bg-white/20 h-8 w-8 p-0 transition-colors sm:self-auto"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -483,23 +486,23 @@ export const DockerManagement = memo(() => {
       )}
 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
             <Container className="h-4 w-4" />
           </div>
-          <div>
-            <h2 className="text-lg font-black text-white uppercase">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-black text-white uppercase">
               Docker Management
             </h2>
-            <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mt-0.5">
+            <p className="truncate text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mt-0.5">
               {engineLabel}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {diskSpace && (
             <div
-              className={`flex flex-col items-end gap-1 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 ${
+              className={`flex min-w-0 flex-col items-start gap-1 px-3 py-1.5 rounded-lg backdrop-blur-md transition-[background-color,border-color,color,box-shadow] duration-300 sm:items-end ${
                 diskSpaceError
                   ? "bg-destructive border border-destructive/50 text-white shadow-lg shadow-destructive/20"
                   : "bg-black/40 border border-amber-500/20 text-amber-500 shadow-lg shadow-amber-500/20"
@@ -532,6 +535,8 @@ export const DockerManagement = memo(() => {
             size="sm"
             onClick={fetchData}
             disabled={loading}
+            aria-label="Refresh Docker data"
+            title="Refresh Docker data"
             className="rounded-lg bg-white/5 hover:bg-white/10 h-8 w-8 p-0 border border-white/5 transition-all text-white shadow-sm"
           >
             <RefreshCw
@@ -556,13 +561,13 @@ export const DockerManagement = memo(() => {
       {isDownloading && (
         <Card className="relative overflow-hidden group transition-all duration-500 border-amber-500/50 bg-amber-500/10 backdrop-blur-xl shadow-2xl shadow-amber-500/10">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-amber-500)_15%,transparent),transparent)]" />
-          <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-2">
-            <CardTitle className="flex items-center gap-3">
+          <CardHeader className="flex flex-col gap-3 relative z-10 px-4 pb-2 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex min-w-0 items-center gap-3">
               <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
                 <Download className="h-4 w-4 animate-bounce" />
               </div>
-              <div>
-                <span className="font-black text-xs uppercase tracking-widest text-white">
+              <div className="min-w-0">
+                <span className="line-clamp-2 font-black text-xs uppercase tracking-widest text-white">
                   {dockerPullProgress?.status || "Downloading"}{" "}
                   {dockerPullProgress?.image}
                 </span>
@@ -572,7 +577,7 @@ export const DockerManagement = memo(() => {
               variant="destructive"
               size="sm"
               onClick={handleCancelDownload}
-              className="rounded-lg h-9 px-4 text-[10px] font-black uppercase tracking-widest"
+              className="h-9 rounded-lg px-4 text-[10px] font-black uppercase tracking-widest sm:self-center"
             >
               Abort
             </Button>
@@ -608,13 +613,13 @@ export const DockerManagement = memo(() => {
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-        <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
-          <CardTitle className="flex items-center gap-3">
+        <CardHeader className="flex flex-col gap-3 relative z-10 px-4 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex min-w-0 items-center gap-3">
             <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
               <Container className="h-4 w-4" />
             </div>
-            <div>
-              <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
+            <div className="min-w-0">
+              <span className="line-clamp-2 font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
                 Running Containers
               </span>
               <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.2em] mt-0.5">
@@ -636,7 +641,7 @@ export const DockerManagement = memo(() => {
               {containers.map((container) => (
                 <div
                   key={container.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-all duration-500 group/row hover:bg-amber-500/20"
+                  className="flex flex-col gap-3 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-[background-color,border-color,box-shadow] duration-500 group/row hover:bg-amber-500/20 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-black text-[11px] text-white/90 truncate uppercase tracking-wide">
@@ -646,7 +651,7 @@ export const DockerManagement = memo(() => {
                       {container.image}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4 ml-4">
+                  <div className="flex items-center justify-between gap-3 sm:ml-4 sm:justify-end">
                     <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-400/20 bg-emerald-400/5 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                       {container.status}
                     </span>
@@ -657,6 +662,7 @@ export const DockerManagement = memo(() => {
                         handleStopContainer(container.id, container.name)
                       }
                       disabled={actionLoading !== null}
+                      aria-label={`Stop container ${container.name}`}
                       className="rounded-lg h-9 w-9 p-0 bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white"
                     >
                       {actionLoading === `stop-${container.id}` ? (
@@ -685,17 +691,17 @@ export const DockerManagement = memo(() => {
             <Loader size="lg" variant="primary" className="mb-4" />
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
               {actionLoading === "remove-all"
-                ? "Purging Repository..."
-                : "Removing Image..."}
+                ? "Purging Repository…"
+                : "Removing Image…"}
             </p>
           </div>
         )}
-        <CardHeader className="flex flex-row items-center justify-between relative z-10 px-4 pb-3">
-          <CardTitle className="flex items-center gap-3">
+        <CardHeader className="flex flex-col gap-3 relative z-10 px-4 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex min-w-0 items-center gap-3">
             <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-lg shadow-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
               <HardDrive className="h-5 w-5" />
             </div>
-            <span className="font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
+            <span className="line-clamp-2 font-black text-[10px] uppercase tracking-[0.2em] text-white/90">
               Downloaded Docker Images ({images.length})
             </span>
           </CardTitle>
@@ -705,7 +711,7 @@ export const DockerManagement = memo(() => {
               size="sm"
               onClick={handleRemoveAllImages}
               disabled={actionLoading !== null}
-              className="h-8 text-[10px] font-black uppercase tracking-widest px-4"
+              className="h-auto min-h-8 whitespace-normal text-[10px] font-black uppercase tracking-widest px-4"
             >
               {actionLoading === "remove-all" ? (
                 <Loader size="xs" className="mr-2" />
@@ -726,7 +732,7 @@ export const DockerManagement = memo(() => {
               {images.map((image) => (
                 <div
                   key={image.id}
-                  className="flex items-center justify-between p-2.5 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-colors hover:bg-amber-500/20"
+                  className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-colors hover:bg-amber-500/20"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-black text-[11px] text-white/90 truncate uppercase tracking-wide">
@@ -751,6 +757,7 @@ export const DockerManagement = memo(() => {
                       )
                     }
                     disabled={actionLoading !== null}
+                    aria-label={`Remove Docker image ${image.repository}:${image.tag}`}
                   >
                     {actionLoading === `remove-${image.id}` ? (
                       <Loader size="xs" />

@@ -69,18 +69,21 @@ export function ProviderPricingCard({
         {rateLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <Loader size="xs" className="text-white" />
-            Loading rate info...
+            Loading rate info…
           </div>
         ) : rateInfo ? (
           <>
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative min-w-0 flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
                     $
                   </span>
                   <Input
                     type="number"
+                    name="provider-hourly-rate"
+                    aria-label="Provider hourly GPU rate"
+                    inputMode="decimal"
                     step="0.001"
                     min={rateToHourly(rateInfo.floor_rate).toFixed(3)}
                     max={rateToHourly(rateInfo.ceiling_rate).toFixed(3)}
@@ -106,7 +109,7 @@ export function ProviderPricingCard({
                     variant="outline"
                     onClick={onResetRate}
                     disabled={rateSaving}
-                    className="shrink-0 text-xs"
+                    className="shrink-0 text-xs sm:w-auto"
                   >
                     Reset
                   </Button>
@@ -188,7 +191,7 @@ export function ProviderPricingCard({
                     aria-pressed={isActive}
                     onClick={() => onSetPreset(multiplier)}
                     disabled={exceedsCeiling || cooldownSeconds > 0}
-                    className={`h-auto rounded-lg px-2.5 py-1.5 font-semibold transition-colors justify-between gap-1.5 ${
+                    className={`h-auto rounded-lg px-2.5 py-1.5 font-semibold transition-colors justify-between gap-1.5 whitespace-normal ${
                       isActive
                         ? ""
                         : "text-muted-foreground hover:text-foreground hover:border-primary/50"
@@ -221,10 +224,10 @@ export function ProviderPricingCard({
                   return (
                     <div
                       key={job.label}
-                      className="flex items-center justify-between px-3 py-1.5 text-xs"
+                      className="flex flex-col gap-1 px-3 py-1.5 text-xs sm:flex-row sm:items-center sm:justify-between"
                     >
                       <span className="text-muted-foreground">{job.label}</span>
-                      <div className="flex items-center gap-2 tabular-nums">
+                      <div className="flex flex-wrap items-center gap-2 tabular-nums">
                         <span className="font-medium text-white">
                           {formatMillicents(perJob)}/job
                         </span>
@@ -238,9 +241,9 @@ export function ProviderPricingCard({
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
               <span className="text-muted-foreground">Market position</span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end">
                 {currentInputRate !== null &&
                 currentInputRate >
                   rateInfo.platform_rate_cents_per_vram_gb_min ? (
@@ -251,7 +254,7 @@ export function ProviderPricingCard({
                     />
                     <Badge
                       variant="outline"
-                      className="text-[10px] border-destructive/30 text-destructive-foreground"
+                      className="h-auto whitespace-normal text-left text-[10px] border-destructive/30 text-destructive-foreground"
                     >
                       Above platform rate - no standard jobs
                     </Badge>
@@ -263,7 +266,7 @@ export function ProviderPricingCard({
                         <TrendingDown size={12} className="text-white" />
                         <Badge
                           variant="primary"
-                          className="text-[10px] border-primary/30 text-white"
+                          className="h-auto whitespace-normal text-left text-[10px] border-primary/30 text-white"
                         >
                           Competitive - more jobs likely
                         </Badge>
@@ -274,7 +277,7 @@ export function ProviderPricingCard({
                         <Minus size={12} className="text-white" />
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-merged-status/30 text-merged-status"
+                          className="h-auto whitespace-normal text-left text-[10px] border-merged-status/30 text-merged-status"
                         >
                           Above average - slightly fewer jobs
                         </Badge>
@@ -285,7 +288,7 @@ export function ProviderPricingCard({
                         <TrendingUp size={12} className="text-white" />
                         <Badge
                           variant="outline"
-                          className="text-[10px] border-merged-status/30 text-merged-status"
+                          className="h-auto whitespace-normal text-left text-[10px] border-merged-status/30 text-merged-status"
                         >
                           Premium - significantly fewer jobs
                         </Badge>

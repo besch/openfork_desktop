@@ -24,11 +24,12 @@ export function ConfirmationDialog({
   isLoading,
 }: ConfirmationDialogProps) {
   const footer = (
-    <div className="flex justify-end gap-3 w-full">
-      <Button 
-        variant="destructive" 
-        onClick={onClose} 
+    <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <Button
+        variant="destructive"
+        onClick={onClose}
         disabled={isLoading}
+        className="whitespace-normal"
       >
         {cancelButtonText}
       </Button>
@@ -36,11 +37,12 @@ export function ConfirmationDialog({
         variant="primary"
         onClick={onConfirm}
         disabled={isLoading}
+        className="whitespace-normal"
       >
         {isLoading ? (
           <div className="flex items-center gap-2">
             <Loader size="xs" />
-            <span>{confirmButtonText}...</span>
+            <span>{confirmButtonText}…</span>
           </div>
         ) : (
           confirmButtonText

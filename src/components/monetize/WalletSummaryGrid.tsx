@@ -71,8 +71,8 @@ export function WalletSummaryGrid({
   return (
     <div className="space-y-3">
       {walletError && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
-          <span>{walletError}</span>
+        <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span className="break-words">{walletError}</span>
           {onReload && (
             <Button
               type="button"
@@ -105,7 +105,7 @@ export function WalletSummaryGrid({
                   </div>
                 </div>
                 <p
-                  className={`mt-3 flex min-h-8 items-center text-2xl font-black tabular-nums ${item.color} drop-shadow-2xl`}
+                  className={`mt-3 flex min-h-8 items-center break-words text-xl font-black tabular-nums sm:text-2xl ${item.color} drop-shadow-2xl`}
                 >
                   {loadingWallet && !wallet ? (
                     <Loader size="xs" className="text-white" />

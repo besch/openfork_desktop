@@ -40,8 +40,9 @@ export const Chart = () => {
 
   return (
     <Card className="bg-card/50 backdrop-blur-sm border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <CardContent>
-        <ResponsiveContainer width="100%" height={400}>
+      <CardContent className="p-3 sm:p-6">
+        <div className="h-[320px] sm:h-[400px]">
+        <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
             margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
@@ -50,8 +51,14 @@ export const Chart = () => {
               strokeDasharray="3 3"
               stroke="rgba(255,255,255,0.1)"
             />
-            <XAxis dataKey="name" stroke="#a1a1aa" />
-            <YAxis allowDecimals={false} stroke="#a1a1aa" />
+            <XAxis
+              dataKey="name"
+              stroke="#a1a1aa"
+              tick={{ fontSize: 11 }}
+              tickMargin={8}
+              height={48}
+            />
+            <YAxis allowDecimals={false} stroke="#a1a1aa" tick={{ fontSize: 11 }} />
             <Tooltip
               contentStyle={{
                 backgroundColor: "#1c1917",
@@ -83,6 +90,7 @@ export const Chart = () => {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );

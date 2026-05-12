@@ -133,18 +133,18 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
   ): string => {
     if (!prompt) return "No prompt provided";
     return prompt.length > maxLength
-      ? `${prompt.substring(0, maxLength)}...`
+      ? `${prompt.substring(0, maxLength)}…`
       : prompt;
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-all duration-500 group relative overflow-hidden hover:bg-amber-500/20 shadow-sm">
+    <div className="group relative flex flex-col gap-3 overflow-hidden rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-white shadow-sm transition-[background-color,border-color,box-shadow] duration-500 hover:bg-amber-500/20 sm:flex-row sm:items-center">
       <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-      <div className="relative z-10 p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/10 text-amber-500 group-hover:scale-105 transition-all duration-500">
+      <div className="relative z-10 w-fit p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/10 text-amber-500 group-hover:scale-105 transition-[transform,background-color,border-color] duration-500">
         {getWorkflowIcon(job.workflow_type)}
       </div>
       <div className="relative z-10 flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-black text-[11px] text-white/90 truncate uppercase tracking-wide line-clamp-1">
             {job.workflow_type?.replace(/_/g, " ") || "unknown workflow"}
           </span>
@@ -157,14 +157,14 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
           {truncatePrompt(job.prompt)}
         </p>
       </div>
-      <div className="relative z-10 text-right shrink-0 flex flex-col justify-center">
-        <div className="text-[9px] font-black tracking-wide text-white/90 flex items-center justify-end group-hover:text-white transition-colors uppercase">
+      <div className="relative z-10 flex shrink-0 flex-col justify-center text-left sm:text-right">
+        <div className="flex items-center justify-start text-[9px] font-black uppercase tracking-wide text-white/90 transition-colors group-hover:text-white sm:justify-end">
           {job.user?.username ? (
             <a
               href={`https://openfork.video/${job.user.username}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-amber-400 transition-colors cursor-pointer underline-offset-4 hover:underline"
+              className="max-w-[14rem] truncate hover:text-amber-400 transition-colors cursor-pointer underline-offset-4 hover:underline"
             >
               @{job.user.username.toUpperCase()}
             </a>
@@ -172,7 +172,7 @@ const JobRow = memo(({ job }: { job: ProcessedJob }) => {
             "UNKNOWN USER"
           )}
         </div>
-        <div className="text-[8px] font-black text-white/40 mt-0.5 uppercase tracking-wide flex items-center justify-end gap-2">
+        <div className="mt-0.5 flex flex-wrap items-center justify-start gap-2 text-[8px] font-black uppercase tracking-wide text-white/40 sm:justify-end">
           {job.duration_seconds && (
             <span className="flex items-center gap-1">
               <Clock size={8} className="opacity-50" />
@@ -454,7 +454,7 @@ export const JobHistory = memo(() => {
       <div className="flex flex-col items-center justify-center h-[400px] gap-4">
         <Loader size="lg" variant="primary" />
         <span className="text-muted-foreground font-medium animate-pulse">
-          Synchronizing your work history...
+          Synchronizing your work history…
         </span>
       </div>
     );
@@ -489,7 +489,10 @@ export const JobHistory = memo(() => {
             <div className="relative flex-1 min-w-[200px] group/search">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 group-focus-within/search:text-white transition-colors" />
               <input
-                placeholder="Search by prompt, workflow or username..."
+                aria-label="Search job history"
+                name="job-history-search"
+                autoComplete="off"
+                placeholder="Search by prompt, workflow or username…"
                 className="flex h-10 w-full rounded-lg border border-white/5 bg-muted/20 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 pl-9"
                 value={searchQuery}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -498,15 +501,17 @@ export const JobHistory = memo(() => {
               />
               {searchQuery && (
                 <button
+                  type="button"
+                  aria-label="Clear job history search"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 >
                   <X className="h-4 w-4 text-white" />
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[140px] bg-muted/20 border-white/5 text-xs font-bold">
                   <SelectValue placeholder="All statuses" />
@@ -574,9 +579,9 @@ export const JobHistory = memo(() => {
 
       {/* List Card */}
       <Card className="bg-surface/20 backdrop-blur-3xl border-white/20 shadow-3xl min-h-[400px] flex flex-col rounded-lg overflow-hidden">
-        <CardContent className="p-8 flex-1 overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-primary">
+        <CardContent className="flex-1 overflow-y-auto max-h-[600px] p-4 scrollbar-thin scrollbar-primary sm:p-8">
           {error && (
-            <div className="mb-6 bg-destructive-foreground/10 border border-destructive-foreground/20 text-destructive-foreground rounded-lg p-5 flex items-start gap-4">
+            <div className="mb-6 flex items-start gap-4 rounded-lg border border-destructive-foreground/20 bg-destructive-foreground/10 p-4 text-destructive-foreground sm:p-5">
               <div className="p-2 rounded-lg bg-destructive-foreground/20 text-destructive-foreground">
                 <XCircle className="h-5 w-5" />
               </div>
@@ -650,7 +655,7 @@ export const JobHistory = memo(() => {
               <div className="mt-8 text-center">
                 <p className="text-[10px] font-bold text-muted-foreground/30 uppercase tracking-[0.2em]">
                   {hasMore
-                    ? `Loading more... (${jobs.length} loaded)`
+                    ? `Loading more… (${jobs.length} loaded)`
                     : `Displaying all ${jobs.length} records`}
                 </p>
               </div>

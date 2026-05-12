@@ -343,21 +343,21 @@ export function StorageSettings({
   const reclaimBusy = isReclaiming || reclaimInProgress || reclaimSettling;
   const autoCompactInProgress = autoCompact?.compactInProgress === true;
   const reclaimBusyLabel = reclaimStatus?.phase?.startsWith("recovering")
-    ? "Reconnecting..."
+    ? "Reconnecting…"
     : reclaimStatus?.phase === "waiting_for_idle"
       ? reclaimStatus.waitingForActiveDownload
-        ? "Waiting for download..."
+        ? "Waiting for download…"
         : reclaimStatus.waitingForActiveJob
-          ? "Waiting for job..."
-          : "Waiting for idle..."
+          ? "Waiting for job…"
+          : "Waiting for idle…"
     : reclaimStatus?.phase === "stopping_client"
-      ? "Pausing engine..."
+      ? "Pausing engine…"
     : reclaimSettling
-      ? "Reconnecting..."
+      ? "Reconnecting…"
     : reclaimStatus?.phase === "pruning_cache"
-      ? "Cleaning cache..."
+      ? "Cleaning cache…"
     : reclaimBusy
-      ? "Reclaiming..."
+      ? "Reclaiming…"
       : "Reclaim Space (Slow, Keeps Images)";
   const autoCompactThresholdGb = Math.round(
     (autoCompact?.thresholdBytes || 0) / 1024 ** 3,
@@ -398,13 +398,15 @@ export function StorageSettings({
       <div
         className={`${compact ? "flex flex-col gap-4 border-b border-white/5 pb-6" : "flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-white/5 pb-8"}`}
       >
-        <div className="flex items-center gap-5">
+        <div className="flex min-w-0 items-center gap-4 sm:gap-5">
           <div className="p-3 rounded-2xl bg-black/40 border border-amber-500/20 shadow-2xl shadow-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
             <HardDrive className="h-6 w-6" />
           </div>
-          <div>
-            <h3 className={headingClassName + " text-base"}>{storageTitle}</h3>
-            <p className={subheadingClassName + " text-[13px]"}>
+          <div className="min-w-0">
+            <h3 className={headingClassName + " truncate text-base"}>
+              {storageTitle}
+            </h3>
+            <p className={subheadingClassName + " truncate text-[13px]"}>
               {storageSubtitle}
             </p>
           </div>
@@ -416,7 +418,7 @@ export function StorageSettings({
                 <div className={statChipClassName}>
                   {diskInfo
                     ? `Active: ${diskInfo.path}`
-                    : "Active: Detecting storage..."}
+                    : "Active: Detecting storage…"}
                 </div>
                 {(diskInfo?.engine_file_gb || loading) && (
                   <div className={accentChipClassName}>
@@ -442,7 +444,7 @@ export function StorageSettings({
               <div className={summaryClassName}>
                 {diskInfo
                   ? `${diskInfo.free_gb} GB FREE / ${diskInfo.total_gb} GB TOTAL`
-                  : "Checking available storage..."}
+                  : "Checking available storage…"}
               </div>
             </div>
             {loading && renderSectionLoadingOverlay()}
@@ -468,7 +470,7 @@ export function StorageSettings({
       )}
 
       <div className={sectionClassName}>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-0.5">
             <Label className={`${labelClassName} flex items-center gap-1.5`}>
               <Sparkles className="h-3 w-3" />
@@ -483,7 +485,7 @@ export function StorageSettings({
           </div>
           {autoCompact && autoCompact.compactInProgress && (
             <span className="shrink-0 rounded-lg border border-amber-500/25 bg-amber-500/12 px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] text-amber-200">
-              Compacting...
+              Compacting…
             </span>
           )}
         </div>
@@ -521,7 +523,7 @@ export function StorageSettings({
         >
           <div className="relative">
             <div className={sectionClassName}>
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-0.5">
                   <Label
                     className={`${labelClassName} flex items-center gap-1.5`}
@@ -580,7 +582,7 @@ export function StorageSettings({
                     disabled={reclaimStatus?.phase === "cancelling"}
                   >
                     {reclaimStatus?.phase === "cancelling"
-                      ? "Cancelling..."
+                      ? "Cancelling…"
                       : "Cancel"}
                   </Button>
                 )}
@@ -615,14 +617,14 @@ export function StorageSettings({
                 </p>
               </div>
 
-              <div className="flex gap-2 items-center">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="flex-1 min-w-0">
                   <Select
                     value={selectedDrive}
                     onValueChange={setSelectedDrive}
                     disabled={loading || isRelocating}
                   >
-                    <SelectTrigger className="w-full h-9 text-[12px] bg-black/60 border-white/10 hover:bg-black/80 hover:border-white/20 transition-all rounded-xl shadow-inner">
+                    <SelectTrigger className="w-full h-9 text-[12px] bg-black/60 border-white/10 hover:bg-black/80 hover:border-white/20 transition-colors rounded-xl shadow-inner">
                       <SelectValue placeholder="Select Drive" />
                     </SelectTrigger>
                     <SelectContent>
@@ -636,7 +638,7 @@ export function StorageSettings({
                             disabled={isInstalledHere}
                             className="text-[11px]"
                           >
-                            <div className="flex items-center justify-between w-full gap-4">
+                            <div className="flex min-w-0 items-center justify-between w-full gap-4">
                               <span>{drive.name}: Drive</span>
                               <span className="text-[10px] opacity-50">
                                 ({drive.freeGB} GB free)
@@ -692,7 +694,7 @@ export function StorageSettings({
 
       {/* Docker Image Storage Limit */}
       <div className={sectionClassName}>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-0.5">
             <Label className={`${labelClassName} flex items-center gap-1.5`}>
               <Gauge className="h-3 w-3" />
@@ -709,7 +711,7 @@ export function StorageSettings({
 
         {pythonConfig && (
           <div className="space-y-4 pt-1">
-            <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
               <Info className="h-3 w-3 text-amber-300 shrink-0" />
               <span className="text-[11px] font-semibold leading-relaxed text-amber-200">
                 When the limit is crossed, OpenFork removes least-used images.
@@ -766,7 +768,7 @@ export function StorageSettings({
 
             {imageCacheUsage &&
               imageCacheUsage.build_cache_reclaimable_bytes > 1024 ** 3 && (
-                <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
                   <Info className="h-3 w-3 text-amber-300 shrink-0" />
                   <span className="text-[11px] font-semibold leading-relaxed text-amber-200">
                     Docker reports{" "}
@@ -842,7 +844,7 @@ export function StorageSettings({
                           : prev,
                       )
                     }
-                    className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                    className={`rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,color,box-shadow] ${
                       selected
                         ? "border-amber-500/50 bg-amber-500/15 text-white"
                         : "border-white/10 bg-black/25 text-white/70 hover:border-white/20 hover:bg-white/[0.04]"
@@ -880,6 +882,9 @@ export function StorageSettings({
                   <Label className={labelClassName}>{field.label}</Label>
                   <input
                     type="number"
+                    name={field.key}
+                    aria-label={field.label}
+                    inputMode="numeric"
                     min={field.min}
                     max={field.max}
                     value={
@@ -900,7 +905,7 @@ export function StorageSettings({
                           : prev,
                       );
                     }}
-                    className="w-full h-10 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-[13px] font-semibold focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all shadow-inner"
+                    className="w-full h-10 px-3 rounded-xl bg-black/60 border border-white/10 text-white text-[13px] font-semibold focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-[background-color,border-color,box-shadow] shadow-inner"
                   />
                 </div>
               ))}
@@ -933,11 +938,11 @@ export function StorageSettings({
                   </motion.div>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`${buttonTextClassName}`}
+                  className={`${buttonTextClassName} h-auto min-h-8 whitespace-normal`}
                   onClick={resetPythonConfig}
                   disabled={configLoading}
                 >
@@ -947,7 +952,7 @@ export function StorageSettings({
                 <Button
                   variant="primary"
                   size="sm"
-                  className={`${buttonTextClassName}`}
+                  className={`${buttonTextClassName} h-auto min-h-8 whitespace-normal`}
                   onClick={validateAndSavePythonConfig}
                   disabled={configLoading}
                 >
@@ -964,7 +969,7 @@ export function StorageSettings({
         <motion.div
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-md bg-destructive-foreground border border-destructive/20 flex items-center gap-2 text-destructive px-3 py-2.5"
+          className="rounded-md bg-destructive-foreground border border-destructive/20 flex items-start gap-2 text-destructive px-3 py-2.5"
         >
           <AlertTriangle className="h-3 w-3 flex-shrink-0" />
           <span className="text-[11px] text-white font-semibold leading-relaxed">

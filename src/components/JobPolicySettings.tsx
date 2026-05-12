@@ -169,13 +169,14 @@ export function JobPolicySettings({
   return (
     <div className="space-y-3">
       {/* Primary mode tiles */}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
         {primaryModes.map((mode) => (
           <button
+            type="button"
             key={mode.value}
             onClick={() => handlePrimaryModeChange(mode.value)}
             disabled={disabled}
-            className={`text-left px-2.5 py-2.5 rounded-lg border text-xs tracking-normal transition-all ${
+            className={`min-w-0 text-left px-2.5 py-2.5 rounded-lg border text-xs tracking-normal transition-[background-color,border-color,color,box-shadow] ${
               primaryMode === mode.value
                 ? "border-amber-500/50 bg-amber-500/10 text-white"
                 : "border-white/10 bg-white/5 text-white/70 hover:border-white/20 hover:text-white/90"
@@ -195,8 +196,8 @@ export function JobPolicySettings({
       {primaryMode === "private" && (
         <div className="space-y-2 pl-3 border-l-2 border-amber-500/20">
           {/* Trusted group toggle */}
-          <div className="flex items-center justify-between py-1">
-            <div>
+          <div className="flex items-start justify-between gap-3 py-1">
+            <div className="min-w-0">
               <Label className="text-xs font-semibold text-white/80 tracking-normal">
                 Trusted group
               </Label>
@@ -208,6 +209,7 @@ export function JobPolicySettings({
               checked={trustedEnabled}
               onCheckedChange={handleTrustedGroupToggle}
               disabled={disabled}
+              className="shrink-0"
             />
           </div>
 
@@ -218,10 +220,11 @@ export function JobPolicySettings({
               <div className="flex gap-1.5">
                 {(["users", "projects"] as TrustedTarget[]).map((target) => (
                   <button
+                    type="button"
                     key={target}
                     onClick={() => handleTrustedTargetChange(target)}
                     disabled={disabled}
-                    className={`px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                    className={`px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider transition-[background-color,color] ${
                       trustedTarget === target
                         ? "bg-white/15 text-white"
                         : "bg-white/5 text-white/40 hover:text-white/70"
@@ -267,8 +270,8 @@ export function JobPolicySettings({
       {/* Public sub-settings */}
       {primaryMode === "public" && (
         <div className="pl-3 border-l-2 border-amber-500/20">
-          <div className="flex items-center justify-between py-1">
-            <div>
+          <div className="flex items-start justify-between gap-3 py-1">
+            <div className="min-w-0">
               <Label className="text-xs font-semibold text-white/80 tracking-normal">
                 Prioritize my own jobs
               </Label>
@@ -280,6 +283,7 @@ export function JobPolicySettings({
               checked={config.processOwnJobs}
               onCheckedChange={(v: boolean) => update({ processOwnJobs: v })}
               disabled={disabled}
+              className="shrink-0"
             />
           </div>
         </div>

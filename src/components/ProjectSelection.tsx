@@ -105,12 +105,14 @@ export const ProjectSelection: React.FC<ProjectSelectionProps> = ({
                 exit={{ opacity: 0, scale: 0.5 }}
                 transition={{ duration: 0.2 }}
               >
-                <Badge className="flex items-center gap-1.5">
-                  {project.title}
+                <Badge className="flex max-w-full items-center gap-1.5">
+                  <span className="min-w-0 truncate">{project.title}</span>
                   {!disabled && (
                     <button
+                      type="button"
+                      aria-label={`Remove project ${project.title}`}
                       onClick={() => handleRemoveProject(project.id)}
-                      className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+                      className="rounded-full hover:bg-muted-foreground/20 p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     >
                       <X size={12} />
                     </button>
@@ -122,7 +124,7 @@ export const ProjectSelection: React.FC<ProjectSelectionProps> = ({
         </div>
         <Command className="bg-transparent" shouldFilter={false}>
           <CommandInput
-            placeholder="Search for projects to allow..."
+            placeholder="Search for projects to allow…"
             value={searchTerm}
             onValueChange={setSearchTerm}
             disabled={disabled}

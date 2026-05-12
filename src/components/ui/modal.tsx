@@ -59,7 +59,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md transition-all duration-200"
+      className="fixed inset-0 z-[200] flex items-center justify-center overscroll-contain p-3 backdrop-blur-md transition-[background-color,opacity] duration-200 sm:p-4"
       style={{
         background: "rgba(20, 16, 12, 0.6)",
       }}
@@ -77,9 +77,9 @@ export function Modal({
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
 
         {/* Header */}
-        <div className="flex-shrink-0 px-8 py-6 border-b border-white/5 relative z-10 bg-white/[0.01]">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="flex-shrink-0 px-4 py-5 border-b border-white/5 relative z-10 bg-white/[0.01] sm:px-8 sm:py-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="text-xl font-bold text-white tracking-tight truncate max-w-[calc(100vw-120px)]">
                 {title}
               </h2>
@@ -93,6 +93,7 @@ export function Modal({
               variant="ghost"
               size="icon"
               onClick={onClose}
+              aria-label={`Close ${title}`}
               className="rounded-xl hover:bg-white/5 hover:text-white transition-all duration-300 border border-transparent hover:border-white/10"
             >
               <X className="h-5 w-5" />
@@ -105,6 +106,7 @@ export function Modal({
           <div
             className={cn(
               "flex-1 overflow-y-auto p-8 scrollbar-thin relative z-10",
+              "p-4 sm:p-8",
               scrollbarVariant === "primary" && "scrollbar-primary",
             )}
             style={{
@@ -118,7 +120,7 @@ export function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="flex-shrink-0 px-8 py-6 bg-white/[0.02] backdrop-blur-sm border-t border-white/5 relative z-10">
+          <div className="flex-shrink-0 px-4 py-5 bg-white/[0.02] backdrop-blur-sm border-t border-white/5 relative z-10 sm:px-8 sm:py-6">
             {footer}
           </div>
         )}

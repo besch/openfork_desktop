@@ -46,7 +46,7 @@ export function RecentEarningsCard({
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left transition-colors hover:bg-white/[0.03]"
+              className="flex w-full flex-col gap-3 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:flex-row sm:items-center sm:justify-between sm:px-6"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 shadow-sm shadow-amber-500/20 text-amber-500">
@@ -61,7 +61,7 @@ export function RecentEarningsCard({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 self-start sm:self-center">
                 <Badge variant="muted" className="text-[10px]">
                   {transactions.length} loaded
                 </Badge>
@@ -78,11 +78,11 @@ export function RecentEarningsCard({
         <CollapsibleContent>
           <div
             ref={transactionListRef}
-            className="max-h-[560px] overflow-y-auto px-6 pb-5 pt-1 scrollbar-thin scrollbar-primary"
+            className="max-h-[560px] overflow-y-auto px-4 pb-5 pt-1 scrollbar-thin scrollbar-primary sm:px-6"
           >
             {transactionsError && (
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
-                <span>{transactionsError}</span>
+              <div className="mb-3 flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span className="break-words">{transactionsError}</span>
                 <Button
                   type="button"
                   variant="outline"
@@ -97,7 +97,7 @@ export function RecentEarningsCard({
             {loadingTransactions ? (
               <div className="flex items-center gap-2 text-muted-foreground text-sm py-5">
                 <Loader size="xs" className="text-white" />
-                Loading transactions...
+                Loading transactions…
               </div>
             ) : transactions.length === 0 ? (
               <div className="rounded-lg border border-white/10 bg-black/20 px-4 py-8 text-center">
@@ -118,7 +118,7 @@ export function RecentEarningsCard({
                     <div
                       key={transaction.id}
                       ref={isLast ? lastTransactionRef : undefined}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-white/10 bg-black/20 px-4 py-3 transition-colors hover:bg-white/[0.04]"
+                      className="grid grid-cols-1 gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-3 transition-colors hover:bg-white/[0.04] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:px-4"
                     >
                       <div className="min-w-0">
                         <div className="flex min-w-0 items-center gap-2">
@@ -142,7 +142,7 @@ export function RecentEarningsCard({
                           {transaction.transaction_type.replace(/_/g, " ")}
                         </p>
                       </div>
-                      <div className="text-right tabular-nums">
+                      <div className="tabular-nums sm:text-right">
                         <p
                           className={`font-mono text-sm font-bold ${
                             isNegative
@@ -165,7 +165,7 @@ export function RecentEarningsCard({
                 {loadingMoreTransactions && (
                   <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
                     <Loader size="xs" className="text-white" />
-                    Loading more earnings...
+                    Loading more earnings…
                   </div>
                 )}
 
