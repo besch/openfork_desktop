@@ -88,8 +88,16 @@ const NoticeBanner = memo(
         className={`flex items-start justify-between gap-3 rounded-lg border p-3 text-white shadow-lg backdrop-blur-md ${toneClasses.shell}`}
       >
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="shrink-0">
-            {isBusy ? <Loader size="sm" variant="primary" /> : icon}
+          <div className="flex h-4 w-4 shrink-0 items-center justify-center">
+            {isBusy ? (
+              <Loader
+                size="xs"
+                variant="primary"
+                className="h-4 w-4 p-0"
+              />
+            ) : (
+              icon
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <p
