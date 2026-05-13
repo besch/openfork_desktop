@@ -741,6 +741,10 @@ class PythonProcessManager {
         PYTHONUNBUFFERED: "1",
         PYTHONIOENCODING: "utf-8",
         PYTHONUTF8: "1",
+        OPENFORK_CLIENT_KIND: "desktop",
+        OPENFORK_CLIENT_VERSION: app.getVersion(),
+        OPENFORK_DESKTOP_VERSION: app.getVersion(),
+        OPENFORK_DGN_PROTOCOL_VERSION: "1",
       };
       // Point Python config.py at the user overrides file so overrides are
       // applied at import time before any downstream module reads them.
@@ -873,6 +877,34 @@ class PythonProcessManager {
                 console.error("onProviderRegistered handler threw:", err);
               }
             }
+            return;
+          }
+
+          if (message.status === "UPGRADE_REQUIRED") {
+            const payload = message.payload || {};
+            const requiredUpdate =
+              payload.required_update || payload.evaluation || payload;
+            const updateMessage =
+              payload.message ||
+              requiredUpdate.message ||
+              "A required OpenFork update is available. Install it to continue.";
+
+            console.warn("Python reported required update:", payload);
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.webContents.send("update:required", {
+                required: true,
+                ...requiredUpdate,
+                message: updateMessage,
+              });
+              this.mainWindow.webContents.send("openfork_client:log", {
+                type: "stderr",
+                message: updateMessage,
+              });
+              this.mainWindow.webContents.send("openfork_client:status", "stopped");
+            }
+            this.stop().catch((err) => {
+              console.error("Failed to stop after required update:", err);
+            });
             return;
           }
 

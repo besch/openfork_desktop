@@ -70,6 +70,23 @@ interface UpdateProgress {
   total?: number;
 }
 
+interface RequiredUpdateInfo {
+  required: boolean;
+  severity?: "recommended" | "security";
+  reason?: "desktop_version" | "client_version" | "protocol_version" | null;
+  message: string;
+  latest_version?: string | null;
+  download_url?: string | null;
+  release_notes_url?: string | null;
+  current_desktop_version?: string | null;
+  current_client_version?: string | null;
+  current_protocol_version?: number | null;
+  min_desktop_version?: string | null;
+  min_client_version?: string | null;
+  min_protocol_version?: number | null;
+  policy_updated_at?: string | null;
+}
+
 interface ProcessInfo {
   chrome: string;
   electron: string;
@@ -296,6 +313,10 @@ interface ElectronAPI {
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => CleanupFn;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => CleanupFn;
+  onRequiredUpdate: (
+    callback: (info: RequiredUpdateInfo) => void,
+  ) => CleanupFn;
+  checkUpdatePolicy: () => Promise<RequiredUpdateInfo | null>;
   downloadUpdate: () => Promise<void>;
   installUpdate: () => Promise<void>;
 

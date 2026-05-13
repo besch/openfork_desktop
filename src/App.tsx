@@ -25,9 +25,12 @@ import {
   BarChart as BarChartIcon,
   Container,
   Download,
+  ExternalLink,
   History,
   DollarSign,
   HardDrive,
+  RefreshCcw,
+  ShieldAlert,
 } from "lucide-react";
 import {
   Popover,
@@ -69,6 +72,139 @@ function TabContentLoader() {
   return (
     <div className="flex h-64 items-center justify-center rounded-lg border border-white/10 bg-surface/30">
       <Loader size="lg" variant="primary" />
+    </div>
+  );
+}
+
+type RequiredUpdateInfo = {
+  required: boolean;
+  severity?: "recommended" | "security";
+  reason?: string | null;
+  message: string;
+  latest_version?: string | null;
+  download_url?: string | null;
+  release_notes_url?: string | null;
+  current_desktop_version?: string | null;
+  min_desktop_version?: string | null;
+  min_client_version?: string | null;
+  min_protocol_version?: number | null;
+};
+
+type UpdateProgressInfo = {
+  percent: number;
+};
+
+function RequiredUpdateScreen({
+  update,
+  progress,
+  downloaded,
+}: {
+  update: RequiredUpdateInfo;
+  progress: UpdateProgressInfo | null;
+  downloaded: boolean;
+}) {
+  const progressPercent = Math.max(
+    0,
+    Math.min(100, Math.round(progress?.percent ?? 0)),
+  );
+  const latestVersion = update.latest_version
+    ? `Version ${update.latest_version}`
+    : "Latest OpenFork";
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8 text-white">
+      <div className="w-full max-w-2xl rounded-lg border border-red-500/25 bg-surface/80 p-6 shadow-2xl shadow-black/30">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-300">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-black uppercase tracking-widest text-red-300">
+              Required Security Update
+            </p>
+            <h1 className="mt-2 text-2xl font-black tracking-normal">
+              {latestVersion} is required
+            </h1>
+            <p className="mt-3 text-sm font-medium leading-6 text-white/70">
+              {update.message}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-2 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white/65 sm:grid-cols-3">
+          <div>
+            <p className="font-bold uppercase tracking-widest text-white/35">
+              Current
+            </p>
+            <p className="mt-1 text-white">
+              {update.current_desktop_version ?? "unknown"}
+            </p>
+          </div>
+          <div>
+            <p className="font-bold uppercase tracking-widest text-white/35">
+              Required
+            </p>
+            <p className="mt-1 text-white">
+              {update.min_desktop_version ??
+                update.min_client_version ??
+                update.min_protocol_version ??
+                "latest"}
+            </p>
+          </div>
+          <div>
+            <p className="font-bold uppercase tracking-widest text-white/35">
+              Reason
+            </p>
+            <p className="mt-1 text-white">{update.reason ?? "policy"}</p>
+          </div>
+        </div>
+
+        {progress && !downloaded && (
+          <div className="mt-5 space-y-2">
+            <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-white/45">
+              <span>Downloading</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-red-300 transition-[width] duration-200"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          {downloaded ? (
+            <Button
+              variant="primary"
+              onClick={() => window.electronAPI.installUpdate()}
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Restart & Install
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={() => {
+                window.electronAPI.downloadUpdate();
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download Update
+            </Button>
+          )}
+          {update.download_url && (
+            <Button
+              variant="outline"
+              onClick={() => window.electronAPI.openExternal(update.download_url!)}
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Open Release
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -164,10 +300,53 @@ function App() {
     username?: string;
   } | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [requiredUpdate, setRequiredUpdate] =
+    useState<RequiredUpdateInfo | null>(null);
+  const [requiredUpdateProgress, setRequiredUpdateProgress] =
+    useState<UpdateProgressInfo | null>(null);
+  const [requiredUpdateDownloaded, setRequiredUpdateDownloaded] =
+    useState(false);
 
   const handleLogout = () => {
     window.electronAPI.logout();
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    window.electronAPI
+      .checkUpdatePolicy()
+      .then((update) => {
+        if (mounted && update?.required) {
+          setRequiredUpdate(update);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to check required update policy:", error);
+      });
+
+    const cleanupRequired = window.electronAPI.onRequiredUpdate((update) => {
+      if (update?.required) {
+        setRequiredUpdate(update);
+        setRequiredUpdateDownloaded(false);
+        setRequiredUpdateProgress(null);
+      }
+    });
+    const cleanupProgress = window.electronAPI.onUpdateProgress((progress) => {
+      setRequiredUpdateProgress(progress);
+    });
+    const cleanupDownloaded = window.electronAPI.onUpdateDownloaded(() => {
+      setRequiredUpdateDownloaded(true);
+      setRequiredUpdateProgress(null);
+    });
+
+    return () => {
+      mounted = false;
+      cleanupRequired();
+      cleanupProgress();
+      cleanupDownloaded();
+    };
+  }, []);
 
   // Check dependencies on startup
   useEffect(() => {
@@ -370,6 +549,16 @@ function App() {
     };
     fetchProfile();
   }, [session]);
+
+  if (requiredUpdate?.required) {
+    return (
+      <RequiredUpdateScreen
+        update={requiredUpdate}
+        progress={requiredUpdateProgress}
+        downloaded={requiredUpdateDownloaded}
+      />
+    );
+  }
 
   // Show loading while checking dependencies
   if (checkingDeps) {

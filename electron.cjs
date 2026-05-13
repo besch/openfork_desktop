@@ -318,6 +318,8 @@ let pendingClientStart = null;
 let authStateSubscription = null;
 let pendingAuthState = null;
 let ipcSenderGuardInstalled = false;
+let requiredUpdateState = null;
+let requiredUpdateCheckPromise = null;
 
 const RENDERER_REFRESH_TOKEN_SENTINEL =
   "__openfork_renderer_refresh_token_not_available__";
@@ -334,6 +336,76 @@ function sendSessionToRenderer(authSession) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("auth:session", sessionForRenderer(authSession));
   }
+}
+
+function requestJson(url) {
+  return new Promise((resolve, reject) => {
+    const request = net.request({ method: "GET", url });
+    request.setHeader("Accept", "application/json");
+    let body = "";
+    request.on("response", (response) => {
+      response.on("data", (chunk) => {
+        body += chunk.toString();
+      });
+      response.on("end", () => {
+        try {
+          resolve({
+            statusCode: response.statusCode,
+            body: body ? JSON.parse(body) : null,
+          });
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+function normalizeRequiredUpdatePayload(payload) {
+  const evaluation = payload?.evaluation || payload?.required_update || payload;
+  if (!evaluation?.required) return null;
+  return {
+    required: true,
+    ...evaluation,
+    message:
+      evaluation.message ||
+      "A required OpenFork update is available. Install it to continue.",
+  };
+}
+
+function notifyRequiredUpdate(updateInfo) {
+  requiredUpdateState = normalizeRequiredUpdatePayload(updateInfo);
+  if (requiredUpdateState && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update:required", requiredUpdateState);
+  }
+}
+
+async function checkRequiredUpdatePolicy() {
+  if (requiredUpdateCheckPromise) return requiredUpdateCheckPromise;
+
+  requiredUpdateCheckPromise = (async () => {
+    const url = new URL("/api/update-policy", ORCHESTRATOR_API_URL);
+    const appVersion = app.getVersion();
+    url.searchParams.set("desktopVersion", appVersion);
+    url.searchParams.set("clientVersion", appVersion);
+    url.searchParams.set("clientKind", "desktop");
+    url.searchParams.set("protocolVersion", "1");
+
+    const result = await requestJson(url.toString());
+    notifyRequiredUpdate(result.body);
+    return requiredUpdateState;
+  })()
+    .catch((err) => {
+      console.warn("Failed to check required update policy:", err?.message || err);
+      return requiredUpdateState;
+    })
+    .finally(() => {
+      requiredUpdateCheckPromise = null;
+    });
+
+  return requiredUpdateCheckPromise;
 }
 
 const SERVICE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
@@ -357,6 +429,8 @@ const EXTERNAL_HTTPS_HOSTS = new Set([
   "connect.stripe.com",
   "dashboard.stripe.com",
   "billing.stripe.com",
+  "github.com",
+  "www.github.com",
 ]);
 
 function getOrigin(value) {
@@ -770,6 +844,9 @@ function createWindow() {
 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
+    checkRequiredUpdatePolicy().catch((err) => {
+      console.error("Failed to check required update policy:", err);
+    });
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       console.error("Failed to check for updates:", err);
     });
@@ -986,6 +1063,22 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
   const safeRoutingConfig = sanitizeRoutingConfig(routingConfig);
 
   if (!pythonManager || pythonManager.isRunning() || pendingClientStart) {
+    return;
+  }
+
+  const requiredUpdate = await checkRequiredUpdatePolicy();
+  if (requiredUpdate?.required) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("update:required", requiredUpdate);
+      mainWindow.webContents.send("openfork_client:log", {
+        type: "stderr",
+        message: requiredUpdate.message,
+      });
+      mainWindow.webContents.send("openfork_client:status", "stopped");
+    }
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error("Failed to check for required app update:", err);
+    });
     return;
   }
 
@@ -1230,6 +1323,7 @@ ipcMain.on("window:set-closable", (event, closable) => {
 
 // Info
 ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
+ipcMain.handle("update:check-policy", () => checkRequiredUpdatePolicy());
 ipcMain.handle("get-process-info", () => ({
   chrome: process.versions.chrome,
   electron: process.versions.electron,

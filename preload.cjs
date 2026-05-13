@@ -167,6 +167,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onUpdateProgress: (callback) => createListener("update:progress", callback),
   onUpdateDownloaded: (callback) =>
     createListener("update:downloaded", callback),
+  onRequiredUpdate: (callback) => createListener("update:required", callback),
+  checkUpdatePolicy: () => ipcRenderer.invoke("update:check-policy"),
   downloadUpdate: () => ipcRenderer.invoke("update:download"),
   installUpdate: () => ipcRenderer.invoke("update:install"),
 
