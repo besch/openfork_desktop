@@ -13,6 +13,8 @@ interface LoaderProps {
 
 const LOGO_SRC = "./logo.svg";
 const LOGO_MASK = `url("${LOGO_SRC}") center / contain no-repeat`;
+const LOGO_STRIPES =
+  "repeating-linear-gradient(115deg, var(--color-primary) 0 14%, white 18% 30%, var(--color-primary) 34% 48%)";
 
 const sizeMap: Record<NonNullable<LoaderProps["size"]>, number> = {
   xs: 16,
@@ -37,10 +39,13 @@ export function Loader({
   const logoSize = sizeMap[size];
 
   return (
-    <div className={cn(
-      "flex flex-col items-center justify-center gap-4 py-4",
-      className
-    )}>
+    <div
+      data-slot="loader"
+      className={cn(
+        "flex flex-col items-center justify-center gap-4 py-4",
+        className,
+      )}
+    >
       <div className="relative group">
         {/* Aesthetic Background Glow */}
         <div className={cn(
@@ -49,19 +54,30 @@ export function Loader({
         )} />
         
         <motion.span
+          data-slot="loader-logo"
           aria-hidden="true"
           className={cn(
             variants[variant],
-            "relative z-10 block h-[var(--loader-logo-height)] w-[var(--loader-logo-width)] bg-current drop-shadow-2xl"
+            "relative z-10 block h-[var(--loader-logo-height)] w-[var(--loader-logo-width)] bg-current drop-shadow-2xl will-change-transform"
           )}
           style={{
             "--loader-logo-width": `${logoSize}px`,
             "--loader-logo-height": `${logoSize * 1.6}px`,
+            backgroundImage: LOGO_STRIPES,
+            backgroundSize: "260% 260%",
             WebkitMask: LOGO_MASK,
             mask: LOGO_MASK,
           } as CSSProperties}
-          animate={{ opacity: [0.75, 1, 0.75], scale: [0.96, 1.03, 0.96] }}
-          transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          animate={{
+            backgroundPosition: ["0% 50%", "220% 50%"],
+            opacity: [0.92, 1, 0.92],
+            scale: [0.98, 1.04, 0.98],
+          }}
+          transition={{
+            duration: 1.35,
+            repeat: Infinity,
+            ease: "linear",
+          }}
         />
       </div>
 
