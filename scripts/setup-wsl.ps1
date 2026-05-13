@@ -62,6 +62,19 @@ function Enable-SparseVhd {
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) {
             $detail = ($output | Out-String).Trim()
+            if ($detail -match "--allow-unsafe" -or $detail -match "Sparse VHD support is currently disabled") {
+                Write-Log "WSL requires --allow-unsafe for sparse VHD conversion on this version. Retrying for the dedicated OpenFork distro..."
+                $output = & wsl.exe --manage $Name --set-sparse true --allow-unsafe 2>&1
+                $exitCode = $LASTEXITCODE
+                if ($exitCode -eq 0) {
+                    $detail = ""
+                } else {
+                    $detail = ($output | Out-String).Trim()
+                }
+            }
+        }
+
+        if ($exitCode -ne 0) {
             if ($detail) {
                 throw "wsl --manage exited with code $exitCode. $detail"
             }
