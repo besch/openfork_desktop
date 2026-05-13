@@ -197,7 +197,9 @@ function RequiredUpdateScreen({
           {update.download_url && (
             <Button
               variant="outline"
-              onClick={() => window.electronAPI.openExternal(update.download_url!)}
+              onClick={() =>
+                window.electronAPI.openExternal(update.download_url!)
+              }
             >
               <ExternalLink className="mr-2 h-4 w-4" />
               Open Release
@@ -613,11 +615,11 @@ function App() {
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
             <div className="relative z-10 flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
               <img
-                src="./logo.png"
+                src="./logo.svg"
                 alt="Openfork logo"
                 width={40}
                 height={40}
-                className="h-10 w-10 shrink-0 drop-shadow-2xl"
+                className="h-10 w-10 shrink-0 bg-transparent brightness-0 invert drop-shadow-2xl"
               />
               <div className="min-w-0">
                 <h1 className="truncate text-2xl md:text-3xl font-black text-white leading-none">
