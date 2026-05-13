@@ -13,8 +13,8 @@ interface LoaderProps {
 
 const LOGO_SRC = "./logo.svg";
 const LOGO_MASK = `url("${LOGO_SRC}") center / contain no-repeat`;
-const LOGO_STRIPES =
-  "repeating-linear-gradient(115deg, var(--color-primary) 0 14%, white 18% 30%, var(--color-primary) 34% 48%)";
+const LOGO_SWEEP =
+  "linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.92) 42%, var(--color-primary-highlight) 50%, rgba(255, 255, 255, 0.92) 58%, transparent 100%)";
 
 const sizeMap: Record<NonNullable<LoaderProps["size"]>, number> = {
   xs: 16,
@@ -58,27 +58,45 @@ export function Loader({
           aria-hidden="true"
           className={cn(
             variants[variant],
-            "relative z-10 block h-[var(--loader-logo-height)] w-[var(--loader-logo-width)] bg-current drop-shadow-2xl will-change-transform"
+            "relative z-10 block h-[var(--loader-logo-height)] w-[var(--loader-logo-width)] overflow-hidden bg-current drop-shadow-2xl"
           )}
           style={{
             "--loader-logo-width": `${logoSize}px`,
             "--loader-logo-height": `${logoSize * 1.6}px`,
-            backgroundImage: LOGO_STRIPES,
-            backgroundSize: "260% 260%",
             WebkitMask: LOGO_MASK,
             mask: LOGO_MASK,
           } as CSSProperties}
-          animate={{
-            backgroundPosition: ["0% 50%", "220% 50%"],
-            opacity: [0.92, 1, 0.92],
-            scale: [0.98, 1.04, 0.98],
-          }}
-          transition={{
-            duration: 1.35,
-            repeat: Infinity,
-            ease: "linear",
-          }}
-        />
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-[-45%] block"
+            style={{
+              transform: "rotate(28deg)",
+              transformOrigin: "center",
+            }}
+          >
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-y-0 block will-change-transform"
+              style={{
+                backgroundImage: LOGO_SWEEP,
+                left: "-28%",
+                width: "28%",
+              }}
+              animate={{
+                x: ["0%", "520%"],
+                opacity: [0, 1, 1, 0],
+              }}
+              transition={{
+                duration: 1.65,
+                ease: "easeInOut",
+                repeat: Infinity,
+                repeatDelay: 0.35,
+                times: [0, 0.16, 0.82, 1],
+              }}
+            />
+          </span>
+        </motion.span>
       </div>
 
       {label && (
