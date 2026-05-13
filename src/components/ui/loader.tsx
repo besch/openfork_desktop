@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
-import { OpenForkLogo } from "@/components/ui/open-fork-logo";
 
 interface LoaderProps {
   className?: string;
@@ -11,25 +11,30 @@ interface LoaderProps {
   label?: string;
 }
 
+const LOGO_SRC = "./logo.svg";
+const LOGO_MASK = `url("${LOGO_SRC}") center / contain no-repeat`;
+
+const sizeMap: Record<NonNullable<LoaderProps["size"]>, number> = {
+  xs: 16,
+  sm: 24,
+  md: 40,
+  lg: 64,
+  xl: 96,
+};
+
+const variants: Record<NonNullable<LoaderProps["variant"]>, string> = {
+  primary: "text-primary",
+  secondary: "text-status-pending",
+  white: "text-white",
+};
+
 export function Loader({ 
   className, 
   size = "md", 
   variant = "primary",
   label 
 }: LoaderProps) {
-  const sizeMap = {
-    xs: 16,
-    sm: 24,
-    md: 40,
-    lg: 64,
-    xl: 96,
-  };
-
-  const variants = {
-    primary: "text-primary",
-    secondary: "text-status-pending",
-    white: "text-white",
-  };
+  const logoSize = sizeMap[size];
 
   return (
     <div className={cn(
@@ -43,12 +48,20 @@ export function Loader({
           variant === "primary" ? "bg-primary" : "bg-status-pending"
         )} />
         
-        <OpenForkLogo 
-          size={sizeMap[size]} 
+        <motion.span
+          aria-hidden="true"
           className={cn(
             variants[variant],
-            "relative z-10 drop-shadow-2xl"
-          )} 
+            "relative z-10 block h-[var(--loader-logo-height)] w-[var(--loader-logo-width)] bg-current drop-shadow-2xl"
+          )}
+          style={{
+            "--loader-logo-width": `${logoSize}px`,
+            "--loader-logo-height": `${logoSize * 1.6}px`,
+            WebkitMask: LOGO_MASK,
+            mask: LOGO_MASK,
+          } as CSSProperties}
+          animate={{ opacity: [0.75, 1, 0.75], scale: [0.96, 1.03, 0.96] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
