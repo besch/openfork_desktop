@@ -327,16 +327,32 @@ export function StorageSettings({
   const imageCacheUsedGb = Number.parseFloat(imageCacheUsage?.total_gb || "0");
   const imageUsageKnown = imageCacheUsage?.known !== false;
   const imageUsageStale = imageCacheUsage?.stale === true;
-  const cacheUsedPercent =
-    cacheLimitGb > 0 && (imageUsageKnown || imageUsageStale)
-      ? Math.min(100, Math.round((imageCacheUsedGb / cacheLimitGb) * 100))
+  const imageUsageAvailable =
+    !!imageCacheUsage && (imageUsageKnown || imageUsageStale);
+  const engineFileGbText = diskInfo?.engine_file_gb ?? null;
+  const engineFileUsedGb = Number.parseFloat(engineFileGbText || "0");
+  const hasEngineFileUsage =
+    Number.isFinite(engineFileUsedGb) && engineFileUsedGb > 0;
+  const budgetUsedGb = hasEngineFileUsage
+    ? engineFileUsedGb
+    : imageCacheUsedGb;
+  const budgetUsageAvailable = hasEngineFileUsage || imageUsageAvailable;
+  const budgetUsageStale = !hasEngineFileUsage && imageUsageStale;
+  const budgetUsedPercent =
+    cacheLimitGb > 0 && budgetUsageAvailable
+      ? Math.min(100, Math.round((budgetUsedGb / cacheLimitGb) * 100))
       : 0;
   const imageUsageDisplay =
-    imageCacheUsage && (imageUsageKnown || imageUsageStale)
+    imageUsageAvailable
       ? `${imageCacheUsage.total_gb} GB`
       : imageCacheUsage
         ? "Unknown"
         : "--";
+  const budgetUsageDisplay = hasEngineFileUsage
+    ? `${engineFileGbText} GB VHDX`
+    : imageUsageAvailable && imageCacheUsage
+      ? `${imageCacheUsage.total_gb} GB images`
+      : null;
   const imageUsageQualifier = imageUsageStale
     ? "Last known"
     : imageUsageKnown
@@ -595,6 +611,8 @@ export function StorageSettings({
                 <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold leading-relaxed text-amber-200">
                   This OpenFork VHDX is not marked sparse, so Windows may need
                   the slower DiskPart compaction path after reclaiming space.
+                  Run Repair OpenFork Ubuntu to update WSL and retry sparse
+                  mode.
                 </p>
               )}
               {reclaimStatus?.phase === "completed" && (
@@ -786,8 +804,8 @@ export function StorageSettings({
               <div className="flex items-center justify-between gap-3">
                 <Label className={labelClassName}>Storage Budget</Label>
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/45">
-                  {imageUsageKnown || imageUsageStale
-                    ? `${cacheUsedPercent}% used`
+                  {budgetUsageAvailable && budgetUsageDisplay
+                    ? `${budgetUsageDisplay} / ${cacheLimitGb} GB`
                     : "Usage unknown"}
                 </span>
               </div>
@@ -812,12 +830,12 @@ export function StorageSettings({
               <div className="h-2 overflow-hidden rounded-full bg-white/5">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    imageUsageStale ? "bg-amber-300/60" : "bg-amber-500"
+                    budgetUsageStale ? "bg-amber-300/60" : "bg-amber-500"
                   }`}
                   style={{
-                    width: `${cacheUsedPercent}%`,
+                    width: `${budgetUsedPercent}%`,
                     minWidth:
-                      cacheUsedPercent > 0 && cacheUsedPercent < 2
+                      budgetUsedPercent > 0 && budgetUsedPercent < 2
                         ? "0.5rem"
                         : undefined,
                   }}

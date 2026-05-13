@@ -51,11 +51,41 @@ function Test-SparseFile {
     return (([System.IO.File]::GetAttributes($Path) -band [System.IO.FileAttributes]::SparseFile) -ne 0)
 }
 
+function Update-WslBestEffort {
+    Write-Log "Checking for WSL updates before enabling Sparse VHD..."
+    try {
+        $output = & wsl.exe --update 2>&1
+        $exitCode = $LASTEXITCODE
+        $detail = ($output | Out-String).Trim()
+
+        if ($exitCode -eq 0) {
+            if ($detail) {
+                Write-Log "WSL update completed: $detail"
+            } else {
+                Write-Log "WSL update completed."
+            }
+            return
+        }
+
+        if ($detail) {
+            Write-Log "WSL update skipped or failed with code ${exitCode}: $detail"
+        } else {
+            Write-Log "WSL update skipped or failed with code $exitCode."
+        }
+    } catch {
+        Write-Log "WSL update skipped or failed: $($_.Exception.Message)"
+    }
+}
+
 function Enable-SparseVhd {
     param([string]$Name)
 
     Write-Log "Enabling Sparse VHD for automatic disk space reclamation..."
     try {
+        Update-WslBestEffort
+        wsl.exe --terminate $Name 2>$null
+        Start-Sleep -Seconds 2
+
         # This requires WSL 2.0.0 or higher. Native command failures do not
         # throw in Windows PowerShell, so check $LASTEXITCODE explicitly.
         $output = & wsl.exe --manage $Name --set-sparse true 2>&1
