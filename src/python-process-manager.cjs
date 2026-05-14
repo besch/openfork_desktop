@@ -1209,8 +1209,7 @@ class PythonProcessManager {
         const providerId = this._currentProviderId;
         const expectedCleanStop = this._stopRequestedByManager || this.isQuitting;
         const exitedCleanly = code === 0;
-        const shouldRecover =
-          activeJobs.length > 0 && (!expectedCleanStop || !exitedCleanly);
+        const shouldRecover = activeJobs.length > 0 && !expectedCleanStop;
 
         this.mainWindow.webContents.send("openfork_client:status", "stopped");
         this.mainWindow.webContents.send("openfork_client:provider-id", null);

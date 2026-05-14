@@ -126,6 +126,15 @@ class AutoCompactManager {
     if (this._compactInProgress) {
       this._persistState();
       setTimeout(() => this._startRecoveryWatch(), 0);
+    } else if (this._shouldCompactBase()) {
+      setTimeout(() => {
+        this._maybeStartIdleWatch().catch((err) => {
+          console.warn(
+            "AutoCompactManager: could not resume pending idle watch:",
+            err?.message || err,
+          );
+        });
+      }, 0);
     }
   }
 
@@ -139,6 +148,7 @@ class AutoCompactManager {
     this._freedSinceLastCompact += freed_bytes;
     if (reason === "storage_limit") {
       this._storageLimitCompactPending = true;
+      this._sendStorageLimitPauseToPython();
     }
     this._persistState();
     this._maybeStartIdleWatch().catch((err) => {
@@ -246,10 +256,14 @@ class AutoCompactManager {
       this._notify("auto-compact:status", {});
     }
 
-    if (this._staleVhdxCompactPending) {
+    if (this._storageLimitCompactPending) {
+      this._sendStorageLimitPauseToPython();
+    }
+
+    if (this._storageLimitCompactPending || this._staleVhdxCompactPending) {
       this._maybeStartIdleWatch().catch((err) => {
         console.warn(
-          "AutoCompactManager: could not start stale-VHDX idle watch:",
+          "AutoCompactManager: could not start pending idle watch:",
           err?.message || err,
         );
       });
@@ -433,6 +447,13 @@ class AutoCompactManager {
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
+
+  _sendStorageLimitPauseToPython() {
+    if (!this._storageLimitCompactPending) return;
+    if (this.pythonManager?.isRunning?.()) {
+      this.pythonManager.setCompactionPending?.(true);
+    }
+  }
 
   _persistState() {
     this.store.set("autoCompactState", {
@@ -896,6 +917,7 @@ class AutoCompactManager {
       this._notify("auto-compact:status", {});
       return;
     }
+    this._sendStorageLimitPauseToPython();
     this._idleTimer = setInterval(
       () => this._tickIdleCheck(),
       AutoCompactManager.IDLE_CHECK_INTERVAL_MS,
@@ -926,6 +948,7 @@ class AutoCompactManager {
         this._notify("auto-compact:status", {});
         return;
       }
+      this._sendStorageLimitPauseToPython();
       if (!this._isIdle()) return;
       if (!this._currentProviderId) {
         // No provider id yet (Python registering / restarting). Wait for the next tick.
