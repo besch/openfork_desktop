@@ -408,7 +408,7 @@ export const DockerManagement = memo(() => {
   const handleRemoveAllImages = () => {
     showConfirmDialog(
       "Remove All Docker Images",
-      `Are you sure you want to remove ALL ${images.length} OpenFork Docker images? This is a destructive action that will require re-downloading large images (10-20GB+) if needed again.`,
+      `Are you sure you want to remove ALL ${images.length} OpenFork Docker images? This is a destructive action that will require re-downloading large images (10-20GB+) if needed again. On Windows with OpenFork Ubuntu, the app will compact the WSL disk afterward.`,
       async () => {
         setActionLoading("remove-all");
         try {

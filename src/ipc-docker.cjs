@@ -804,7 +804,7 @@ function notifyImagesRemoved({
     reason,
   };
 
-  if (_onImageRemoved && freedBytes > 0) {
+  if (_onImageRemoved && (freedBytes > 0 || reason === "manual_delete_all")) {
     try {
       _onImageRemoved(payload);
     } catch (error) {
@@ -1115,7 +1115,7 @@ function register(ipcMain) {
         title: "Remove OpenFork Images",
         message: "Remove all OpenFork Docker images?",
         detail:
-          "This deletes local OpenFork model images and may require downloading them again before jobs can run.",
+          "This deletes local OpenFork model images and may require downloading them again before jobs can run. On Windows with OpenFork Ubuntu, the app will compact the WSL disk afterward to reclaim host space.",
       });
       if (!confirmed) return cancelledSensitiveAction();
 

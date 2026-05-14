@@ -117,6 +117,8 @@ class AutoCompactManager {
     this._staleVhdxCompactPending = saved.staleVhdxCompactPending === true;
     this._storageLimitCompactPending =
       saved.storageLimitCompactPending === true;
+    this._manualDeleteAllCompactPending =
+      saved.manualDeleteAllCompactPending === true;
     this._lastStaleVhdxCompactTs =
       Number(saved.lastStaleVhdxCompactTs || 0) || 0;
 
@@ -141,14 +143,27 @@ class AutoCompactManager {
   /** Wired to PythonProcessManager via onImageEvicted. */
   notifyImageEvicted({ freed_bytes, reason }) {
     if (process.platform !== "win32") return;
-    if (!this._enabled) return;
+    const isManualDeleteAll = reason === "manual_delete_all";
+    if (
+      isManualDeleteAll &&
+      this.dockerEngine?.isUsingWslDocker?.() !== true
+    ) {
+      return;
+    }
+    if (!this._enabled && !isManualDeleteAll) return;
 
-    if (!Number.isFinite(freed_bytes) || freed_bytes <= 0) return;
+    if (!Number.isFinite(freed_bytes) || freed_bytes <= 0) {
+      if (!isManualDeleteAll) return;
+      freed_bytes = 0;
+    }
 
     this._freedSinceLastCompact += freed_bytes;
     if (reason === "storage_limit") {
       this._storageLimitCompactPending = true;
-      this._sendStorageLimitPauseToPython();
+      this._sendPendingCompactionPauseToPython();
+    } else if (isManualDeleteAll) {
+      this._manualDeleteAllCompactPending = true;
+      this._sendPendingCompactionPauseToPython();
     }
     this._persistState();
     this._maybeStartIdleWatch().catch((err) => {
@@ -257,10 +272,14 @@ class AutoCompactManager {
     }
 
     if (this._storageLimitCompactPending) {
-      this._sendStorageLimitPauseToPython();
+      this._sendPendingCompactionPauseToPython();
     }
 
-    if (this._storageLimitCompactPending || this._staleVhdxCompactPending) {
+    if (
+      this._storageLimitCompactPending ||
+      this._staleVhdxCompactPending ||
+      this._manualDeleteAllCompactPending
+    ) {
       this._maybeStartIdleWatch().catch((err) => {
         console.warn(
           "AutoCompactManager: could not start pending idle watch:",
@@ -282,6 +301,7 @@ class AutoCompactManager {
     this._lastStaleVhdxCompactTs = this._lastCompactTs;
     this._staleVhdxCompactPending = false;
     this._storageLimitCompactPending = false;
+    this._manualDeleteAllCompactPending = false;
     this._estimatedReclaimableBytes = 0;
     this._buildCacheBytes = 0;
     this._buildCacheReclaimableBytes = 0;
@@ -293,7 +313,16 @@ class AutoCompactManager {
     this._enabled = !!enabled;
     const saved = this.store.get("autoCompactState") || {};
     this.store.set("autoCompactState", { ...saved, enabled: this._enabled });
-    if (!this._enabled) this._stopIdleWatch();
+    if (!this._enabled && !this._manualDeleteAllCompactPending) {
+      this._stopIdleWatch();
+    } else if (this._manualDeleteAllCompactPending) {
+      this._maybeStartIdleWatch().catch((err) => {
+        console.warn(
+          "AutoCompactManager: could not resume delete-all compaction:",
+          err?.message || err,
+        );
+      });
+    }
   }
 
   isEnabled() {
@@ -323,6 +352,7 @@ class AutoCompactManager {
       estimatedReclaimableBytes: this._estimatedReclaimableBytes,
       staleVhdxCompactPending: this._staleVhdxCompactPending,
       storageLimitCompactPending: this._storageLimitCompactPending,
+      manualDeleteAllCompactPending: this._manualDeleteAllCompactPending,
       lastCompactTs: this._lastCompactTs,
       compactInProgress: this._compactInProgress,
       platformSupported: process.platform === "win32",
@@ -448,8 +478,13 @@ class AutoCompactManager {
 
   // ── Internal ──────────────────────────────────────────────────────────────
 
-  _sendStorageLimitPauseToPython() {
-    if (!this._storageLimitCompactPending) return;
+  _sendPendingCompactionPauseToPython() {
+    if (
+      !this._storageLimitCompactPending &&
+      !this._manualDeleteAllCompactPending
+    ) {
+      return;
+    }
     if (this.pythonManager?.isRunning?.()) {
       this.pythonManager.setCompactionPending?.(true);
     }
@@ -473,6 +508,7 @@ class AutoCompactManager {
       estimatedReclaimableBytes: this._estimatedReclaimableBytes,
       staleVhdxCompactPending: this._staleVhdxCompactPending,
       storageLimitCompactPending: this._storageLimitCompactPending,
+      manualDeleteAllCompactPending: this._manualDeleteAllCompactPending,
       lastStaleVhdxCompactTs: this._lastStaleVhdxCompactTs,
       compactInProgress: this._compactInProgress,
       phase: this._phase,
@@ -541,6 +577,7 @@ class AutoCompactManager {
     this._lastStaleVhdxCompactTs = this._lastCompactTs;
     this._staleVhdxCompactPending = false;
     this._storageLimitCompactPending = false;
+    this._manualDeleteAllCompactPending = false;
     this._estimatedReclaimableBytes = 0;
     this._buildCacheBytes = 0;
     this._buildCacheReclaimableBytes = 0;
@@ -823,7 +860,8 @@ class AutoCompactManager {
 
   _shouldCompactBase() {
     if (process.platform !== "win32") return false;
-    if (!this._enabled) return false;
+    const manualDeleteAllReady = this._manualDeleteAllCompactPending;
+    if (!this._enabled && !manualDeleteAllReady) return false;
     if (this._compactInProgress) return false;
     const evictedBytesReady = this._freedSinceLastCompact >= this._thresholdBytes;
     const staleVhdxReady =
@@ -831,11 +869,17 @@ class AutoCompactManager {
       Date.now() - this._lastStaleVhdxCompactTs >=
         AutoCompactManager.MIN_STALE_VHDX_COMPACT_GAP_MS;
     const storageLimitReady = this._storageLimitCompactPending;
-    if (!evictedBytesReady && !staleVhdxReady && !storageLimitReady) {
+    if (
+      !evictedBytesReady &&
+      !staleVhdxReady &&
+      !storageLimitReady &&
+      !manualDeleteAllReady
+    ) {
       return false;
     }
     if (
       !storageLimitReady &&
+      !manualDeleteAllReady &&
       Date.now() - this._lastCompactTs <
       AutoCompactManager.MIN_COMPACT_GAP_MS
     )
@@ -856,7 +900,8 @@ class AutoCompactManager {
       this._staleVhdxCompactPending &&
       this._freedSinceLastCompact < this._thresholdBytes;
     const storageLimitTriggered = this._storageLimitCompactPending;
-    if (staleVhdxOnly || storageLimitTriggered) {
+    const manualDeleteAllTriggered = this._manualDeleteAllCompactPending;
+    if (staleVhdxOnly || storageLimitTriggered || manualDeleteAllTriggered) {
       this._deferredByHostFreeSpace = false;
       return true;
     }
@@ -901,9 +946,11 @@ class AutoCompactManager {
   }
 
   _isIdle() {
-    if (!this.pythonManager) return false;
+    if (!this.pythonManager) return this._manualDeleteAllCompactPending;
+    if (!this.pythonManager.isRunning()) {
+      return this._manualDeleteAllCompactPending;
+    }
     return (
-      this.pythonManager.isRunning() &&
       !this.pythonManager.hasActiveJob() &&
       !this.pythonManager.hasActiveDownload()
     );
@@ -917,7 +964,7 @@ class AutoCompactManager {
       this._notify("auto-compact:status", {});
       return;
     }
-    this._sendStorageLimitPauseToPython();
+    this._sendPendingCompactionPauseToPython();
     this._idleTimer = setInterval(
       () => this._tickIdleCheck(),
       AutoCompactManager.IDLE_CHECK_INTERVAL_MS,
@@ -948,9 +995,9 @@ class AutoCompactManager {
         this._notify("auto-compact:status", {});
         return;
       }
-      this._sendStorageLimitPauseToPython();
+      this._sendPendingCompactionPauseToPython();
       if (!this._isIdle()) return;
-      if (!this._currentProviderId) {
+      if (this.pythonManager?.isRunning?.() && !this._currentProviderId) {
         // No provider id yet (Python registering / restarting). Wait for the next tick.
         return;
       }
@@ -964,9 +1011,14 @@ class AutoCompactManager {
   }
 
   async _runCompactionFlow() {
-    const providerId = this._currentProviderId;
-    const lastService = this.pythonManager.getLastService?.();
-    const lastRoutingConfig = this.pythonManager.getLastRoutingConfig?.();
+    const pythonRunningAtStart = this.pythonManager?.isRunning?.() === true;
+    const providerId = pythonRunningAtStart ? this._currentProviderId : null;
+    const lastService = pythonRunningAtStart
+      ? this.pythonManager?.getLastService?.()
+      : null;
+    const lastRoutingConfig = pythonRunningAtStart
+      ? this.pythonManager?.getLastRoutingConfig?.()
+      : null;
     const wasMonitoring =
       this.dockerMonitor?.isDockerMonitoringActive?.() ?? false;
 
@@ -976,13 +1028,14 @@ class AutoCompactManager {
       this._staleVhdxCompactPending &&
       this._freedSinceLastCompact < this._thresholdBytes;
     const storageLimitTriggered = this._storageLimitCompactPending;
+    const manualDeleteAllTriggered = this._manualDeleteAllCompactPending;
 
     this._ownedCompactionFlow = true;
     this._compactInProgress = true;
     this._interruptedCompaction = false;
     this._lastError = undefined;
     this._compactStartedTs = Date.now();
-    this._restartAfterCompact = !!lastService;
+    this._restartAfterCompact = pythonRunningAtStart && !!lastService;
     this._lastServiceForRestart = lastService || null;
     this._lastRoutingConfigForRestart = lastRoutingConfig || null;
     this._pausedProviderId = providerId || null;
@@ -1000,6 +1053,14 @@ class AutoCompactManager {
             ? `Auto-compact: storage-limit cleanup freed ${Math.round(
                 this._freedSinceLastCompact / 1024 ** 3,
               )} GB. Pausing DGN client before the next queued job to compact...`
+            : manualDeleteAllTriggered
+              ? `Auto-compact: deleted all OpenFork Docker images and freed ${Math.round(
+                  this._freedSinceLastCompact / 1024 ** 3,
+                )} GB. ${
+                  pythonRunningAtStart
+                    ? "Pausing DGN client to compact OpenFork Ubuntu..."
+                    : "Compacting OpenFork Ubuntu disk..."
+                }`
           : `Auto-compact: ${Math.round(
               this._freedSinceLastCompact / 1024 ** 3,
             )} GB of Docker images evicted since last compaction. Pausing DGN client to reclaim disk space...`;
@@ -1009,27 +1070,34 @@ class AutoCompactManager {
         });
       }
       // 1. Tell the orchestrator we are pausing job acceptance.
-      try {
-        this.pythonManager.setCompactionPending?.(true);
-        const pauseResult = await this.setProviderPausedForCompaction(
-          providerId,
-          true,
-        );
-        if (!pauseResult?.success) {
+      if (pythonRunningAtStart) {
+        try {
+          this.pythonManager.setCompactionPending?.(true);
+          if (!providerId) {
+            throw new Error("Missing provider id for compaction pause.");
+          }
+          const pauseResult = await this.setProviderPausedForCompaction(
+            providerId,
+            true,
+          );
+          if (!pauseResult?.success) {
+            throw new Error(
+              pauseResult?.error || "Could not pause provider for compaction.",
+            );
+          }
+          pausedSet = true;
+        } catch (err) {
           throw new Error(
-            pauseResult?.error || "Could not pause provider for compaction.",
+            `Could not pause provider for compaction: ${err?.message || err}`,
           );
         }
-        pausedSet = true;
-      } catch (err) {
-        throw new Error(
-          `Could not pause provider for compaction: ${err?.message || err}`,
-        );
       }
 
       // 2. Stop Python so the VHDX is released.
-      this._setPhase("stopping_client");
-      await this.pythonManager.stop();
+      if (pythonRunningAtStart) {
+        this._setPhase("stopping_client");
+        await this.pythonManager.stop();
+      }
 
       if (staleVhdxOnly) {
         this._setPhase("pruning_cache");
@@ -1086,6 +1154,7 @@ class AutoCompactManager {
       this._lastStaleVhdxCompactTs = this._lastCompactTs;
       this._staleVhdxCompactPending = false;
       this._storageLimitCompactPending = false;
+      this._manualDeleteAllCompactPending = false;
       this._estimatedReclaimableBytes = 0;
       this._buildCacheBytes = 0;
       this._buildCacheReclaimableBytes = 0;
@@ -1101,7 +1170,9 @@ class AutoCompactManager {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send("openfork_client:log", {
           type: "stderr",
-          message: `Auto-compact failed: ${err?.message || err}. Client will restart.`,
+          message: `Auto-compact failed: ${err?.message || err}.${
+            pythonRunningAtStart ? " Client will restart." : ""
+          }`,
         });
       }
     } finally {
@@ -1120,10 +1191,17 @@ class AutoCompactManager {
         }
         this._persistState();
       }
-      this.pythonManager.setCompactionPending?.(false);
+      if (pythonRunningAtStart) {
+        this.pythonManager?.setCompactionPending?.(false);
+      }
       // 5. Restart Python with the previous service/routing config.
       try {
-        if (lastService && !this.pythonManager.isRunning()) {
+        if (
+          pythonRunningAtStart &&
+          lastService &&
+          this.pythonManager &&
+          !this.pythonManager.isRunning()
+        ) {
           this._setPhase("restarting_client");
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             this.mainWindow.webContents.send("openfork_client:log", {

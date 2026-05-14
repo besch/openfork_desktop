@@ -144,6 +144,7 @@ export interface AutoCompactStatus {
   estimatedReclaimableBytes?: number;
   staleVhdxCompactPending?: boolean;
   storageLimitCompactPending?: boolean;
+  manualDeleteAllCompactPending?: boolean;
   lastCompactTs: number;
   compactInProgress: boolean;
   platformSupported: boolean;
