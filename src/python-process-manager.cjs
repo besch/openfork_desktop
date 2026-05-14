@@ -78,6 +78,19 @@ class PythonProcessManager {
 
   }
 
+  _scheduleDockerMonitorRefresh(reason, delaysMs = [0, 1500, 5000]) {
+    for (const delayMs of delaysMs) {
+      setTimeout(() => {
+        dockerMonitor.checkDockerUpdates().catch((error) => {
+          console.warn(
+            `Could not refresh Docker container list after ${reason}:`,
+            error?.message || error,
+          );
+        });
+      }, delayMs);
+    }
+  }
+
   isRunning() {
     return this.pythonProcess !== null;
   }
@@ -1014,6 +1027,11 @@ class PythonProcessManager {
 
             // Only clear if this is for the current download
             if (currentNorm === messageNorm) {
+              this._scheduleDockerMonitorRefresh("Docker pull completion", [
+                1000,
+                4000,
+                10000,
+              ]);
               this.mainWindow.webContents.send(
                 "openfork_client:docker-progress",
                 { ...message.payload, status: "Complete", progress: 100 }
@@ -1089,6 +1107,20 @@ class PythonProcessManager {
                 this._activeJobIds.delete(jobId);
                 this._activeJobs.delete(jobId);
               }
+            }
+            if (message.type === "JOB_START") {
+              this._scheduleDockerMonitorRefresh("job start", [
+                500,
+                2000,
+                5000,
+                10000,
+              ]);
+            } else {
+              this._scheduleDockerMonitorRefresh("job finish", [
+                0,
+                1500,
+                4000,
+              ]);
             }
             // Notify cleanup manager (if registered) about job lifecycle
             if (this.onJobEvent) {
@@ -1176,6 +1208,7 @@ class PythonProcessManager {
 
         if (log.includes("DGN_CLIENT_RUNNING")) {
           this.mainWindow.webContents.send("openfork_client:status", "running");
+          this._scheduleDockerMonitorRefresh("client ready", [0, 1500, 5000]);
           return;
         }
 

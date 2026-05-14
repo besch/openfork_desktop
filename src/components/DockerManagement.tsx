@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
-import type { DockerImage, DockerContainer, DockerStatus } from "@/types";
+import type { DockerImage, DockerStatus } from "@/types";
 
 interface ConfirmDialogState {
   isOpen: boolean;
@@ -31,7 +31,6 @@ export const DockerManagement = memo(() => {
     "win32",
   );
   const [images, setImages] = useState<DockerImage[]>([]);
-  const [containers, setContainers] = useState<DockerContainer[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +56,10 @@ export const DockerManagement = memo(() => {
 
   const dockerPullProgress = useClientStore(
     (state) => state.dockerPullProgress,
+  );
+  const containers = useClientStore((state) => state.dockerContainers);
+  const setDockerContainers = useClientStore(
+    (state) => state.setDockerContainers,
   );
   const status = useClientStore((state) => state.status);
   const diskSpaceError = useClientStore((state) => state.diskSpaceError);
@@ -139,8 +142,7 @@ export const DockerManagement = memo(() => {
         const diskResult = await window.electronAPI.getDiskSpace();
         if (diskResult.success) setDiskSpace(diskResult.data);
         setImages([]);
-        setContainers([]);
-        useClientStore.getState().setDockerContainers([]);
+        setDockerContainers([]);
         return;
       }
 
@@ -180,16 +182,14 @@ export const DockerManagement = memo(() => {
         } else {
           setImages([]);
         }
-        setContainers([]);
-        useClientStore.getState().setDockerContainers([]);
+        setDockerContainers([]);
         setError(describeDockerState(nextDockerStatus));
         return;
       }
 
       // Docker is running (or containers were found despite status check flakiness).
       if (containersResult.success && containersResult.data) {
-        setContainers(containersResult.data);
-        useClientStore.getState().setDockerContainers(containersResult.data);
+        setDockerContainers(containersResult.data);
       }
 
       if (diskResult.success) {
@@ -208,7 +208,12 @@ export const DockerManagement = memo(() => {
     } finally {
       setLoading(false);
     }
-  }, [describeDockerState, setAutoCompactStatus, setDiskSpaceError]);
+  }, [
+    describeDockerState,
+    setAutoCompactStatus,
+    setDiskSpaceError,
+    setDockerContainers,
+  ]);
 
   useEffect(() => {
     window.electronAPI.getProcessInfo().then((info) => {
@@ -303,7 +308,7 @@ export const DockerManagement = memo(() => {
   useEffect(() => {
     const cleanupContainers = window.electronAPI.onDockerContainersUpdate(
       (data) => {
-        setContainers(data);
+        setDockerContainers(data);
       },
     );
 
@@ -315,7 +320,7 @@ export const DockerManagement = memo(() => {
       cleanupContainers();
       cleanupImages();
     };
-  }, []);
+  }, [setDockerContainers]);
 
   const showConfirmDialog = (
     title: string,
