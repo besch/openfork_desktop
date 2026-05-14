@@ -75,12 +75,12 @@ export function DependencySetup({
       ? "Docker is installed, but your user cannot access it yet. If you just finished setup on Linux, log out and back in before retrying."
       : isWindows
         ? isWrongDockerDaemon
-          ? "Windows localhost:2375 is responding from another Docker engine, usually Docker Desktop. Disable Docker Desktop's TCP daemon or repair OpenFork Ubuntu so downloads go to the OpenFork engine."
+          ? "Windows localhost:2375 is responding from another Docker engine, usually Docker Desktop. Disable Docker Desktop's TCP daemon or repair OpenFork Ubuntu."
           : isBridgeStarting
             ? "OpenFork is waiting for the Docker API inside the dedicated Ubuntu distro to become reachable from Windows. This usually takes a few seconds after WSL boots."
             : "Repair or restart the dedicated OpenFork Ubuntu engine to use local workflows."
         : isBridgeStarting
-          ? "OpenFork is waiting for the Docker API to become reachable from Windows. This usually takes a few seconds after WSL boots."
+          ? "OpenFork is waiting for the Docker API to become reachable. This usually takes a few seconds after the engine starts."
           : "Please ensure the engine service is running. If you just installed it, you may need to restart your PC."
     : "";
 
@@ -231,8 +231,8 @@ export function DependencySetup({
             System Setup
           </h1>
           <p className="text-muted-foreground">
-            OpenFork requires Docker and an NVIDIA GPU to run workflows on your
-            machine.
+            OpenFork uses a local Docker engine and an NVIDIA GPU to run
+            workflows on your machine.
           </p>
         </div>
 
@@ -315,11 +315,11 @@ export function DependencySetup({
                   {isInstallStateFromMain ? (
                     <div className="space-y-1">
                       <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
-                        Installing OpenFork Ubuntu...
+                        Installing OpenFork Ubuntu…
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        OpenFork is still provisioning Ubuntu and Docker inside
-                        WSL. Keep this window open while setup finishes.
+                        OpenFork is setting up Ubuntu and Docker inside WSL.
+                        Keep this window open until setup finishes.
                       </p>
                     </div>
                   ) : (
@@ -335,8 +335,8 @@ export function DependencySetup({
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 {wslDistroExists
-                                  ? "The OpenFork Ubuntu distro was created but Docker did not finish installing. Click Repair to retry."
-                                  : "OpenFork will install its own Ubuntu distro and Docker runtime automatically."}
+                                  ? "The OpenFork Ubuntu distro was created, but Docker did not finish installing. Click Repair to try again."
+                                  : "OpenFork will automatically install a dedicated Ubuntu distro with Docker in WSL."}
                               </p>
                             </>
                           ) : (
@@ -345,7 +345,7 @@ export function DependencySetup({
                                 Docker not found
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Docker is required to run OpenFork.
+                                OpenFork needs Docker to run local workflows.
                                 {" It will be installed automatically."}
                               </p>
                             </>
@@ -524,8 +524,8 @@ export function DependencySetup({
                     No NVIDIA GPU detected
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    OpenFork requires an NVIDIA GPU with CUDA 12.8 or higher.
-                    Install or update your NVIDIA drivers to include CUDA 12.8+.
+                    OpenFork requires an NVIDIA GPU with CUDA 12.8 or newer.
+                    Install or update your NVIDIA drivers, then retry setup.
                   </p>
                   <Button
                     variant="outline"
@@ -545,7 +545,7 @@ export function DependencySetup({
           </Card>
         </div>
 
-        {/* Retry Check — only shown when engine is installed but not running */}
+        {/* Check Again — only shown when engine is installed but not running */}
         {status?.docker.installed && (
           <div className="flex flex-col gap-3 pt-4">
             <Button
@@ -559,7 +559,7 @@ export function DependencySetup({
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {isChecking ? "Checking…" : "Retry Check"}
+              {isChecking ? "Checking…" : "Check Again"}
             </Button>
           </div>
         )}
