@@ -320,6 +320,7 @@ let pendingAuthState = null;
 let ipcSenderGuardInstalled = false;
 let requiredUpdateState = null;
 let requiredUpdateCheckPromise = null;
+let rendererSecurityHeadersInstalled = false;
 
 const RENDERER_REFRESH_TOKEN_SENTINEL =
   "__openfork_renderer_refresh_token_not_available__";
@@ -441,6 +442,19 @@ function getOrigin(value) {
   }
 }
 
+function getWebsocketOrigin(value) {
+  const origin = getOrigin(value);
+  if (!origin) return null;
+
+  try {
+    const parsed = new URL(origin);
+    parsed.protocol = parsed.protocol === "http:" ? "ws:" : "wss:";
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
 function getAllowedExternalOrigins() {
   return new Set(
     [getOrigin(ORCHESTRATOR_API_URL), getOrigin(SUPABASE_URL)].filter(Boolean),
@@ -506,6 +520,96 @@ function isTrustedRendererUrl(value) {
   }
 
   return getAllowedRendererOrigins().has(parsed.origin);
+}
+
+function buildRendererCsp() {
+  const isDev = !app.isPackaged;
+  const orchestratorOrigin = getOrigin(ORCHESTRATOR_API_URL);
+  const supabaseOrigin = getOrigin(SUPABASE_URL);
+  const supabaseRealtimeOrigin = getWebsocketOrigin(SUPABASE_URL);
+  const connectSrc = [
+    "'self'",
+    orchestratorOrigin,
+    supabaseOrigin,
+    supabaseRealtimeOrigin,
+    ...(isDev
+      ? [
+          "http://localhost:*",
+          "http://127.0.0.1:*",
+          "ws://localhost:*",
+          "ws://127.0.0.1:*",
+        ]
+      : []),
+  ].filter(Boolean);
+  const scriptSrc = isDev
+    ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
+    : ["'self'"];
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSrc.join(" ")}`,
+    `connect-src ${connectSrc.join(" ")}`,
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob:${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    `media-src 'self' data: blob:${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+    "font-src 'self' data:",
+    "worker-src 'self' blob:",
+    "child-src 'none'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+function setResponseHeader(headers, name, value) {
+  const normalizedName = name.toLowerCase();
+  const nextHeaders = {};
+
+  for (const [key, headerValue] of Object.entries(headers || {})) {
+    if (key.toLowerCase() !== normalizedName) {
+      nextHeaders[key] = headerValue;
+    }
+  }
+
+  nextHeaders[name] = [value];
+  return nextHeaders;
+}
+
+function installRendererSecurityHeaders() {
+  if (rendererSecurityHeadersInstalled) return;
+  rendererSecurityHeadersInstalled = true;
+
+  electronSession.defaultSession.webRequest.onHeadersReceived(
+    (details, callback) => {
+      if (
+        details.resourceType !== "mainFrame" ||
+        !isTrustedRendererUrl(details.url)
+      ) {
+        callback({ responseHeaders: details.responseHeaders });
+        return;
+      }
+
+      let responseHeaders = setResponseHeader(
+        details.responseHeaders,
+        "Content-Security-Policy",
+        buildRendererCsp(),
+      );
+      responseHeaders = setResponseHeader(
+        responseHeaders,
+        "X-Content-Type-Options",
+        "nosniff",
+      );
+      responseHeaders = setResponseHeader(
+        responseHeaders,
+        "Referrer-Policy",
+        "no-referrer",
+      );
+
+      callback({ responseHeaders });
+    },
+  );
 }
 
 function isTrustedIpcSender(event) {
@@ -816,6 +920,8 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
     },
   });
 
@@ -984,6 +1090,7 @@ autoUpdater.on("error", (err) => {
 
 app.whenReady().then(() => {
   registerAppImageProtocolHandler();
+  installRendererSecurityHeaders();
   createWindow();
 
   // Register IPC handler modules (order doesn't matter here)

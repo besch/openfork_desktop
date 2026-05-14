@@ -21,9 +21,15 @@ import { DEFAULT_ROUTING_CONFIG } from "./types";
 import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
+const MAX_LOG_MESSAGE_LENGTH = 12000;
 const SYSTEM_NOTICE_TTL_MS = 8000;
 const IMAGE_NOTICE_TTL_MS = 6000;
 const DISK_SPACE_ERROR_TTL_MS = 30000;
+const ESC = String.fromCharCode(27);
+const ANSI_ESCAPE_PATTERN = new RegExp(
+  `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`,
+  "g",
+);
 
 // Simplified project type for search results
 interface SearchProject {
@@ -98,6 +104,61 @@ interface JobRealtimeOptions {
   schema: "public";
   table: "dgn_jobs";
   filter?: string;
+}
+
+function stringifyLogMessage(value: unknown) {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  if (value instanceof Error) return value.message;
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function stripUnsafeLogControls(value: string) {
+  let result = "";
+
+  for (const char of value) {
+    const code = char.codePointAt(0);
+    if (
+      code === undefined ||
+      (code <= 0x08 && code !== 0x09) ||
+      code === 0x0b ||
+      code === 0x0c ||
+      (code >= 0x0e && code <= 0x1f) ||
+      (code >= 0x7f && code <= 0x9f) ||
+      (code >= 0x202a && code <= 0x202e) ||
+      (code >= 0x2066 && code <= 0x2069)
+    ) {
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
+function sanitizeLogMessage(value: unknown) {
+  const sanitized = stripUnsafeLogControls(
+    stringifyLogMessage(value).replace(ANSI_ESCAPE_PATTERN, ""),
+  ).replace(/\r\n?/g, "\n");
+
+  if (sanitized.length <= MAX_LOG_MESSAGE_LENGTH) {
+    return sanitized;
+  }
+
+  return `${sanitized.slice(0, MAX_LOG_MESSAGE_LENGTH)}... [truncated]`;
+}
+
+function normalizeLogInput(log: Partial<Omit<LogEntry, "timestamp">>) {
+  return {
+    type: log?.type === "stderr" ? "stderr" : "stdout",
+    message: sanitizeLogMessage(log?.message),
+  } satisfies Omit<LogEntry, "timestamp">;
 }
 
 interface JobStatusPayload {
@@ -224,8 +285,9 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   },
   setStatus: (status) => set({ status }),
   addLog: (log) => {
+    const normalizedLog = normalizeLogInput(log);
     const newLog: LogEntry = {
-      ...log,
+      ...normalizedLog,
       timestamp: new Date().toLocaleTimeString(),
     };
     set((state) => ({
