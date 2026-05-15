@@ -120,6 +120,7 @@ async function tryLinuxFallbackOpen(url) {
   }
 
   console.error(`Could not open URL on Linux, no opener succeeded: ${url}`);
+  throw new Error("No Linux URL opener succeeded");
 }
 
 async function openExternal(url) {
