@@ -321,10 +321,21 @@ let pendingAuthState = null;
 let ipcSenderGuardInstalled = false;
 let requiredUpdateState = null;
 let requiredUpdateCheckPromise = null;
+let appUpdateState = {
+  available: null,
+  progress: null,
+  downloaded: false,
+  error: null,
+  checking: false,
+  lastCheckedAt: null,
+};
+let appUpdateCheckPromise = null;
+let appUpdateCheckInterval = null;
 let rendererSecurityHeadersInstalled = false;
 
 const RENDERER_REFRESH_TOKEN_SENTINEL =
   "__openfork_renderer_refresh_token_not_available__";
+const APP_UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
 function sessionForRenderer(authSession) {
   if (!authSession) return null;
@@ -382,6 +393,72 @@ function notifyRequiredUpdate(updateInfo) {
   if (requiredUpdateState && mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("update:required", requiredUpdateState);
   }
+}
+
+function setAppUpdateState(patch) {
+  appUpdateState = {
+    ...appUpdateState,
+    ...patch,
+  };
+  return appUpdateState;
+}
+
+function sendAppUpdateEvent(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+function normalizeAppUpdateError(err) {
+  return {
+    message: err?.message || "Update failed",
+    code: err?.code || "UNKNOWN_ERROR",
+  };
+}
+
+async function checkForAppUpdate() {
+  if (!app.isPackaged) return appUpdateState;
+  if (appUpdateCheckPromise) return appUpdateCheckPromise;
+  if (appUpdateState.downloaded || appUpdateState.progress) {
+    return appUpdateState;
+  }
+
+  setAppUpdateState({
+    checking: true,
+    error: null,
+    lastCheckedAt: new Date().toISOString(),
+  });
+
+  appUpdateCheckPromise = autoUpdater
+    .checkForUpdates()
+    .then(() => appUpdateState)
+    .catch((err) => {
+      const error = normalizeAppUpdateError(err);
+      console.error("Failed to check for updates:", err);
+      setAppUpdateState({ error, progress: null });
+      sendAppUpdateEvent("update:error", error);
+      return appUpdateState;
+    })
+    .finally(() => {
+      setAppUpdateState({ checking: false });
+      appUpdateCheckPromise = null;
+    });
+
+  return appUpdateCheckPromise;
+}
+
+function startAppUpdateChecks() {
+  if (!app.isPackaged || appUpdateCheckInterval) return;
+
+  checkForAppUpdate().catch((err) => {
+    console.error("Failed to start update check:", err);
+  });
+  appUpdateCheckInterval = setInterval(() => {
+    checkForAppUpdate().catch((err) => {
+      console.error("Failed to run scheduled update check:", err);
+    });
+  }, APP_UPDATE_CHECK_INTERVAL_MS);
+  appUpdateCheckInterval.unref?.();
 }
 
 async function checkRequiredUpdatePolicy() {
@@ -954,9 +1031,7 @@ function createWindow() {
     checkRequiredUpdatePolicy().catch((err) => {
       console.error("Failed to check required update policy:", err);
     });
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error("Failed to check for updates:", err);
-    });
+    startAppUpdateChecks();
   });
 
   mainWindow.webContents.on("did-finish-load", async () => {
@@ -1062,31 +1137,45 @@ autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
 autoUpdater.on("update-available", (info) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("update:available", info);
-  }
+  setAppUpdateState({
+    available: info,
+    progress: null,
+    downloaded: false,
+    error: null,
+  });
+  sendAppUpdateEvent("update:available", info);
+});
+
+autoUpdater.on("update-not-available", () => {
+  if (appUpdateState.downloaded) return;
+  setAppUpdateState({
+    available: null,
+    progress: null,
+    downloaded: false,
+    error: null,
+  });
 });
 
 autoUpdater.on("download-progress", (progressObj) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("update:progress", progressObj);
-  }
+  setAppUpdateState({ progress: progressObj });
+  sendAppUpdateEvent("update:progress", progressObj);
 });
 
 autoUpdater.on("update-downloaded", (info) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("update:downloaded", info);
-  }
+  setAppUpdateState({
+    available: info,
+    progress: null,
+    downloaded: true,
+    error: null,
+  });
+  sendAppUpdateEvent("update:downloaded", info);
 });
 
 autoUpdater.on("error", (err) => {
   console.error("AutoUpdater error:", err);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("update:error", {
-      message: err.message || "Update failed",
-      code: err.code || "UNKNOWN_ERROR",
-    });
-  }
+  const error = normalizeAppUpdateError(err);
+  setAppUpdateState({ error, progress: null });
+  sendAppUpdateEvent("update:error", error);
 });
 
 app.whenReady().then(() => {
@@ -1117,6 +1206,11 @@ app.on("before-quit", async (event) => {
   isQuittingApp = true;
   if (pythonManager) {
     pythonManager.isQuitting = true;
+  }
+
+  if (appUpdateCheckInterval) {
+    clearInterval(appUpdateCheckInterval);
+    appUpdateCheckInterval = null;
   }
 
   // Release the Supabase auth subscription so its internal timers don't
@@ -1184,7 +1278,7 @@ ipcMain.on("openfork_client:start", async (event, service, routingConfig) => {
       });
       mainWindow.webContents.send("openfork_client:status", "stopped");
     }
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    checkForAppUpdate().catch((err) => {
       console.error("Failed to check for required app update:", err);
     });
     return;
@@ -1432,6 +1526,8 @@ ipcMain.on("window:set-closable", (event, closable) => {
 // Info
 ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
 ipcMain.handle("update:check-policy", () => checkRequiredUpdatePolicy());
+ipcMain.handle("update:check", () => checkForAppUpdate());
+ipcMain.handle("update:get-state", () => appUpdateState);
 ipcMain.handle("get-process-info", () => ({
   chrome: process.versions.chrome,
   electron: process.versions.electron,

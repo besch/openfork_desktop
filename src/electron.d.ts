@@ -70,6 +70,20 @@ interface UpdateProgress {
   total?: number;
 }
 
+interface UpdateError {
+  message: string;
+  code?: string;
+}
+
+interface UpdateState {
+  available: UpdateInfo | null;
+  progress: UpdateProgress | null;
+  downloaded: boolean;
+  error: UpdateError | null;
+  checking: boolean;
+  lastCheckedAt: string | null;
+}
+
 interface RequiredUpdateInfo {
   required: boolean;
   severity?: "recommended" | "security";
@@ -317,6 +331,8 @@ interface ElectronAPI {
     callback: (info: RequiredUpdateInfo) => void,
   ) => CleanupFn;
   checkUpdatePolicy: () => Promise<RequiredUpdateInfo | null>;
+  checkForUpdates: () => Promise<UpdateState>;
+  getUpdateState: () => Promise<UpdateState>;
   downloadUpdate: () => Promise<void>;
   installUpdate: () => Promise<void>;
 

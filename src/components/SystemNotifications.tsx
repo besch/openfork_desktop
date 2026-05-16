@@ -27,6 +27,12 @@ interface UpdateProgress {
   percent: number;
 }
 
+interface UpdateState {
+  available: UpdateInfo | null;
+  progress: UpdateProgress | null;
+  downloaded: boolean;
+}
+
 interface NoticeBannerProps {
   id: string;
   tone: NoticeTone;
@@ -223,6 +229,15 @@ export const SystemNotifications = memo(() => {
   const reclaimStartedTs = reclaimStatus?.startedTs;
 
   useEffect(() => {
+    let cancelled = false;
+    const applyUpdateState = (state: UpdateState | null) => {
+      if (cancelled || !state?.available) return;
+      setUpdateInfo(state.available);
+      setUpdateProgress(state.progress);
+      setUpdateDownloaded(state.downloaded);
+      setUpdateDismissed(false);
+    };
+
     const cleanupAvailable = window.electronAPI.onUpdateAvailable((info) => {
       setUpdateInfo(info);
       setUpdateDownloaded(false);
@@ -241,7 +256,22 @@ export const SystemNotifications = memo(() => {
       setUpdateDismissed(false);
     });
 
+    window.electronAPI
+      .getUpdateState()
+      .then(applyUpdateState)
+      .catch((error) => {
+        console.error("Failed to read update state:", error);
+      });
+
+    window.electronAPI
+      .checkForUpdates()
+      .then(applyUpdateState)
+      .catch((error) => {
+        console.error("Failed to check for app updates:", error);
+      });
+
     return () => {
+      cancelled = true;
       cleanupAvailable();
       cleanupProgress();
       cleanupDownloaded();
