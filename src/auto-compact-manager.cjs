@@ -150,9 +150,17 @@ class AutoCompactManager {
     ) {
       return;
     }
-    if (!this._enabled && !isManualDeleteAll) return;
+    if (!this._enabled && !isManualDeleteAll) {
+      if (reason === "storage_limit") {
+        this._releasePendingCompactionPauseToPython();
+      }
+      return;
+    }
 
     if (!Number.isFinite(freed_bytes) || freed_bytes <= 0) {
+      if (reason === "storage_limit") {
+        this._releasePendingCompactionPauseToPython();
+      }
       if (!isManualDeleteAll) return;
       freed_bytes = 0;
     }
@@ -487,6 +495,12 @@ class AutoCompactManager {
     }
     if (this.pythonManager?.isRunning?.()) {
       this.pythonManager.setCompactionPending?.(true);
+    }
+  }
+
+  _releasePendingCompactionPauseToPython() {
+    if (this.pythonManager?.isRunning?.()) {
+      this.pythonManager.setCompactionPending?.(false);
     }
   }
 
@@ -1125,7 +1139,11 @@ class AutoCompactManager {
       await runCompactWslScript({
         app: this.app,
         wslDistro,
-        timeoutMs: 10 * 60 * 1000,
+        // Keep auto-compact aligned with the manual reclaim path. Large WSL
+        // VHDX files can spend well over ten minutes inside elevated DiskPart;
+        // timing out early leaves the app to recover from a still-running host
+        // compaction process.
+        timeoutMs: 30 * 60 * 1000,
         onPid: (pid) => {
           this._compactPid = pid;
           this._persistState();
