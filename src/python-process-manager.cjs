@@ -758,6 +758,8 @@ class PythonProcessManager {
         OPENFORK_CLIENT_VERSION: app.getVersion(),
         OPENFORK_DESKTOP_VERSION: app.getVersion(),
         OPENFORK_DGN_PROTOCOL_VERSION: "1",
+        ORCHESTRATOR_URL_PROD: this.orchestratorApiUrl,
+        ORCHESTRATOR_URL_DEV: this.orchestratorApiUrl,
       };
       // Point Python config.py at the user overrides file so overrides are
       // applied at import time before any downstream module reads them.
