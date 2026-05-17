@@ -3,6 +3,8 @@
 const { execFile } = require("child_process");
 const path = require("path");
 
+const COMPACT_WSL_TIMEOUT_MS = 90 * 60 * 1000;
+
 function getPowerShellDiagnosticLines(output = "") {
   return String(output || "")
     .replace(/\0/g, "")
@@ -58,7 +60,7 @@ function getCompactWslScriptPath(app) {
 function runCompactWslScript({
   app,
   wslDistro,
-  timeoutMs = 30 * 60 * 1000,
+  timeoutMs = COMPACT_WSL_TIMEOUT_MS,
   onProcess,
   onPid,
 } = {}) {
@@ -169,6 +171,7 @@ async function recoverWslDockerAfterCompaction({
 }
 
 module.exports = {
+  COMPACT_WSL_TIMEOUT_MS,
   buildCompactionFailureMessage,
   getCompactWslScriptPath,
   getPowerShellDiagnosticLines,

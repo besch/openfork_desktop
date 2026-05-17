@@ -1,5 +1,6 @@
 const { execFile } = require("child_process");
 const {
+  COMPACT_WSL_TIMEOUT_MS,
   recoverWslDockerAfterCompaction,
   runCompactWslScript,
 } = require("./compaction-utils.cjs");
@@ -1143,7 +1144,7 @@ class AutoCompactManager {
         // VHDX files can spend well over ten minutes inside elevated DiskPart;
         // timing out early leaves the app to recover from a still-running host
         // compaction process.
-        timeoutMs: 30 * 60 * 1000,
+        timeoutMs: COMPACT_WSL_TIMEOUT_MS,
         onPid: (pid) => {
           this._compactPid = pid;
           this._persistState();

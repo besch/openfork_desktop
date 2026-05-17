@@ -12,6 +12,7 @@ const wslUtils = require("./wsl-utils.cjs");
 const settings = require("./settings.cjs");
 const engineInstall = require("./engine-install.cjs");
 const {
+  COMPACT_WSL_TIMEOUT_MS,
   recoverWslDockerAfterCompaction,
   runCompactWslScript,
 } = require("./compaction-utils.cjs");
@@ -477,7 +478,7 @@ async function runManualReclaimFlow({
     await runCompactWslScript({
       app: _app,
       wslDistro,
-      timeoutMs: 30 * 60 * 1000,
+      timeoutMs: COMPACT_WSL_TIMEOUT_MS,
       onProcess: (child) => {
         reclaimProcess = child;
         notifyReclaimStatus({ pid: child.pid || null });

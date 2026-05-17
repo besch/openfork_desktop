@@ -11,6 +11,7 @@ const os = require("os");
 const fs = require("fs");
 const crypto = require("crypto");
 const { fileURLToPath } = require("url");
+const { EventEmitter } = require("events");
 const { execFile: _execFile } = require("child_process");
 
 const Store = require("electron-store").default;
@@ -21,7 +22,6 @@ const {
   SCHEDULE_PRESETS,
 } = require("./src/schedule-manager.cjs");
 const { DockerCleanupManager } = require("./src/docker-cleanup-manager.cjs");
-const { autoUpdater } = require("electron-updater");
 const process = require("process");
 
 // --- EXTRACTED MODULES ---
@@ -33,6 +33,20 @@ const engineInstall = require("./src/engine-install.cjs");
 const ipcDocker = require("./src/ipc-docker.cjs");
 const ipcDeps = require("./src/ipc-deps.cjs");
 const { AutoCompactManager } = require("./src/auto-compact-manager.cjs");
+
+function createDevAutoUpdater() {
+  const updater = new EventEmitter();
+  updater.autoDownload = false;
+  updater.autoInstallOnAppQuit = false;
+  updater.checkForUpdates = async () => null;
+  updater.downloadUpdate = async () => null;
+  updater.quitAndInstall = () => {};
+  return updater;
+}
+
+const autoUpdater = app.isPackaged
+  ? require("electron-updater").autoUpdater
+  : createDevAutoUpdater();
 
 function execFilePromise(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -261,6 +275,11 @@ async function registerAppImageProtocolHandler() {
 // rendering is sufficient for this app's UI.
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("disable-gpu");
+}
+
+const remoteDebuggingPort = process.env.OPENFORK_ELECTRON_REMOTE_DEBUGGING_PORT;
+if (!app.isPackaged && remoteDebuggingPort) {
+  app.commandLine.appendSwitch("remote-debugging-port", remoteDebuggingPort);
 }
 
 // --- PROTOCOL & INITIALIZATION ---
