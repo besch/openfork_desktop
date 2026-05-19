@@ -12,27 +12,57 @@ function init({ store, execFile }) {
   _execFile = execFile;
 }
 
-function listWslDistros() {
+function parseWslDistroList(stdout = "") {
+  return stdout
+    .replace(/\0/g, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(
+      (line) =>
+        !/^windows subsystem for linux has no installed distributions/i.test(
+          line,
+        ) && !/^use 'wsl\.exe --install'/i.test(line),
+    );
+}
+
+function listWslDistrosDetailed() {
   return new Promise((resolve) => {
     _execFile(
       "wsl.exe",
       ["--list", "--quiet"],
       { timeout: 5000 },
-      (error, stdout) => {
-        if (error || !stdout) {
+      (error, stdout, stderr) => {
+        const rawOutput = (stdout || "").replace(/\0/g, "");
+        const distros = parseWslDistroList(rawOutput);
+        if (error) {
           console.warn("Failed to list WSL distros:", error?.message);
-          resolve([]);
+          resolve({
+            ok: false,
+            distros,
+            error: error?.message || "Failed to list WSL distros",
+            stderr: stderr?.trim() || "",
+          });
           return;
         }
-        const distros = stdout
-          .replace(/\0/g, "")
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean);
-        resolve(distros);
+        if (!rawOutput.trim()) {
+          resolve({
+            ok: false,
+            distros,
+            error: "WSL distro list returned no output.",
+            stderr: stderr?.trim() || "",
+          });
+          return;
+        }
+        resolve({ ok: true, distros });
       },
     );
   });
+}
+
+async function listWslDistros() {
+  const result = await listWslDistrosDetailed();
+  return result.distros;
 }
 
 function choosePreferredWslDistro(distros) {
@@ -56,7 +86,8 @@ async function getWslDistroName() {
   if (_resolvedWslDistro) return _resolvedWslDistro;
 
   const stored = _store.get("wslDistro");
-  const distros = await listWslDistros();
+  const listResult = await listWslDistrosDetailed();
+  const distros = listResult.distros;
   const openForkDistro = findOpenForkDistro(distros);
 
   if (stored) {
@@ -65,6 +96,15 @@ async function getWslDistroName() {
         `Stored WSL distro '${stored}' is a Docker Desktop internal distro. Falling back to OpenFork auto-detect.`,
       );
       _store.delete("wslDistro");
+    } else if (!listResult.ok) {
+      // If WSL itself is temporarily unavailable, keep using the last known
+      // distro name. A later command will distinguish "missing" from
+      // "temporarily unreachable" without dropping the user into setup.
+      console.warn(
+        `Could not refresh WSL distro list; keeping stored distro '${stored}'.`,
+      );
+      _resolvedWslDistro = stored;
+      return _resolvedWslDistro;
     } else if (
       openForkDistro &&
       stored.toLowerCase() !== openForkDistro.toLowerCase()
@@ -90,6 +130,12 @@ async function getWslDistroName() {
       );
       _store.delete("wslDistro");
     }
+  }
+
+  const envDistro = process.env.OPENFORK_WSL_DISTRO;
+  if (!listResult.ok && envDistro && !isDockerDesktopDistro(envDistro)) {
+    _resolvedWslDistro = envDistro;
+    return _resolvedWslDistro;
   }
 
   const detected = choosePreferredWslDistro(distros);
@@ -170,28 +216,69 @@ async function resolveWslStoragePath(distroName) {
   return (fs.existsSync(candidate) ? candidate : null) || normalizedBasePath;
 }
 
-function checkDistroExists(distroName) {
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function outputContainsDistro(output, distroName) {
+  const namePattern = new RegExp(
+    `^\\*?\\s*${escapeRegExp(distroName)}(?:\\s|$)`,
+    "i",
+  );
+  return output
+    .replace(/\0/g, "")
+    .split(/\r?\n/)
+    .some((line) => namePattern.test(line.trim()));
+}
+
+function checkDistroPresence(distroName) {
   return new Promise((resolve) => {
-    if (process.platform !== "win32") { resolve(true); return; }
+    if (process.platform !== "win32") {
+      resolve({ exists: true });
+      return;
+    }
+    if (!distroName) {
+      resolve({ exists: false });
+      return;
+    }
     const psCommand = "wsl.exe -l -v | Out-String";
     _execFile(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", psCommand],
-      (error, stdout) => {
-        const output = (stdout || "").replace(/\0/g, "");
-        if (output.includes(distroName)) {
-          resolve(true);
-        } else {
-          if (error) {
-            console.error(
-              `WSL check failed: ${error.message}. Output: ${output}`,
-            );
-          }
-          resolve(false);
+      { timeout: 10000 },
+      (error, stdout, stderr) => {
+        const output = `${stdout || ""}\n${stderr || ""}`.replace(/\0/g, "");
+        if (error) {
+          console.error(
+            `WSL check failed: ${error.message}. Output: ${output}`,
+          );
+          resolve({
+            exists: null,
+            error: error.message,
+            output: output.trim(),
+          });
+          return;
         }
+        if (!output.trim()) {
+          resolve({
+            exists: null,
+            error: "WSL distro list returned no output.",
+            output: "",
+          });
+          return;
+        }
+        resolve({
+          exists: outputContainsDistro(output, distroName),
+          output: output.trim(),
+        });
       },
     );
   });
+}
+
+async function checkDistroExists(distroName) {
+  const result = await checkDistroPresence(distroName);
+  return result.exists === true;
 }
 
 function getWindowsSystemDriveLetter() {
@@ -202,6 +289,7 @@ function getWindowsSystemDriveLetter() {
 module.exports = {
   init,
   listWslDistros,
+  listWslDistrosDetailed,
   choosePreferredWslDistro,
   getWslDistroName,
   resetWslDistro,
@@ -211,6 +299,7 @@ module.exports = {
   getWindowsDockerApiHosts,
   getDistroBasePath,
   resolveWslStoragePath,
+  checkDistroPresence,
   checkDistroExists,
   getWindowsSystemDriveLetter,
 };

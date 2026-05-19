@@ -1,7 +1,6 @@
 "use strict";
 
 const dockerEngine = require("./docker-engine.cjs");
-const wslUtils = require("./wsl-utils.cjs");
 
 let _getMainWindow;
 let _getPythonManager;
@@ -30,6 +29,7 @@ let dockerMonitorConsecutiveFailures = 0;
 const DOCKER_MONITOR_MAX_FAILURES = 3;
 const DOCKER_MONITOR_INTERVAL_MS = 15000;
 let dockerApiUnreachableFailures = 0;
+let wslDistroMissingFailures = 0;
 let wslRecoveryInProgress = false;
 let lastWslRecoveryTs = 0;
 let lastLargeDownloadCompletedTs = 0;
@@ -319,6 +319,7 @@ async function checkDockerUpdates() {
     if (isCompactionInProgress()) {
       dockerMonitorConsecutiveFailures = 0;
       dockerApiUnreachableFailures = 0;
+      wslDistroMissingFailures = 0;
       resetDockerRoutingCache();
       return;
     }
@@ -333,12 +334,14 @@ async function checkDockerUpdates() {
     if (isCompactionInProgress()) {
       dockerMonitorConsecutiveFailures = 0;
       dockerApiUnreachableFailures = 0;
+      wslDistroMissingFailures = 0;
       resetDockerRoutingCache();
       return;
     }
     if (dockerStatus.error === "WSL_VHDX_LOCKED") {
       dockerMonitorConsecutiveFailures = 0;
       dockerApiUnreachableFailures = 0;
+      wslDistroMissingFailures = 0;
       resetDockerRoutingCache();
       return;
     }
@@ -401,16 +404,29 @@ async function checkDockerUpdates() {
         (imagesOutput && imagesOutput.trim().length > 0)
       ) {
         dockerMonitorConsecutiveFailures = 0;
+        wslDistroMissingFailures = 0;
       } else {
         dockerMonitorConsecutiveFailures++;
+        if (
+          process.platform === "win32" &&
+          dockerStatus.error === "WSL_DISTRO_MISSING"
+        ) {
+          wslDistroMissingFailures++;
+        } else {
+          wslDistroMissingFailures = 0;
+        }
       }
 
       if (
         process.platform === "win32" &&
-        dockerStatus.error === "WSL_DISTRO_MISSING"
+        dockerStatus.error === "WSL_DISTRO_MISSING" &&
+        wslDistroMissingFailures >= DOCKER_MONITOR_MAX_FAILURES
       ) {
         mainWindow.webContents.send("docker:wsl-distro-missing", {
-          distroName: await wslUtils.getWslDistroName(),
+          distroName:
+            dockerStatus.wslDistro || process.env.OPENFORK_WSL_DISTRO || null,
+          confirmed: true,
+          failures: wslDistroMissingFailures,
         });
       }
 
@@ -467,6 +483,7 @@ async function checkDockerUpdates() {
     // Docker is running — reset the failure counter
     dockerMonitorConsecutiveFailures = 0;
     dockerApiUnreachableFailures = 0;
+    wslDistroMissingFailures = 0;
 
     // Send container updates
     if (containersOutput !== lastContainersJson) {

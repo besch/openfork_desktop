@@ -94,6 +94,12 @@ type UpdateProgressInfo = {
   percent: number;
 };
 
+type WslDistroMissingNotice = {
+  distroName?: string | null;
+  confirmed?: boolean;
+  failures?: number;
+};
+
 function RequiredUpdateScreen({
   update,
   progress,
@@ -466,19 +472,23 @@ function App() {
   }, [dependencyStatus]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onWslDistroMissing(() => {
-      const current = dependencyStatusRef.current;
-      setDependencyStatus({
-        docker: {
-          ...(current?.docker ?? {}),
-          installed: false,
-          running: false,
-          error: "WSL_DISTRO_MISSING",
-        },
-        nvidia: current?.nvidia ?? { available: false, gpu: null },
-        allReady: false,
-      });
-    });
+    const unsubscribe = window.electronAPI.onWslDistroMissing(
+      (notice?: WslDistroMissingNotice) => {
+        const current = dependencyStatusRef.current;
+        const wasReady = current?.allReady === true;
+        setDependencyStatus({
+          docker: {
+            ...(current?.docker ?? {}),
+            installed: wasReady,
+            running: false,
+            error: "WSL_DISTRO_MISSING",
+            wslDistro: notice?.distroName ?? current?.docker?.wslDistro,
+          },
+          nvidia: current?.nvidia ?? { available: false, gpu: null },
+          allReady: wasReady,
+        });
+      },
+    );
     return () => {
       if (typeof unsubscribe === "function") unsubscribe();
     };

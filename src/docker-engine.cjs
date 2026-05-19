@@ -739,8 +739,11 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
   }
   process.env.OPENFORK_WSL_DISTRO = wslDistro;
 
-  const distroExists = await wslUtils.checkDistroExists(wslDistro);
-  if (!distroExists) {
+  const distroPresence =
+    (await wslUtils.checkDistroPresence?.(wslDistro)) || {
+      exists: await wslUtils.checkDistroExists(wslDistro),
+    };
+  if (distroPresence.exists === false) {
     console.log(`WSL distro '${wslDistro}' is missing`);
     delete process.env.OPENFORK_WSL_DISTRO;
     delete process.env.OPENFORK_DOCKER_HOST;
@@ -753,6 +756,20 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
       running: false,
       isNative: false,
       error: "WSL_DISTRO_MISSING",
+      wslDistro,
+    };
+  }
+  if (distroPresence.exists === null) {
+    console.warn(
+      `Could not confirm WSL distro '${wslDistro}' exists (${distroPresence.error || "unknown WSL probe error"}). ` +
+        "Treating it as temporarily unreachable.",
+    );
+    delete process.env.OPENFORK_DOCKER_HOST;
+    return {
+      installed: true,
+      running: false,
+      isNative: false,
+      error: "DOCKER_API_UNREACHABLE",
       wslDistro,
     };
   }

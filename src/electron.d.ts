@@ -118,6 +118,12 @@ interface InstallProgressEvent {
   percent: number;
 }
 
+interface WslDistroMissingNotice {
+  distroName?: string | null;
+  confirmed?: boolean;
+  failures?: number;
+}
+
 interface PythonConfigData {
   POLICY_IDLE_TIMEOUT_MINUTES: Record<string, number | null>;
   DOCKER_IMAGE_CACHE_LIMIT_GB: number;
@@ -286,7 +292,9 @@ interface ElectronAPI {
     success: boolean;
     error?: string;
   }>;
-  onWslDistroMissing: (callback: () => void) => CleanupFn;
+  onWslDistroMissing: (
+    callback: (notice: WslDistroMissingNotice) => void,
+  ) => CleanupFn;
   onEngineSwitch: (callback: (data: EngineSwitchNotice) => void) => CleanupFn;
   onWslRecoveryStatus: (
     callback: (status: WslRecoveryStatus) => void,
