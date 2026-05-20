@@ -274,13 +274,14 @@ function classifyDockerCheckError(errorMessage = "", stderr = "") {
     return "WSL_VHDX_LOCKED";
   }
   // WSL service crash (Wsl/Service/E_UNEXPECTED). The distro and its processes
-  // remain intact but new wsl.exe connections fail. Treat identically to a
-  // VHDX lock — the same restartWslDockerEngine() recovery flow applies.
+  // remain intact but new wsl.exe connections fail. This needs the same WSL
+  // restart recovery path as a locked VHDX, but it is not disk compaction and
+  // must not be reported through the VHDX lock observer.
   if (
     combined.includes("wsl/service/e_unexpected") ||
     combined.includes("catastrophic failure")
   ) {
-    return "WSL_VHDX_LOCKED";
+    return "WSL_SERVICE_UNEXPECTED";
   }
   return null;
 }
@@ -885,13 +886,16 @@ async function checkWslDockerStatus({ hostTimeoutMs = 15000, infoTimeoutMs } = {
     const endpointErrorCode = _lastDockerApiEndpointMismatch
       ? "DOCKER_API_WRONG_DAEMON"
       : "DOCKER_API_UNREACHABLE";
-    const infoErrorCode =
+    let infoErrorCode =
       infoResult.code ||
       classifyDockerCheckError(
         `${infoResult.error}\n${infoResult.stdout || ""}`,
         infoResult.stderr,
       ) ||
       endpointErrorCode;
+    if (infoErrorCode === "WSL_SERVICE_UNEXPECTED") {
+      infoErrorCode = "DOCKER_API_UNREACHABLE";
+    }
     if (infoErrorCode === "WSL_VHDX_LOCKED") {
       emitWslVhdxLocked({
         wslDistro,
