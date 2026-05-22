@@ -50,7 +50,7 @@ const primaryModes: {
   {
     value: "monetize",
     label: "Monetize",
-    description: "Earn money from processing paid jobs",
+    description: "Earn money by processing paid jobs",
   },
 ];
 
