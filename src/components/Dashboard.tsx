@@ -192,6 +192,7 @@ export const Dashboard = memo(() => {
     loadPersistentSettings,
     savePersistentSettings,
     providerId,
+    dockerContainers,
   } = useClientStore();
   const jobState = useClientStore((state) => state.jobState);
   const compactInProgress = useClientStore(
@@ -242,8 +243,18 @@ export const Dashboard = memo(() => {
     [setRoutingConfig, savePersistentSettings, isRunning, providerId],
   );
 
+  const runningJobContainerCount = dockerContainers.filter(
+    (container) =>
+      container.state === "running" && container.name.startsWith("dgn-client-"),
+  ).length;
+  const activeJobCount = Math.max(
+    stats.processing || 0,
+    jobState.status === "processing" ? 1 : 0,
+    runningJobContainerCount,
+  );
   const isProcessingAndRunning =
-    status === "running" && jobState.status === "processing";
+    status === "running" &&
+    (activeJobCount > 0 || jobState.status === "processing");
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -283,7 +294,7 @@ export const Dashboard = memo(() => {
         />
         <StatCard
           title="In Progress"
-          value={isProcessingAndRunning ? 1 : 0}
+          value={activeJobCount}
           icon={
             <RefreshCw
               size={20}
