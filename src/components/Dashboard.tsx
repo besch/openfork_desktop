@@ -193,6 +193,7 @@ export const Dashboard = memo(() => {
     savePersistentSettings,
     providerId,
     dockerContainers,
+    setDockerContainers,
   } = useClientStore();
   const jobState = useClientStore((state) => state.jobState);
   const compactInProgress = useClientStore(
@@ -205,6 +206,33 @@ export const Dashboard = memo(() => {
   useEffect(() => {
     loadPersistentSettings();
   }, [loadPersistentSettings]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshContainers = async () => {
+      try {
+        const result = await window.electronAPI.listDockerContainers();
+        if (
+          !cancelled &&
+          result?.success &&
+          Array.isArray(result.data)
+        ) {
+          setDockerContainers(result.data);
+        }
+      } catch (error) {
+        console.error("Failed to refresh Docker containers:", error);
+      }
+    };
+
+    refreshContainers();
+    const intervalId = window.setInterval(refreshContainers, 10000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [setDockerContainers]);
 
   const isRunning = status === "running" || status === "starting";
   const isDisabled =
