@@ -83,6 +83,37 @@ export const DEFAULT_ROUTING_CONFIG: ProviderRoutingConfig = {
   monetizeMode: false,
 };
 
+const COMMUNITY_MODES = new Set<CommunityMode>([
+  "none",
+  "trusted_users",
+  "trusted_projects",
+  "all",
+]);
+
+export function normalizeProviderRoutingConfig(
+  value?: Partial<ProviderRoutingConfig> | null,
+): ProviderRoutingConfig {
+  const source = value && typeof value === "object" ? value : {};
+  const communityMode = COMMUNITY_MODES.has(source.communityMode as CommunityMode)
+    ? (source.communityMode as CommunityMode)
+    : DEFAULT_ROUTING_CONFIG.communityMode;
+  const trustedIds = Array.isArray(source.trustedIds)
+    ? source.trustedIds.filter((id): id is string => typeof id === "string")
+    : DEFAULT_ROUTING_CONFIG.trustedIds;
+  const monetizeMode = source.monetizeMode === true;
+  const isPrivateMode = !monetizeMode && communityMode !== "all";
+
+  return {
+    processOwnJobs:
+      isPrivateMode || monetizeMode
+        ? true
+        : source.processOwnJobs === true,
+    communityMode: monetizeMode ? "none" : communityMode,
+    trustedIds,
+    monetizeMode,
+  };
+}
+
 export interface MonetizeWallet {
   id?: string;
   user_id?: string;

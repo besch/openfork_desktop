@@ -15,7 +15,10 @@ import {
 
 import { motion, AnimatePresence } from "framer-motion";
 import { JobPolicySettings } from "./JobPolicySettings";
-import type { ProviderRoutingConfig } from "@/types";
+import {
+  normalizeProviderRoutingConfig,
+  type ProviderRoutingConfig,
+} from "@/types";
 
 const StatCard = memo(
   ({
@@ -252,13 +255,14 @@ export const Dashboard = memo(() => {
 
   const handleRoutingConfigChange = useCallback(
     async (newConfig: ProviderRoutingConfig) => {
-      await setRoutingConfig(newConfig);
+      const normalizedConfig = normalizeProviderRoutingConfig(newConfig);
+      await setRoutingConfig(normalizedConfig);
       await savePersistentSettings();
       // If the client is running, push the config update live (no restart needed)
       if (isRunning && providerId) {
         const result = await window.electronAPI.updateProviderConfig(
           providerId,
-          newConfig,
+          normalizedConfig,
         );
         if (!result.success) {
           console.error(

@@ -753,11 +753,16 @@ function sanitizeRoutingConfig(value = {}) {
         .slice(0, 500)
     : [];
 
+  const monetizeMode = config.monetizeMode === true;
+  const normalizedCommunityMode = monetizeMode ? "none" : communityMode;
+  const isPrivateMode = !monetizeMode && normalizedCommunityMode !== "all";
+
   return {
-    processOwnJobs: config.processOwnJobs === true,
-    communityMode,
+    processOwnJobs:
+      isPrivateMode || monetizeMode ? true : config.processOwnJobs === true,
+    communityMode: normalizedCommunityMode,
     trustedIds,
-    monetizeMode: config.monetizeMode === true,
+    monetizeMode,
   };
 }
 

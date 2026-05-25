@@ -17,7 +17,10 @@ import type {
   ImageEvictedNotification,
   WslRecoveryStatus,
 } from "./types";
-import { DEFAULT_ROUTING_CONFIG } from "./types";
+import {
+  DEFAULT_ROUTING_CONFIG,
+  normalizeProviderRoutingConfig,
+} from "./types";
 import { supabase } from "./supabase";
 
 const MAX_LOGS = 500;
@@ -216,7 +219,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   projects: [],
   selectedProjects: [],
   isLoading: true,
-  routingConfig: DEFAULT_ROUTING_CONFIG,
+  routingConfig: normalizeProviderRoutingConfig(DEFAULT_ROUTING_CONFIG),
   dockerPullProgress: null,
   dependencyStatus: null,
   dockerContainers: [],
@@ -301,7 +304,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   setSelectedProjects: (projects) => set({ selectedProjects: projects }),
   setRoutingConfig: async (config) => {
     await get().unsubscribeFromJobChanges();
-    set({ routingConfig: config });
+    set({ routingConfig: normalizeProviderRoutingConfig(config) });
     get().subscribeToJobChanges();
   },
   setSession: async (session) => {
@@ -567,10 +570,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
       const settings = await window.electronAPI.loadSettings();
       if (settings?.routingConfig) {
         set({
-          routingConfig: {
-            ...DEFAULT_ROUTING_CONFIG,
-            ...settings.routingConfig,
-          },
+          routingConfig: normalizeProviderRoutingConfig(settings.routingConfig),
         });
       }
     } catch (error) {
