@@ -91,7 +91,9 @@
       }
     ],
     "publish": {
-      "provider": "github"
+      "provider": "github",
+      "owner": "besch",
+      "repo": "openfork_desktop"
     },
     "files": [
       "dist/**/*",

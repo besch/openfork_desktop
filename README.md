@@ -138,6 +138,11 @@ Publish a release through `electron-builder`:
 npm run release
 ```
 
+Auto-update checks only notify users when the published release has a higher
+semantic version than their installed app. Rebuilding, deleting, or recreating
+the same tag, such as `v0.0.16`, will not be offered to users already running
+`0.0.16`; publish the next tag instead, such as `v0.0.17`.
+
 The production build bundles:
 
 - `bin/client` or `bin/client.exe`
