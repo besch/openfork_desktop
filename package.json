@@ -80,7 +80,7 @@
     "appId": "com.openfork.openfork_client",
     "productName": "Openfork Client",
     "icon": "public/icon.png",
-    "artifactName": "${productName}-${os}-${arch}.${ext}",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "afterPack": "scripts/after-pack.cjs",
     "protocols": [
       {
