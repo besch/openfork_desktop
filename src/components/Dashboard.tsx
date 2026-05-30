@@ -19,6 +19,13 @@ import {
   normalizeProviderRoutingConfig,
   type ProviderRoutingConfig,
 } from "@/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const StatCard = memo(
   ({
@@ -36,16 +43,16 @@ const StatCard = memo(
       className={`relative overflow-hidden border-white/15 bg-surface/40 backdrop-blur-md ${className || ""}`}
     >
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
-      <div className="flex flex-row items-center justify-between space-y-0 pb-2 p-4 relative z-10">
-        <span className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-white/60">
+      <div className="flex flex-row items-center justify-between space-y-0 pb-1 p-2.5 relative z-10">
+        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">
           {title}
         </span>
-        <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 shadow-sm shadow-amber-500/10 text-amber-500">
+        <div className="p-1.5 rounded-lg bg-black/40 border border-white/10 shadow-sm shadow-amber-500/10 text-amber-500 flex items-center justify-center">
           {icon}
         </div>
       </div>
-      <div className="relative z-10 px-4 pb-3">
-        <div className="text-xl font-black text-white drop-shadow-2xl">
+      <div className="relative z-10 px-2.5 pb-2">
+        <div className="text-base font-black text-white drop-shadow-2xl">
           {value.toLocaleString()}
         </div>
       </div>
@@ -197,6 +204,8 @@ export const Dashboard = memo(() => {
     providerId,
     dockerContainers,
     setDockerContainers,
+    statsTimeframe,
+    setStatsTimeframe,
   } = useClientStore();
   const jobState = useClientStore((state) => state.jobState);
   const compactInProgress = useClientStore(
@@ -317,11 +326,45 @@ export const Dashboard = memo(() => {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="flex justify-end mb-2">
+        <Select value={statsTimeframe} onValueChange={setStatsTimeframe}>
+          <SelectTrigger className="w-[140px] bg-muted/20 border-white/5 text-xs font-bold h-7.5 py-1">
+            <SelectValue placeholder="Select timeframe" />
+          </SelectTrigger>
+          <SelectContent className="bg-surface border-white/10">
+            <SelectItem
+              value="24h"
+              className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+            >
+              Last 24 Hours
+            </SelectItem>
+            <SelectItem
+              value="week"
+              className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+            >
+              Last Week
+            </SelectItem>
+            <SelectItem
+              value="month"
+              className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+            >
+              Last Month
+            </SelectItem>
+            <SelectItem
+              value="all"
+              className="text-xs font-bold focus:bg-primary/20 focus:text-white"
+            >
+              All Time
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="In Queue"
           value={stats.pending}
-          icon={<Server size={20} />}
+          icon={<Server size={16} />}
           className="text-yellow-400"
         />
         <StatCard
@@ -329,7 +372,7 @@ export const Dashboard = memo(() => {
           value={activeJobCount}
           icon={
             <RefreshCw
-              size={20}
+              size={16}
               className={`${isProcessingAndRunning ? "animate-spin" : ""}`}
             />
           }
@@ -338,13 +381,13 @@ export const Dashboard = memo(() => {
         <StatCard
           title="Completed"
           value={stats.completed}
-          icon={<CheckCircle size={20} />}
+          icon={<CheckCircle size={16} />}
           className="text-green-400"
         />
         <StatCard
           title="Failed"
           value={stats.failed}
-          icon={<XCircle size={20} />}
+          icon={<XCircle size={16} />}
           className="text-destructive-foreground"
         />
       </div>

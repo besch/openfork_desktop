@@ -100,6 +100,8 @@ interface DGNClientState {
   }) => void;
   monetizeWallet: MonetizeWallet | null;
   fetchMonetizeWallet: () => Promise<void>;
+  statsTimeframe: string;
+  setStatsTimeframe: (timeframe: string) => void;
 }
 
 interface JobRealtimeOptions {
@@ -231,6 +233,11 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
   imageEvictedNotification: null,
   jobState: createIdleJobState(),
   monetizeWallet: null,
+  statsTimeframe: "24h",
+  setStatsTimeframe: (timeframe) => {
+    set({ statsTimeframe: timeframe });
+    get().fetchStats();
+  },
   setDockerPullProgress: (progress) => set({ dockerPullProgress: progress }),
   setDockerContainers: (containers: DockerContainer[]) =>
     set({ dockerContainers: containers }),
@@ -387,7 +394,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
     }
   },
   fetchStats: async () => {
-    const { session, routingConfig } = get();
+    const { session, routingConfig, statsTimeframe } = get();
     if (!session?.user) {
       set({ stats: { pending: 0, processing: 0, completed: 0, failed: 0 } });
       return;
@@ -412,6 +419,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
           p_policy: statsPolicy,
           p_user_id: session.user.id,
           p_allowed_ids: allowedIds,
+          p_timeframe: statsTimeframe,
         })
         .single();
 
