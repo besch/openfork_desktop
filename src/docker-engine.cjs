@@ -678,7 +678,7 @@ async function restartWslDockerEngine({
     "if ! docker info >/dev/null 2>&1; then",
     "(systemctl restart docker || service docker restart || (mkdir -p /var/log/openfork && nohup /usr/bin/dockerd >/var/log/openfork/dockerd.log 2>&1 &)) >/dev/null 2>&1 || true;",
     "fi;",
-    "i=0; while [ $i -lt 60 ]; do docker info >/dev/null 2>&1 && exit 0; sleep 2; i=$((i+1)); done;",
+    "i=0; while [ \\$i -lt 60 ]; do docker info >/dev/null 2>&1 && exit 0; sleep 2; i=\\$((i+1)); done;",
     "exit 1",
   ].join(" ");
 
