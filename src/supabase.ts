@@ -4,6 +4,7 @@ import config from "../config.json";
 
 const supabaseUrl = config.SUPABASE_URL;
 const supabasePublishableKey = config.SUPABASE_PUBLISHABLE_KEY;
+let rendererAccessToken: string | null = null;
 
 if (!supabaseUrl || !supabasePublishableKey) {
   console.error(
@@ -12,13 +13,12 @@ if (!supabaseUrl || !supabasePublishableKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
-  auth: {
-    // The main process handles session persistence via electron-store.
-    // The renderer client uses in-memory storage and gets the session from main.
-    // Keep refresh ownership in the main process so we don't have multiple
-    // clients racing to rotate the same refresh token.
-    autoRefreshToken: false,
-    persistSession: false,
-    detectSessionInUrl: false,
-  },
+  // The main process owns Supabase Auth persistence and refresh rotation.
+  // Renderer requests only need the current access token for RLS/PostgREST.
+  accessToken: async () => rendererAccessToken,
 });
+
+export const setSupabaseAccessToken = (accessToken: string | null) => {
+  rendererAccessToken = accessToken;
+  supabase.realtime.setAuth(accessToken);
+};

@@ -22,7 +22,6 @@ import {
   LayoutDashboard,
   Terminal,
   LogOut,
-  BarChart as BarChartIcon,
   Container,
   Download,
   ExternalLink,
@@ -48,9 +47,6 @@ const LogViewer = lazy(() =>
   import("@/components/LogViewer").then((module) => ({
     default: module.LogViewer,
   })),
-);
-const Chart = lazy(() =>
-  import("@/components/Chart").then((module) => ({ default: module.Chart })),
 );
 const DockerManagement = lazy(() =>
   import("@/components/DockerManagement").then((module) => ({
@@ -724,7 +720,6 @@ function App() {
               <TabTrigger value="docker" icon={Container} label="Docker" />
               <TabTrigger value="monetize" icon={DollarSign} label="Monetize" />
               <TabTrigger value="history" icon={History} label="History" />
-              <TabTrigger value="chart" icon={BarChartIcon} label="Chart" />
               <TabTrigger value="logs" icon={Terminal} label="Logs" />
             </TabsList>
 
@@ -735,12 +730,6 @@ function App() {
                   className="mt-0 focus-visible:outline-none"
                 >
                   <Dashboard />
-                </TabsContent>
-                <TabsContent
-                  value="chart"
-                  className="mt-0 focus-visible:outline-none"
-                >
-                  <Chart />
                 </TabsContent>
                 <TabsContent
                   value="logs"
@@ -758,7 +747,7 @@ function App() {
                   value="history"
                   className="mt-0 focus-visible:outline-none"
                 >
-                  <JobHistory />
+                  <JobHistory compact />
                 </TabsContent>
                 <TabsContent
                   value="monetize"

@@ -21,7 +21,7 @@ import {
   DEFAULT_ROUTING_CONFIG,
   normalizeProviderRoutingConfig,
 } from "./types";
-import { supabase } from "./supabase";
+import { setSupabaseAccessToken, supabase } from "./supabase";
 
 const MAX_LOGS = 500;
 const MAX_LOG_MESSAGE_LENGTH = 12000;
@@ -321,11 +321,7 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
     if (isSameUser && session) {
       // Just update the tokens without resetting subscriptions
-      supabase.realtime.setAuth(session.access_token);
-      await supabase.auth.setSession({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-      });
+      setSupabaseAccessToken(session.access_token);
       set({ session });
       // Refresh stats to ensure we're in sync, in case any requests failed during token expiry
       get().fetchStats();
@@ -337,14 +333,9 @@ export const useClientStore = create<DGNClientState>((set, get) => ({
 
     // Update the Supabase client and the store's state.
     if (session) {
-      supabase.realtime.setAuth(session.access_token);
-      await supabase.auth.setSession({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-      });
+      setSupabaseAccessToken(session.access_token);
     } else {
-      await supabase.auth.signOut({ scope: "local" });
-      supabase.realtime.setAuth(null);
+      setSupabaseAccessToken(null);
     }
     set({ session });
 
