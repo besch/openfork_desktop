@@ -58,6 +58,12 @@ export const DockerManagement = memo(() => {
     (state) => state.dockerPullProgress,
   );
   const containers = useClientStore((state) => state.dockerContainers);
+  const runningContainers = containers.filter(
+    (container) => container.state?.toLowerCase() === "running",
+  );
+  const stoppedContainers = containers.filter(
+    (container) => container.state?.toLowerCase() !== "running",
+  );
   const setDockerContainers = useClientStore(
     (state) => state.setDockerContainers,
   );
@@ -628,22 +634,22 @@ export const DockerManagement = memo(() => {
                 Running Containers
               </span>
               <p className="text-[9px] text-white/30 font-black uppercase tracking-[0.2em] mt-0.5">
-                {containers.length} Instances
+                {runningContainers.length} Instances
               </p>
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="relative z-10 px-4 overflow-hidden pb-4">
-          {containers.length === 0 ? (
+          {runningContainers.length === 0 ? (
             <div className="text-center py-12 opacity-30 select-none">
               <Container className="h-10 w-10 mx-auto mb-3 opacity-20" />
               <p className="text-[10px] font-black uppercase tracking-widest">
-                No active containers found
+                No running containers found
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {containers.map((container) => (
+              {runningContainers.map((container) => (
                 <div
                   key={container.id}
                   className="flex flex-col gap-3 p-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-white transition-[background-color,border-color,box-shadow] duration-500 group/row hover:bg-amber-500/20 sm:flex-row sm:items-center sm:justify-between"
@@ -679,6 +685,57 @@ export const DockerManagement = memo(() => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {stoppedContainers.length > 0 && (
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <div className="mb-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">
+                  Stopped Containers
+                </p>
+                <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-white/25">
+                  {stoppedContainers.length} removable
+                </p>
+              </div>
+              <div className="space-y-3">
+                {stoppedContainers.map((container) => (
+                  <div
+                    key={container.id}
+                    className="flex flex-col gap-3 p-3 rounded-lg border border-white/10 bg-white/[0.03] text-white transition-[background-color,border-color] duration-500 group/row hover:bg-white/[0.06] sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black text-[11px] text-white/80 truncate uppercase tracking-wide">
+                        {container.name}
+                      </p>
+                      <p className="text-[10px] text-white/35 truncate font-bold uppercase mt-0.5 tracking-wide">
+                        {container.image}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 sm:ml-4 sm:justify-end">
+                      <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-white/45">
+                        {container.status}
+                      </span>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() =>
+                          handleStopContainer(container.id, container.name)
+                        }
+                        disabled={actionLoading !== null}
+                        aria-label={`Remove stopped container ${container.name}`}
+                        className="rounded-lg h-9 w-9 p-0 bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive hover:text-white"
+                      >
+                        {actionLoading === `stop-${container.id}` ? (
+                          <Loader size="xs" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
