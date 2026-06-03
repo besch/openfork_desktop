@@ -115,9 +115,6 @@ jobs:
       - name: Lint Electron app
         run: npm run lint
 
-      - name: Generate installer images
-        run: npm run generate-installer-images
-
       - name: Build React app
         run: npm run build
 

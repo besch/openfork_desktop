@@ -36,7 +36,7 @@ const { AutoCompactManager } = require("./src/auto-compact-manager.cjs");
 
 function createDevAutoUpdater() {
   const updater = new EventEmitter();
-  updater.autoDownload = false;
+  updater.autoDownload = true;
   updater.autoInstallOnAppQuit = false;
   updater.checkForUpdates = async () => null;
   updater.downloadUpdate = async () => null;
@@ -344,12 +344,14 @@ let appUpdateState = {
   available: null,
   progress: null,
   downloaded: false,
+  installing: false,
   error: null,
   checking: false,
   lastCheckedAt: null,
 };
 let appUpdateCheckPromise = null;
 let appUpdateCheckInterval = null;
+let appUpdateInstallStarted = false;
 let rendererSecurityHeadersInstalled = false;
 
 const RENDERER_REFRESH_TOKEN_SENTINEL =
@@ -435,10 +437,34 @@ function normalizeAppUpdateError(err) {
   };
 }
 
+function installDownloadedAppUpdate() {
+  if (!app.isPackaged || appUpdateInstallStarted) return;
+
+  appUpdateInstallStarted = true;
+  setAppUpdateState({ installing: true, progress: null });
+  sendAppUpdateEvent("update:installing", appUpdateState.available);
+
+  const installTimer = setTimeout(() => {
+    try {
+      autoUpdater.quitAndInstall(false, true);
+    } catch (err) {
+      const error = normalizeAppUpdateError(err);
+      appUpdateInstallStarted = false;
+      setAppUpdateState({ error, installing: false, progress: null });
+      sendAppUpdateEvent("update:error", error);
+    }
+  }, 600);
+  installTimer.unref?.();
+}
+
 async function checkForAppUpdate() {
   if (!app.isPackaged) return appUpdateState;
   if (appUpdateCheckPromise) return appUpdateCheckPromise;
-  if (appUpdateState.downloaded || appUpdateState.progress) {
+  if (
+    appUpdateState.downloaded ||
+    appUpdateState.progress ||
+    appUpdateState.installing
+  ) {
     return appUpdateState;
   }
 
@@ -1157,7 +1183,7 @@ function createWindow() {
 // --- AUTO UPDATER ---
 // Registered once at startup so listeners don't accumulate if createWindow()
 // is called again (e.g. macOS activate with no open windows).
-autoUpdater.autoDownload = false;
+autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
 autoUpdater.on("update-available", (info) => {
@@ -1165,6 +1191,7 @@ autoUpdater.on("update-available", (info) => {
     available: info,
     progress: null,
     downloaded: false,
+    installing: false,
     error: null,
   });
   sendAppUpdateEvent("update:available", info);
@@ -1176,6 +1203,7 @@ autoUpdater.on("update-not-available", () => {
     available: null,
     progress: null,
     downloaded: false,
+    installing: false,
     error: null,
   });
 });
@@ -1190,15 +1218,17 @@ autoUpdater.on("update-downloaded", (info) => {
     available: info,
     progress: null,
     downloaded: true,
+    installing: false,
     error: null,
   });
   sendAppUpdateEvent("update:downloaded", info);
+  installDownloadedAppUpdate();
 });
 
 autoUpdater.on("error", (err) => {
   console.error("AutoUpdater error:", err);
   const error = normalizeAppUpdateError(err);
-  setAppUpdateState({ error, progress: null });
+  setAppUpdateState({ error, installing: false, progress: null });
   sendAppUpdateEvent("update:error", error);
 });
 

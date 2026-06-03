@@ -79,6 +79,7 @@ interface UpdateState {
   available: UpdateInfo | null;
   progress: UpdateProgress | null;
   downloaded: boolean;
+  installing: boolean;
   error: UpdateError | null;
   checking: boolean;
   lastCheckedAt: string | null;
@@ -335,6 +336,9 @@ interface ElectronAPI {
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => CleanupFn;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => CleanupFn;
+  onUpdateInstalling: (
+    callback: (info: UpdateInfo | null) => void,
+  ) => CleanupFn;
   onRequiredUpdate: (
     callback: (info: RequiredUpdateInfo) => void,
   ) => CleanupFn;

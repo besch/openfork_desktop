@@ -3,10 +3,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   CheckCircle2,
-  Download,
   ExternalLink,
   HardDrive,
-  RefreshCcw,
   RefreshCw,
   X,
 } from "lucide-react";
@@ -31,6 +29,7 @@ interface UpdateState {
   available: UpdateInfo | null;
   progress: UpdateProgress | null;
   downloaded: boolean;
+  installing?: boolean;
 }
 
 interface NoticeBannerProps {
@@ -191,6 +190,7 @@ export const SystemNotifications = memo(() => {
   const [updateProgress, setUpdateProgress] =
     useState<UpdateProgress | null>(null);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [cudaDismissed, setCudaDismissed] = useState(false);
 
@@ -235,23 +235,35 @@ export const SystemNotifications = memo(() => {
       setUpdateInfo(state.available);
       setUpdateProgress(state.progress);
       setUpdateDownloaded(state.downloaded);
+      setUpdateInstalling(state.installing ?? false);
       setUpdateDismissed(false);
     };
 
     const cleanupAvailable = window.electronAPI.onUpdateAvailable((info) => {
       setUpdateInfo(info);
       setUpdateDownloaded(false);
+      setUpdateInstalling(false);
       setUpdateProgress(null);
       setUpdateDismissed(false);
     });
 
     const cleanupProgress = window.electronAPI.onUpdateProgress((progress) => {
       setUpdateProgress(progress);
+      setUpdateInstalling(false);
     });
 
     const cleanupDownloaded = window.electronAPI.onUpdateDownloaded((info) => {
       setUpdateInfo(info);
       setUpdateDownloaded(true);
+      setUpdateInstalling(false);
+      setUpdateProgress(null);
+      setUpdateDismissed(false);
+    });
+
+    const cleanupInstalling = window.electronAPI.onUpdateInstalling((info) => {
+      if (info) setUpdateInfo(info);
+      setUpdateDownloaded(true);
+      setUpdateInstalling(true);
       setUpdateProgress(null);
       setUpdateDismissed(false);
     });
@@ -275,6 +287,7 @@ export const SystemNotifications = memo(() => {
       cleanupAvailable();
       cleanupProgress();
       cleanupDownloaded();
+      cleanupInstalling();
     };
   }, []);
 
@@ -334,18 +347,23 @@ export const SystemNotifications = memo(() => {
         tone={updateDownloaded ? "emerald" : "blue"}
         title="App Update"
         message={
-          updateDownloaded
-            ? `Version ${updateInfo.version} is ready to install.`
-            : `Version ${updateInfo.version} is available.`
+          updateInstalling
+            ? `Version ${updateInfo.version} is installing automatically.`
+            : updateDownloaded
+              ? `Version ${updateInfo.version} is starting the installer.`
+              : updateProgress
+                ? `Version ${updateInfo.version} is downloading automatically.`
+                : `Version ${updateInfo.version} will install automatically.`
         }
         icon={
-          updateDownloaded ? (
-            <RefreshCcw className="h-4 w-4 text-emerald-300" />
-          ) : (
-            <Download className="h-4 w-4 text-blue-300" />
-          )
+          <img
+            src="./logo.png"
+            alt="OpenFork logo"
+            width={16}
+            height={16}
+            className="h-4 w-4 object-contain"
+          />
         }
-        isBusy={!!updateProgress && !updateDownloaded}
         details={
           releaseNotes && !updateDownloaded && !updateProgress ? (
             <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-white/10 bg-black/20 p-2 font-sans">
@@ -354,17 +372,7 @@ export const SystemNotifications = memo(() => {
           ) : undefined
         }
         actions={
-          updateDownloaded ? (
-            <Button
-              size="sm"
-              variant="primary"
-              className="h-8 px-3 text-[11px] font-bold"
-              onClick={() => window.electronAPI.installUpdate()}
-            >
-              <RefreshCcw className="mr-2 h-3.5 w-3.5" />
-              Restart & Install
-            </Button>
-          ) : updateProgress ? (
+          updateProgress && !updateDownloaded ? (
             <div className="space-y-1.5">
               <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/45">
                 <span>Downloading</span>
@@ -380,32 +388,21 @@ export const SystemNotifications = memo(() => {
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-3 text-[11px] font-bold"
-                onClick={() => setUpdateDismissed(true)}
-              >
-                Later
-              </Button>
-              <Button
-                size="sm"
-                variant="primary"
-                className="h-8 px-3 text-[11px] font-bold"
-                onClick={() => {
-                  window.electronAPI.downloadUpdate();
-                  setUpdateProgress({ percent: 0 });
-                }}
-              >
-                <Download className="mr-2 h-3.5 w-3.5" />
-                Download
-              </Button>
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-white/60">
+              <img
+                src="./logo.png"
+                alt=""
+                width={20}
+                height={20}
+                className="h-5 w-5 object-contain"
+              />
+              <span>
+                {updateInstalling
+                  ? "Installer is running"
+                  : "Installer will start automatically"}
+              </span>
             </div>
           )
-        }
-        onDismiss={
-          updateDownloaded ? undefined : () => setUpdateDismissed(true)
         }
       />,
     );

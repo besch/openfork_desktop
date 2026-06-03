@@ -24,12 +24,9 @@ import {
   LogOut,
   Container,
   Download,
-  ExternalLink,
   History,
   DollarSign,
   HardDrive,
-  RefreshCcw,
-  ShieldAlert,
 } from "lucide-react";
 import {
   Popover,
@@ -100,10 +97,12 @@ function RequiredUpdateScreen({
   update,
   progress,
   downloaded,
+  installing,
 }: {
   update: RequiredUpdateInfo;
   progress: UpdateProgressInfo | null;
   downloaded: boolean;
+  installing: boolean;
 }) {
   const progressPercent = Math.max(
     0,
@@ -112,14 +111,31 @@ function RequiredUpdateScreen({
   const latestVersion = update.latest_version
     ? `Version ${update.latest_version}`
     : "Latest OpenFork";
+  const phase = installing
+    ? "Installing update"
+    : downloaded
+      ? "Starting installer"
+      : progress
+        ? "Downloading update"
+        : "Preparing update";
+  const phaseDetail = installing
+    ? "OpenFork will restart automatically when the installer finishes."
+    : downloaded
+      ? "The installer is opening now."
+      : "OpenFork is downloading the required desktop update automatically.";
+  const barPercent = installing || downloaded ? 100 : progress ? progressPercent : 8;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8 text-white">
       <div className="w-full max-w-2xl rounded-lg border border-red-500/25 bg-surface/80 p-6 shadow-2xl shadow-black/30">
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-300">
-            <ShieldAlert className="h-6 w-6" />
-          </div>
+          <img
+            src="./logo.png"
+            alt="OpenFork logo"
+            width={56}
+            height={56}
+            className="h-14 w-14 shrink-0 object-contain"
+          />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-black uppercase tracking-widest text-red-300">
               Required Security Update
@@ -161,52 +177,18 @@ function RequiredUpdateScreen({
           </div>
         </div>
 
-        {progress && !downloaded && (
-          <div className="mt-5 space-y-2">
-            <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-white/45">
-              <span>Downloading</span>
-              <span>{progressPercent}%</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-red-300 transition-[width] duration-200"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
+        <div className="mt-5 space-y-2">
+          <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-white/45">
+            <span>{phase}</span>
+            <span>{installing || downloaded ? "Ready" : `${barPercent}%`}</span>
           </div>
-        )}
-
-        <div className="mt-6 flex flex-wrap gap-3">
-          {downloaded ? (
-            <Button
-              variant="primary"
-              onClick={() => window.electronAPI.installUpdate()}
-            >
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Restart & Install
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              onClick={() => {
-                window.electronAPI.downloadUpdate();
-              }}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download Update
-            </Button>
-          )}
-          {update.download_url && (
-            <Button
-              variant="outline"
-              onClick={() =>
-                window.electronAPI.openExternal(update.download_url!)
-              }
-            >
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Open Release
-            </Button>
-          )}
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-red-300 transition-[width] duration-200"
+              style={{ width: `${barPercent}%` }}
+            />
+          </div>
+          <p className="text-xs font-medium text-white/55">{phaseDetail}</p>
         </div>
       </div>
     </div>
@@ -310,6 +292,8 @@ function App() {
     useState<UpdateProgressInfo | null>(null);
   const [requiredUpdateDownloaded, setRequiredUpdateDownloaded] =
     useState(false);
+  const [requiredUpdateInstalling, setRequiredUpdateInstalling] =
+    useState(false);
 
   const handleLogout = () => {
     window.electronAPI.logout();
@@ -332,6 +316,7 @@ function App() {
     const cleanupRequired = window.electronAPI.onRequiredUpdate((update) => {
       if (update?.required) {
         setRequiredUpdate(update);
+        setRequiredUpdateInstalling(false);
         setRequiredUpdateDownloaded(false);
         setRequiredUpdateProgress(null);
       }
@@ -343,14 +328,58 @@ function App() {
       setRequiredUpdateDownloaded(true);
       setRequiredUpdateProgress(null);
     });
+    const cleanupInstalling = window.electronAPI.onUpdateInstalling(() => {
+      setRequiredUpdateInstalling(true);
+      setRequiredUpdateDownloaded(true);
+      setRequiredUpdateProgress(null);
+    });
 
     return () => {
       mounted = false;
       cleanupRequired();
       cleanupProgress();
       cleanupDownloaded();
+      cleanupInstalling();
     };
   }, []);
+
+  useEffect(() => {
+    if (!requiredUpdate?.required) return;
+
+    let cancelled = false;
+
+    const applyUpdateState = (state: Awaited<
+      ReturnType<typeof window.electronAPI.getUpdateState>
+    > | null) => {
+      if (cancelled || !state) return;
+      setRequiredUpdateProgress(state.progress);
+      setRequiredUpdateDownloaded(state.downloaded);
+      setRequiredUpdateInstalling(state.installing);
+      if (state.downloaded && !state.installing) {
+        window.electronAPI.installUpdate().catch((error) => {
+          console.error("Failed to start required update install:", error);
+        });
+      }
+    };
+
+    window.electronAPI
+      .getUpdateState()
+      .then(applyUpdateState)
+      .catch((error) => {
+        console.error("Failed to read required update state:", error);
+      });
+
+    window.electronAPI
+      .checkForUpdates()
+      .then(applyUpdateState)
+      .catch((error) => {
+        console.error("Failed to start required update download:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requiredUpdate?.required]);
 
   // Check dependencies on startup
   useEffect(() => {
@@ -564,6 +593,7 @@ function App() {
         update={requiredUpdate}
         progress={requiredUpdateProgress}
         downloaded={requiredUpdateDownloaded}
+        installing={requiredUpdateInstalling}
       />
     );
   }

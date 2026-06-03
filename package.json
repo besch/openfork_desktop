@@ -14,11 +14,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node scripts/start-electron.cjs",
-    "generate-installer-images": "node scripts/generate-installer-images.cjs",
     "pack": "electron-builder",
-    "prepack": "npm run generate-installer-images",
-    "release": "electron-builder --publish=always",
-    "prerelease": "npm run generate-installer-images"
+    "release": "electron-builder --publish=always"
   },
   "dependencies": {
     "@effect/core": "^0.0.16",
@@ -169,16 +166,13 @@
       "executableArgs": []
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
       "installerHeaderIcon": "public/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "installerSidebar": "public/installerSidebar.png",
-      "uninstallerSidebar": "public/installerSidebar.png",
-      "installerHeader": "public/installerHeader.png",
       "include": "build/installer.nsh"
     }
   }

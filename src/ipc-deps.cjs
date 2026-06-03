@@ -373,14 +373,8 @@ function register(ipcMain) {
     _autoUpdater.downloadUpdate();
   });
 
-  ipcMain.handle("update:install", async (event) => {
-    const confirmed = await confirmSensitiveAction(event, {
-      title: "Install Update",
-      message: "Install the downloaded OpenFork update now?",
-      detail: "The app will quit and restart to finish the update.",
-    });
-    if (!confirmed) return cancelledSensitiveAction();
-    _autoUpdater.quitAndInstall();
+  ipcMain.handle("update:install", async () => {
+    _autoUpdater.quitAndInstall(false, true);
     return { success: true };
   });
 }
