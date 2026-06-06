@@ -1,7 +1,8 @@
 "use strict";
 
-const { exec, execFile } = require("child_process");
+const { execFile } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 let _app;
@@ -21,8 +22,17 @@ let currentInstallCancelled = false;
 let currentInstallDistro = null;
 let currentInstallActive = false;
 let currentInstallPath = null;
-const INSTALL_PROGRESS_LOG = "C:\\Windows\\Temp\\openfork_install_progress.log";
+const INSTALL_PROGRESS_LOG =
+  process.platform === "win32"
+    ? path.win32.join(os.tmpdir(), "openfork_install_progress.log")
+    : path.join(os.tmpdir(), "openfork_install_progress.log");
 const WINDOWS_INSTALL_PATH_RE = /^[A-Za-z]:\\OpenFork\\wsl\\?$/;
+const WINDOWS_WSL_FEATURES = [
+  "Microsoft-Windows-Subsystem-Linux",
+  "VirtualMachinePlatform",
+];
+const WSL_FEATURE_SETUP_ERROR_RE =
+  /(optional component is not enabled|windows subsystem for linux.*not enabled|enable.*windows subsystem for linux|virtual machine platform|0x80370102|wsl.*is not recognized|not recognized as the name)/i;
 
 function readInstallProgressTail(maxLines = 80) {
   try {
@@ -164,6 +174,66 @@ function parseInstallPhase(line) {
 
 // --- ELEVATED POWERSHELL ---
 
+function getDefaultWindowsInstallPath() {
+  const systemDrive =
+    process.env.SystemDrive || process.env.SYSTEMDRIVE || "C:";
+  const normalizedDrive = /^[A-Za-z]:$/.test(systemDrive)
+    ? systemDrive
+    : "C:";
+  return path.win32.join(normalizedDrive, "OpenFork", "wsl");
+}
+
+function emitInstallProgress(line, phase = "", percent = 0) {
+  const mainWindow = _getMainWindow?.();
+  mainWindow?.webContents.send("deps:install-progress", {
+    line,
+    phase,
+    percent,
+  });
+}
+
+function buildPowerShellFileArgs(scriptPath, args = []) {
+  return [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    scriptPath,
+    ...args,
+  ];
+}
+
+function resolveInstallerResult(error, resolve, label) {
+  currentInstallProcess = null;
+  if (currentInstallCancelled) {
+    currentInstallCancelled = false;
+    resolve({ success: false, error: "cancelled" });
+  } else if (error) {
+    console.error(`${label} failed:`, error.message);
+    resolve({ success: false, error: error.message });
+  } else {
+    resolve({ success: true });
+  }
+}
+
+function runPowerShell(scriptPath, args = []) {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") {
+      resolve({ success: false, error: "PowerShell only supported on Windows" });
+      return;
+    }
+
+    console.log(`Running setup without elevation: ${scriptPath}`);
+
+    const child = execFile(
+      "powershell.exe",
+      buildPowerShellFileArgs(scriptPath, args),
+      (error) => resolveInstallerResult(error, resolve, "Setup"),
+    );
+    currentInstallProcess = child;
+  });
+}
+
 function runElevatedPowerShell(scriptPath, args = []) {
   return new Promise((resolve) => {
     if (process.platform !== "win32") {
@@ -172,14 +242,7 @@ function runElevatedPowerShell(scriptPath, args = []) {
     }
 
     // Combine all arguments into a single list for the inner powershell
-    const innerArgs = [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      scriptPath,
-      ...args,
-    ];
+    const innerArgs = buildPowerShellFileArgs(scriptPath, args);
 
     // Use PowerShell array literal syntax @('arg1', 'arg2') for -ArgumentList.
     // IMPORTANT: Start-Process -ArgumentList joins array elements with spaces when
@@ -201,21 +264,181 @@ function runElevatedPowerShell(scriptPath, args = []) {
     const child = execFile(
       "powershell.exe",
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-      (error) => {
-        currentInstallProcess = null;
-        if (currentInstallCancelled) {
-          currentInstallCancelled = false;
-          resolve({ success: false, error: "cancelled" });
-        } else if (error) {
-          console.error("Elevated setup failed:", error.message);
-          resolve({ success: false, error: error.message });
-        } else {
-          resolve({ success: true });
-        }
-      },
+      (error) => resolveInstallerResult(error, resolve, "Elevated setup"),
     );
     currentInstallProcess = child;
   });
+}
+
+function runPowerShellCommand(command, options = {}) {
+  return new Promise((resolve) => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+      { timeout: 15000, ...options },
+      (error, stdout, stderr) => {
+        resolve({
+          success: !error,
+          stdout: stdout?.toString?.() || "",
+          stderr: stderr?.toString?.() || "",
+          error: error?.message || "",
+        });
+      },
+    );
+  });
+}
+
+async function isCurrentProcessElevated() {
+  const command = [
+    "$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())",
+    "$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)",
+  ].join("; ");
+  const result = await runPowerShellCommand(command);
+  return result.success && result.stdout.trim().toLowerCase() === "true";
+}
+
+async function getWindowsFeatureStates() {
+  const featureList = WINDOWS_WSL_FEATURES.map((name) => `'${name}'`).join(", ");
+  const command = [
+    `$features = @(${featureList})`,
+    "$result = @()",
+    "foreach ($feature in $features) {",
+    "  try {",
+    "    $item = Get-WindowsOptionalFeature -Online -FeatureName $feature -ErrorAction Stop",
+    "    $result += [pscustomobject]@{ FeatureName = $feature; State = [string]$item.State; Error = $null }",
+    "  } catch {",
+    "    $result += [pscustomobject]@{ FeatureName = $feature; State = 'Unknown'; Error = $_.Exception.Message }",
+    "  }",
+    "}",
+    "$result | ConvertTo-Json -Compress",
+  ].join("; ");
+  const result = await runPowerShellCommand(command);
+  if (!result.success || !result.stdout.trim()) {
+    return WINDOWS_WSL_FEATURES.map((featureName) => ({
+      FeatureName: featureName,
+      State: "Unknown",
+      Error: result.error || result.stderr || "Feature check failed",
+    }));
+  }
+
+  try {
+    const parsed = JSON.parse(result.stdout.trim());
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch (error) {
+    console.warn("Could not parse Windows feature state:", error.message);
+    return WINDOWS_WSL_FEATURES.map((featureName) => ({
+      FeatureName: featureName,
+      State: "Unknown",
+      Error: "Feature check returned invalid JSON",
+    }));
+  }
+}
+
+function testWindowsInstallPathWritable(installPath) {
+  const targetPath = installPath || getDefaultWindowsInstallPath();
+  try {
+    fs.mkdirSync(targetPath, { recursive: true });
+    const probePath = path.win32.join(
+      targetPath,
+      `.openfork-write-test-${process.pid}-${Date.now()}.tmp`,
+    );
+    fs.writeFileSync(probePath, "", "utf8");
+    fs.unlinkSync(probePath);
+    return { writable: true, targetPath };
+  } catch (error) {
+    return {
+      writable: false,
+      targetPath,
+      error: error?.message || "Install path is not writable",
+    };
+  }
+}
+
+function checkWindowsDistroExists(distroName) {
+  return new Promise((resolve) => {
+    execFile(
+      "wsl.exe",
+      ["--list", "--quiet"],
+      { timeout: 5000 },
+      (_error, stdout, stderr) => {
+        const output = `${stdout || ""}\n${stderr || ""}`.replace(/\0/g, "");
+        const exists = output
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .some((line) => line.toLowerCase() === distroName.toLowerCase());
+        resolve(exists);
+      },
+    );
+  });
+}
+
+function checkWindowsWslAvailable() {
+  return new Promise((resolve) => {
+    execFile(
+      "wsl.exe",
+      ["--status"],
+      { timeout: 5000 },
+      (error, stdout, stderr) => {
+        const output = `${stdout || ""}\n${stderr || ""}`.replace(/\0/g, "");
+        resolve({
+          available: !error,
+          needsFeatureSetup: !!error && WSL_FEATURE_SETUP_ERROR_RE.test(output),
+          output: output.trim(),
+        });
+      },
+    );
+  });
+}
+
+async function inspectWindowsInstallPermissions(installPath, distroName) {
+  const [isElevated, featureStates, distroExists, wslStatus] =
+    await Promise.all([
+    isCurrentProcessElevated(),
+    getWindowsFeatureStates(),
+    checkWindowsDistroExists(distroName),
+    checkWindowsWslAvailable(),
+  ]);
+  const disabledFeatures = featureStates.filter(
+    (feature) =>
+      feature?.State &&
+      feature.State !== "Enabled" &&
+      feature.State !== "Unknown",
+  );
+  const writeCheck = distroExists
+    ? { writable: true, targetPath: installPath, skipped: true }
+    : testWindowsInstallPathWritable(installPath);
+  const reasons = [];
+
+  if (disabledFeatures.length > 0 || wslStatus.needsFeatureSetup) {
+    reasons.push(
+      disabledFeatures.length > 0
+        ? `WSL feature setup (${disabledFeatures
+            .map((feature) => feature.FeatureName)
+            .join(", ")})`
+        : "WSL feature setup",
+    );
+  }
+  if (!writeCheck.writable) {
+    reasons.push(`write access to ${writeCheck.targetPath}`);
+  }
+
+  return {
+    isElevated,
+    requiresElevation: !isElevated && reasons.length > 0,
+    reasons,
+    distroExists,
+    featureStates,
+    wslStatus,
+    writeCheck,
+  };
+}
+
+function shouldRetryElevated(error) {
+  return (
+    /(administrator privileges|requires elevation|requested operation requires elevation|access is denied|permission denied|eacces|eperm)/i.test(
+      String(error || ""),
+    ) || WSL_FEATURE_SETUP_ERROR_RE.test(String(error || ""))
+  );
 }
 
 // --- INSTALL HANDLER ---
@@ -256,7 +479,9 @@ async function handleInstallEngine(installPath) {
   if (process.platform === "win32") {
     let safeInstallPath = null;
     try {
-      safeInstallPath = normalizeWindowsInstallPath(installPath);
+      safeInstallPath =
+        normalizeWindowsInstallPath(installPath) ||
+        getDefaultWindowsInstallPath();
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -312,13 +537,67 @@ async function handleInstallEngine(installPath) {
     const setupArgs = [
       "-DistroName",
       distroName,
-      ...(safeInstallPath ? ["-InstallPath", safeInstallPath] : []),
+      "-InstallPath",
+      safeInstallPath,
+      "-ProgressLog",
+      INSTALL_PROGRESS_LOG,
     ];
 
     let result;
     let progressTail = "";
     try {
-      result = await runElevatedPowerShell(scriptPath, setupArgs);
+      emitInstallProgress(
+        "Checking whether Windows needs elevated permissions...",
+        "Checking system requirements",
+        3,
+      );
+      const preflight = await inspectWindowsInstallPermissions(
+        safeInstallPath,
+        distroName,
+      );
+      if (currentInstallCancelled) {
+        currentInstallCancelled = false;
+        result = { success: false, error: "cancelled" };
+      } else {
+        const requiresElevation = preflight.requiresElevation;
+        if (requiresElevation) {
+          emitInstallProgress(
+            `Windows needs elevated permissions for ${preflight.reasons.join(
+              " and ",
+            )}. Approve the Windows prompt to continue.`,
+            "Waiting for Windows permission",
+            4,
+          );
+        } else {
+          emitInstallProgress(
+            "Windows permissions are already sufficient; continuing without an elevated prompt.",
+            "Checking system requirements",
+            4,
+          );
+        }
+
+        result = requiresElevation
+          ? await runElevatedPowerShell(scriptPath, setupArgs)
+          : await runPowerShell(scriptPath, setupArgs);
+
+        if (
+          !requiresElevation &&
+          !result.success &&
+          result.error !== "cancelled" &&
+          shouldRetryElevated(result.error)
+        ) {
+          emitInstallProgress(
+            "Windows denied part of setup. Retrying once with elevated permissions...",
+            "Waiting for Windows permission",
+            4,
+          );
+          try {
+            fs.writeFileSync(INSTALL_PROGRESS_LOG, "", "utf8");
+            lastReadPos = 0;
+          } catch (_) {}
+          result = await runElevatedPowerShell(scriptPath, setupArgs);
+        }
+      }
     } finally {
       if (result && !result.success && result.error !== "cancelled") {
         progressTail = readInstallProgressTail();
@@ -440,7 +719,12 @@ async function handleInstallEngine(installPath) {
 }
 
 function handleCancelInstall() {
-  if (!currentInstallProcess) return { success: true };
+  if (!currentInstallProcess) {
+    if (currentInstallActive) {
+      currentInstallCancelled = true;
+    }
+    return { success: true };
+  }
   currentInstallCancelled = true;
   const pid = currentInstallProcess.pid;
   // Kill the outer powershell process

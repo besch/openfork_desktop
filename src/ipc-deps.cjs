@@ -1,7 +1,6 @@
 "use strict";
 
 const { execFile } = require("child_process");
-const { BrowserWindow, dialog } = require("electron");
 const os = require("os");
 
 const dockerEngine = require("./docker-engine.cjs");
@@ -16,35 +15,6 @@ function init({ autoUpdater, openExternal, getIsCompactionInProgress }) {
   _autoUpdater = autoUpdater;
   _openExternal = openExternal;
   _getIsCompactionInProgress = getIsCompactionInProgress;
-}
-
-async function confirmSensitiveAction(event, { title, message, detail }) {
-  const window = event?.sender
-    ? BrowserWindow.fromWebContents(event.sender)
-    : null;
-  const options = {
-    type: "warning",
-    buttons: ["Continue", "Cancel"],
-    defaultId: 1,
-    cancelId: 1,
-    noLink: true,
-    title,
-    message,
-    detail,
-  };
-  const result =
-    window && !window.isDestroyed()
-      ? await dialog.showMessageBox(window, options)
-      : await dialog.showMessageBox(options);
-  return result.response === 0;
-}
-
-function cancelledSensitiveAction() {
-  return {
-    success: false,
-    error: "ACTION_CANCELLED",
-    message: "Action cancelled.",
-  };
 }
 
 function register(ipcMain) {
@@ -83,14 +53,7 @@ function register(ipcMain) {
 
   // --- ENGINE INSTALL ---
 
-  ipcMain.handle("deps:install-engine", async (event, installPath) => {
-    const confirmed = await confirmSensitiveAction(event, {
-      title: "Install OpenFork Engine",
-      message: "Install the OpenFork WSL engine?",
-      detail:
-        "This runs the OpenFork engine installer and may request elevated system permissions.",
-    });
-    if (!confirmed) return cancelledSensitiveAction();
+  ipcMain.handle("deps:install-engine", async (_event, installPath) => {
     return engineInstall.handleInstallEngine(installPath);
   });
 

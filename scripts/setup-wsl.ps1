@@ -7,14 +7,25 @@
 param (
     [switch]$InstallOnly,
     [string]$InstallPath,
-    [string]$DistroName = "OpenFork"
+    [string]$DistroName = "OpenFork",
+    [string]$ProgressLog
 )
 
 $ErrorActionPreference = "Stop"
 $VerbosePreference = "Continue"
 
-$progressLog = "C:\Windows\Temp\openfork_install_progress.log"
-[System.IO.File]::WriteAllText($progressLog, "", [System.Text.Encoding]::UTF8)
+$defaultProgressLog = "C:\Windows\Temp\openfork_install_progress.log"
+$progressLog = if ([string]::IsNullOrWhiteSpace($ProgressLog)) { $defaultProgressLog } else { $ProgressLog }
+try {
+    $progressLogDir = Split-Path -Path $progressLog -Parent
+    if ($progressLogDir -and -not (Test-Path -LiteralPath $progressLogDir)) {
+        New-Item -ItemType Directory -Path $progressLogDir -Force | Out-Null
+    }
+    [System.IO.File]::WriteAllText($progressLog, "", [System.Text.Encoding]::UTF8)
+} catch {
+    $progressLog = $defaultProgressLog
+    try { [System.IO.File]::WriteAllText($progressLog, "", [System.Text.Encoding]::UTF8) } catch { }
+}
 
 function Write-Log {
     param([string]$Message)
@@ -128,24 +139,39 @@ function Enable-SparseVhd {
     }
 }
 
-if (-not (Check-IsAdmin)) {
-    Write-Log "Need Administrator privileges to install WSL features. Please re-run as Administrator."
-    Exit 1
-}
-
 Write-Log "Checking Windows Subsystem for Linux (WSL) status..."
+$isAdmin = Check-IsAdmin
 $wslFeature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -ErrorAction SilentlyContinue
 $vmpFeature = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -ErrorAction SilentlyContinue
 
 $requiresReboot = $false
+$featuresToEnable = @()
 
 if ($null -ne $wslFeature -and $wslFeature.State -ne "Enabled") {
+    $featuresToEnable += "Microsoft-Windows-Subsystem-Linux"
+}
+
+if ($null -ne $vmpFeature -and $vmpFeature.State -ne "Enabled") {
+    $featuresToEnable += "VirtualMachinePlatform"
+}
+
+if ($featuresToEnable.Count -gt 0 -and -not $isAdmin) {
+    Write-Log "Administrator privileges are required to enable WSL features: $($featuresToEnable -join ', ')."
+    Write-Output "ELEVATION_REQUIRED"
+    Exit 1
+}
+
+if ($featuresToEnable.Count -eq 0 -and -not $isAdmin) {
+    Write-Log "WSL features are already enabled. Continuing without Administrator privileges."
+}
+
+if ($featuresToEnable -contains "Microsoft-Windows-Subsystem-Linux") {
     Write-Log "Enabling WSL feature..."
     Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart
     $requiresReboot = $true
 }
 
-if ($null -ne $vmpFeature -and $vmpFeature.State -ne "Enabled") {
+if ($featuresToEnable -contains "VirtualMachinePlatform") {
     Write-Log "Enabling Virtual Machine Platform feature..."
     Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart
     $requiresReboot = $true
@@ -287,6 +313,24 @@ Enable-SparseVhd -Name $DistroName
 
 Write-Log "Ensuring WSL is running and executing setup script..."
 
+function ConvertTo-WslPath {
+    param([string]$WindowsPath)
+
+    if ($WindowsPath -match '^([A-Za-z]):\\(.*)$') {
+        $drive = $matches[1].ToLowerInvariant()
+        $relativePath = $matches[2].Replace('\', '/')
+        return "/mnt/$drive/$relativePath"
+    }
+
+    return "/mnt/c/Windows/Temp/openfork_install_progress.log"
+}
+
+function ConvertTo-BashSingleQuotedString {
+    param([string]$Value)
+
+    return "'" + $Value.Replace("'", "'\''") + "'"
+}
+
 $script = @'
 #!/bin/bash
 set -eo pipefail
@@ -294,7 +338,7 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 
-WLOG=/mnt/c/Windows/Temp/openfork_install_progress.log
+WLOG=__OPENFORK_PROGRESS_LOG__
 log() {
     local ts
     ts=$(date '+%H:%M:%S')
@@ -414,6 +458,12 @@ log "[Linux] OpenFork AI Engine Setup Complete."
 
 echo '{"exclude":["/**"]}' | sudo tee /pyrightconfig.json > /dev/null
 '@
+
+$wslProgressLogPath = ConvertTo-WslPath -WindowsPath $progressLog
+$script = $script.Replace(
+    "__OPENFORK_PROGRESS_LOG__",
+    (ConvertTo-BashSingleQuotedString -Value $wslProgressLogPath)
+)
 
 Write-Log "Writing setup script to temp file..."
 $tempScriptDir = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)) "OpenFork\Temp"
