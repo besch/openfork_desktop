@@ -407,9 +407,9 @@ async function hardenWslDockerDaemonBinding(wslDistro) {
   _lastHardenCheckTs = now;
 
   const hardenCommand = [
-    "if [ -f /etc/openfork-managed ] && grep -q 'tcp://0.0.0.0:2375' /etc/docker/daemon.json 2>/dev/null; then",
+    "if [ -f /etc/openfork-managed ] && { grep -q 'tcp://0.0.0.0:2375' /etc/docker/daemon.json 2>/dev/null || ! grep -Eq '\"max-concurrent-uploads\"[[:space:]]*:' /etc/docker/daemon.json 2>/dev/null; }; then",
     "mkdir -p /etc/docker;",
-    "printf '%s\\n' '{\"hosts\": [\"tcp://127.0.0.1:2375\", \"unix:///var/run/docker.sock\"], \"tls\": false}' > /etc/docker/daemon.json;",
+    "printf '%s\\n' '{\"hosts\": [\"tcp://127.0.0.1:2375\", \"unix:///var/run/docker.sock\"], \"tls\": false, \"max-concurrent-uploads\": 2}' > /etc/docker/daemon.json;",
     "(systemctl restart docker || service docker restart || true) >/dev/null 2>&1;",
     "echo hardened;",
     "fi",
@@ -424,7 +424,7 @@ async function hardenWslDockerDaemonBinding(wslDistro) {
 
   if (result.success && result.output.includes("hardened")) {
     console.warn(
-      `Rewrote OpenFork WSL Docker daemon binding for '${wslDistro}' to localhost-only TCP.`,
+      `Rewrote OpenFork WSL Docker daemon config for '${wslDistro}' to localhost-only TCP with limited upload concurrency.`,
     );
     await sleep(1000);
   }
