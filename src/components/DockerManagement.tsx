@@ -125,6 +125,37 @@ export const DockerManagement = memo(() => {
     return "Docker is not ready right now.";
   }, []);
 
+  const clearTransientDockerError = useCallback(() => {
+    setError((current) => {
+      if (!current) return current;
+
+      const normalized = current.toLowerCase();
+      if (
+        normalized.includes("api is not reachable from windows") ||
+        normalized.includes("disk compaction") ||
+        normalized.includes("disk is locked by windows") ||
+        normalized.includes("docker will reconnect")
+      ) {
+        return null;
+      }
+
+      return current;
+    });
+  }, []);
+
+  const isTransientDockerProbeDuringActiveWork = useCallback(
+    (nextStatus: DockerStatus) => {
+      if (dockerPullProgress === null) return false;
+
+      return (
+        nextStatus.error === "DOCKER_API_UNREACHABLE" ||
+        nextStatus.error === "WSL_COMPACTING" ||
+        nextStatus.error === "WSL_VHDX_LOCKED"
+      );
+    },
+    [dockerPullProgress],
+  );
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -171,6 +202,11 @@ export const DockerManagement = memo(() => {
         imagesResult.success &&
         imagesResult.data &&
         imagesResult.data.length > 0;
+      const hasHealthyWslDockerCli =
+        nextDockerStatus.error === "DOCKER_API_UNREACHABLE" &&
+        nextDockerStatus.enginePreference === "wsl" &&
+        containersResult.success &&
+        imagesResult.success;
 
       if (!nextDockerStatus.running && !hasRunningContainers && !hasListedImages) {
         if (diskResult.success) setDiskSpace(diskResult.data);
@@ -179,6 +215,38 @@ export const DockerManagement = memo(() => {
           nextDockerStatus.error === "WSL_COMPACTING" &&
           reclaimCompleted
         ) {
+          setError(null);
+          return;
+        }
+
+        if (hasHealthyWslDockerCli) {
+          if (imagesResult.data) {
+            setImages(imagesResult.data);
+          } else {
+            setImages([]);
+          }
+
+          if (containersResult.data) {
+            setDockerContainers(containersResult.data);
+          } else {
+            setDockerContainers([]);
+          }
+          setError(null);
+          return;
+        }
+
+        if (isTransientDockerProbeDuringActiveWork(nextDockerStatus)) {
+          if (imagesResult.success && imagesResult.data) {
+            setImages(imagesResult.data);
+          } else {
+            setImages([]);
+          }
+
+          if (containersResult.success && containersResult.data) {
+            setDockerContainers(containersResult.data);
+          } else {
+            setDockerContainers([]);
+          }
           setError(null);
           return;
         }
@@ -216,6 +284,7 @@ export const DockerManagement = memo(() => {
     }
   }, [
     describeDockerState,
+    isTransientDockerProbeDuringActiveWork,
     setAutoCompactStatus,
     setDiskSpaceError,
     setDockerContainers,
@@ -235,12 +304,13 @@ export const DockerManagement = memo(() => {
     }
   }, [dockerPullProgress, status, fetchData]);
 
-  // Clear stale disk-space error when a new download starts (space was freed).
+  // Clear stale transient Docker/disk-space errors when a new download starts.
   useEffect(() => {
     if (dockerPullProgress !== null) {
+      clearTransientDockerError();
       setDiskSpaceError(null);
     }
-  }, [dockerPullProgress, setDiskSpaceError]);
+  }, [clearTransientDockerError, dockerPullProgress, setDiskSpaceError]);
 
   // Clear Docker-related errors when the client reaches a healthy state.
   useEffect(() => {
@@ -264,17 +334,26 @@ export const DockerManagement = memo(() => {
         (previousStatus?.compactInProgress ||
           (previousStatus !== null && previousStatus.phase !== "completed"));
 
+      if (nextStatus.compactInProgress) {
+        clearTransientDockerError();
+      }
+
       if (completedAfterActiveCompaction) {
+        setError(null);
         fetchData();
       }
     });
     return cleanup;
-  }, [fetchData]);
+  }, [clearTransientDockerError, fetchData]);
 
   // Refresh the Docker tab when manual disk reclaim completes.
   useEffect(() => {
     let completionRefreshTimer: number | undefined;
     const cleanup = window.electronAPI.onReclaimStatus((status) => {
+      if (status.inProgress || status.settling) {
+        clearTransientDockerError();
+      }
+
       if (status.phase === "completed") {
         setError(null);
         fetchData();
@@ -290,7 +369,7 @@ export const DockerManagement = memo(() => {
         window.clearTimeout(completionRefreshTimer);
       }
     };
-  }, [fetchData]);
+  }, [clearTransientDockerError, fetchData]);
 
   // Auto-refresh when the active Docker engine changes.
   useEffect(() => {
@@ -314,11 +393,13 @@ export const DockerManagement = memo(() => {
   useEffect(() => {
     const cleanupContainers = window.electronAPI.onDockerContainersUpdate(
       (data) => {
+        clearTransientDockerError();
         setDockerContainers(data);
       },
     );
 
     const cleanupImages = window.electronAPI.onDockerImagesUpdate((data) => {
+      clearTransientDockerError();
       setImages(data);
     });
 
@@ -326,7 +407,7 @@ export const DockerManagement = memo(() => {
       cleanupContainers();
       cleanupImages();
     };
-  }, [setDockerContainers]);
+  }, [clearTransientDockerError, setDockerContainers]);
 
   const showConfirmDialog = (
     title: string,
