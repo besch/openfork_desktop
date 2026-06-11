@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loader } from "@/components/ui/loader";
 import { Modal } from "@/components/ui/modal";
@@ -14,6 +20,7 @@ import {
   Download,
   AlertTriangle,
   Settings,
+  MoreHorizontal,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useClientStore } from "@/store";
@@ -849,20 +856,35 @@ export const DockerManagement = memo(() => {
             </span>
           </CardTitle>
           {images.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleRemoveAllImages}
-              disabled={actionLoading !== null}
-              className="h-auto min-h-8 whitespace-normal text-[10px] font-black uppercase tracking-widest px-4"
-            >
-              {actionLoading === "remove-all" ? (
-                <Loader size="xs" className="mr-2" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5 mr-2" />
-              )}
-              Delete All Docker Images
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={actionLoading !== null}
+                  aria-label="Open Docker image actions"
+                  title="Open Docker image actions"
+                  className="rounded-lg bg-white/5 hover:bg-white/10 h-8 w-8 p-0 border border-white/5 transition-all text-white shadow-sm"
+                >
+                  {actionLoading === "remove-all" ? (
+                    <Loader size="xs" />
+                  ) : (
+                    <MoreHorizontal className="h-4 w-4" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => handleRemoveAllImages()}
+                  disabled={actionLoading !== null}
+                  className="h-8 text-[11px] font-semibold normal-case tracking-normal"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete all Docker images
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </CardHeader>
         <CardContent className="px-4 pb-4 relative">
