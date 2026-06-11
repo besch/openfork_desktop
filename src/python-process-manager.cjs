@@ -766,14 +766,12 @@ class PythonProcessManager {
       const configOverridesPath = path.join(this.userDataPath, "config_overrides.json");
       spawnEnv.OPENFORK_CONFIG_OVERRIDES_PATH = configOverridesPath;
       if (process.platform === "win32") {
-        // Only propagate an explicit Docker endpoint.
-        // When OPENFORK_DOCKER_HOST is not set (Docker Desktop native mode) leave
-        // DOCKER_HOST unset so the Python Docker SDK uses named-pipe discovery.
-        // Setting it to tcp://127.0.0.1:2375 as a blanket fallback would silently
-        // route the Python client to the WSL Docker daemon even when Docker Desktop
-        // is the active engine, causing DockerManagement to show a different daemon.
-        const dockerHost =
-          process.env.OPENFORK_DOCKER_HOST || process.env.DOCKER_HOST;
+        // Production Windows jobs must run against the dedicated OpenFork WSL
+        // daemon. Do not inherit Docker Desktop context/host settings from the
+        // parent shell; dockerEngine has already verified OPENFORK_DOCKER_HOST.
+        delete spawnEnv.DOCKER_CONTEXT;
+        delete spawnEnv.DOCKER_HOST;
+        const dockerHost = process.env.OPENFORK_DOCKER_HOST;
         if (dockerHost) {
           spawnEnv.DOCKER_HOST = dockerHost;
         }
