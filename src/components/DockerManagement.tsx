@@ -873,15 +873,15 @@ export const DockerManagement = memo(() => {
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => handleRemoveAllImages()}
                   disabled={actionLoading !== null}
-                  className="h-8 text-[11px] font-semibold normal-case tracking-normal"
+                  className="font-black uppercase tracking-widest"
                 >
-                  <Trash2 className="size-3.5" />
-                  Delete all Docker images
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete All Docker Images
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
