@@ -39,8 +39,11 @@ let lastLargeDownloadCompletedTs = 0;
 // (10 seconds) was too aggressive and fired recovery during normal post-download
 // I/O, stopping the Python client unnecessarily.
 // During the first 3 minutes after a large download, the threshold is raised to
-// 18 polls to give Docker extra settling time.
+// 18 polls to give Docker extra settling time. While a pull is active, use an
+// even wider threshold because the daemon can stop answering health checks
+// during layer extraction while the Python client is still making progress.
 const DOCKER_API_RECOVERY_FAILURES = 6;
+const DOCKER_API_RECOVERY_FAILURES_ACTIVE_DOWNLOAD = 24;
 const DOCKER_API_RECOVERY_FAILURES_POST_DOWNLOAD = 18;
 const POST_DOWNLOAD_GRACE_MS = 3 * 60 * 1000;
 const WSL_RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
@@ -62,6 +65,14 @@ function isCompactionInProgress() {
     !!_getIsManualReclaimInProgress?.() ||
     !!_getIsPostReclaimSettling?.()
   );
+}
+
+function hasActiveDockerDownload() {
+  try {
+    return !!_getPythonManager?.()?.hasActiveDownload?.();
+  } catch {
+    return false;
+  }
 }
 
 function notifyWslRecoveryStatus(payload) {
@@ -149,8 +160,10 @@ function shouldRecoverWslDocker() {
   if (!pythonManager?.isRunning?.()) return false;
   if (!pythonManager.getLastService?.()) return false;
 
-  const threshold =
-    Date.now() - lastLargeDownloadCompletedTs < POST_DOWNLOAD_GRACE_MS
+  const activeDownload = hasActiveDockerDownload();
+  const threshold = activeDownload
+    ? DOCKER_API_RECOVERY_FAILURES_ACTIVE_DOWNLOAD
+    : Date.now() - lastLargeDownloadCompletedTs < POST_DOWNLOAD_GRACE_MS
       ? DOCKER_API_RECOVERY_FAILURES_POST_DOWNLOAD
       : DOCKER_API_RECOVERY_FAILURES;
 
@@ -324,9 +337,10 @@ async function checkDockerUpdates() {
       return;
     }
 
+    const activeDownload = hasActiveDockerDownload();
     const dockerStatus = await dockerEngine.resolveDockerStatus({
       allowNativeStart: false,
-      wslHostTimeoutMs: 5000,
+      wslHostTimeoutMs: activeDownload ? 12000 : 5000,
     });
     _cachedRoutingResult = dockerStatus;
     _cachedRoutingTimestamp = Date.now();
@@ -405,6 +419,12 @@ async function checkDockerUpdates() {
       ) {
         dockerMonitorConsecutiveFailures = 0;
         wslDistroMissingFailures = 0;
+      } else if (activeDownload) {
+        dockerMonitorConsecutiveFailures = 0;
+        wslDistroMissingFailures = 0;
+        console.log(
+          `Docker monitor: Docker API is busy during active image download (error: ${dockerStatus.error || "none"}). Keeping current display.`,
+        );
       } else {
         dockerMonitorConsecutiveFailures++;
         if (
