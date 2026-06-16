@@ -80,6 +80,13 @@ interface UpdateState {
   progress: UpdateProgress | null;
   downloaded: boolean;
   installing: boolean;
+  downloadRequested: boolean;
+  waitingForJobs: boolean;
+  activeJobs: Array<{
+    id?: string | null;
+    service_type?: string | null;
+    workflow_type?: string | null;
+  }>;
   error: UpdateError | null;
   checking: boolean;
   lastCheckedAt: string | null;
@@ -333,6 +340,7 @@ interface ElectronAPI {
   ) => CleanupFn;
 
   // Auto Updater - return cleanup functions
+  onUpdateState: (callback: (state: UpdateState) => void) => CleanupFn;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => CleanupFn;
   onUpdateProgress: (callback: (progress: UpdateProgress) => void) => CleanupFn;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => CleanupFn;
@@ -345,8 +353,8 @@ interface ElectronAPI {
   checkUpdatePolicy: () => Promise<RequiredUpdateInfo | null>;
   checkForUpdates: () => Promise<UpdateState>;
   getUpdateState: () => Promise<UpdateState>;
-  downloadUpdate: () => Promise<void>;
-  installUpdate: () => Promise<void>;
+  downloadUpdate: () => Promise<UpdateState>;
+  installUpdate: () => Promise<UpdateState>;
 
   // Settings persistence
   loadSettings: () => Promise<Record<string, unknown> | null>;

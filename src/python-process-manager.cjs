@@ -100,6 +100,11 @@ class PythonProcessManager {
     return this._activeJobIds.size > 0;
   }
 
+  /** Active job details for user-facing wait states such as update install. */
+  getActiveJobs() {
+    return Array.from(this._activeJobs.values());
+  }
+
   /** True if a Docker image download is currently in flight. */
   hasQueuedDownloads() {
     return this.currentDownloadImage !== null || this._downloadActivity.size > 0;
@@ -592,6 +597,31 @@ class PythonProcessManager {
       return true;
     } catch (error) {
       console.error("Error writing REQUEST_STOP to Python process stdin:", error);
+      return false;
+    }
+  }
+
+  _requestDrainAfterActiveJob() {
+    if (!this.pythonProcess || !this.pythonProcess.stdin.writable) {
+      console.warn(
+        "Cannot send DRAIN_AFTER_ACTIVE_JOB command: Python process not running or stdin not writable.",
+      );
+      return false;
+    }
+
+    const command = {
+      type: "DRAIN_AFTER_ACTIVE_JOB",
+    };
+
+    try {
+      this.pythonProcess.stdin.write(JSON.stringify(command) + "\n");
+      console.log("Sent DRAIN_AFTER_ACTIVE_JOB command to Python process.");
+      return true;
+    } catch (error) {
+      console.error(
+        "Error writing DRAIN_AFTER_ACTIVE_JOB to Python process stdin:",
+        error,
+      );
       return false;
     }
   }
@@ -1373,6 +1403,62 @@ class PythonProcessManager {
           }, 1000);
         }
       }, 15000);
+    });
+  }
+
+  drainAndStopForUpdate() {
+    return new Promise((resolve) => {
+      if (!this.pythonProcess) {
+        this.mainWindow.webContents.send("openfork_client:status", "stopped");
+        return resolve();
+      }
+
+      const drainRequested = this._requestDrainAfterActiveJob();
+      if (!drainRequested) {
+        this.stop().then(resolve);
+        return;
+      }
+
+      let resolved = false;
+      let idleSince = this.hasActiveJob() ? null : Date.now();
+      let fallbackStopStarted = false;
+
+      const finish = () => {
+        if (resolved) return;
+        resolved = true;
+        clearInterval(idleFallbackTimer);
+        this.pythonProcess?.removeListener("close", finish);
+        resolve();
+      };
+
+      const idleFallbackTimer = setInterval(() => {
+        if (resolved) return;
+        if (!this.pythonProcess) {
+          finish();
+          return;
+        }
+
+        if (this.hasActiveJob()) {
+          idleSince = null;
+          return;
+        }
+
+        if (idleSince === null) {
+          idleSince = Date.now();
+          return;
+        }
+
+        if (!fallbackStopStarted && Date.now() - idleSince > 30000) {
+          fallbackStopStarted = true;
+          console.warn(
+            "DGN client did not exit after update drain while idle; requesting normal stop.",
+          );
+          this.stop().then(finish);
+        }
+      }, 1000);
+      idleFallbackTimer.unref?.();
+
+      this.pythonProcess.once("close", finish);
     });
   }
 

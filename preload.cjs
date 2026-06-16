@@ -163,6 +163,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     createListener("auto-compact:status", callback),
 
   // Auto Updater - now return cleanup functions
+  onUpdateState: (callback) => createListener("update:state", callback),
   onUpdateAvailable: (callback) => createListener("update:available", callback),
   onUpdateProgress: (callback) => createListener("update:progress", callback),
   onUpdateDownloaded: (callback) =>

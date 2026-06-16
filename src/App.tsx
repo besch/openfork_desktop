@@ -27,6 +27,10 @@ import {
   History,
   DollarSign,
   HardDrive,
+  CheckCircle2,
+  ExternalLink,
+  RefreshCw,
+  ShieldAlert,
 } from "lucide-react";
 import {
   Popover,
@@ -83,8 +87,31 @@ type RequiredUpdateInfo = {
   min_protocol_version?: number | null;
 };
 
+type AppUpdateInfo = {
+  version?: string;
+  releaseNotes?: string | null;
+};
+
 type UpdateProgressInfo = {
   percent: number;
+};
+
+type ActiveUpdateJob = {
+  id?: string | null;
+  service_type?: string | null;
+  workflow_type?: string | null;
+};
+
+type AppUpdateState = {
+  available: AppUpdateInfo | null;
+  progress: UpdateProgressInfo | null;
+  downloaded: boolean;
+  installing: boolean;
+  downloadRequested?: boolean;
+  waitingForJobs?: boolean;
+  activeJobs?: ActiveUpdateJob[];
+  checking?: boolean;
+  error?: { message: string; code?: string } | null;
 };
 
 type WslDistroMissingNotice = {
@@ -95,50 +122,64 @@ type WslDistroMissingNotice = {
 
 function RequiredUpdateScreen({
   update,
-  progress,
-  downloaded,
-  installing,
+  updateState,
+  actionBusy,
+  onDownload,
+  onInstall,
+  onOpenReleaseNotes,
 }: {
   update: RequiredUpdateInfo;
-  progress: UpdateProgressInfo | null;
-  downloaded: boolean;
-  installing: boolean;
+  updateState: AppUpdateState | null;
+  actionBusy: "download" | "install" | null;
+  onDownload: () => void;
+  onInstall: () => void;
+  onOpenReleaseNotes?: () => void;
 }) {
-  const progressPercent = Math.max(
-    0,
-    Math.min(100, Math.round(progress?.percent ?? 0)),
-  );
+  const isDownloading =
+    updateState?.downloadRequested === true || !!updateState?.progress;
+  const downloaded = updateState?.downloaded === true;
+  const installing = updateState?.installing === true;
+  const waitingForJobs = updateState?.waitingForJobs === true;
+  const activeJobCount = updateState?.activeJobs?.length ?? 0;
   const latestVersion = update.latest_version
     ? `Version ${update.latest_version}`
-    : "Latest OpenFork";
-  const phase = installing
-    ? "Installing update"
+    : updateState?.available?.version
+      ? `Version ${updateState.available.version}`
+      : "Latest OpenFork";
+  const statusTitle = installing
+    ? waitingForJobs
+      ? "Waiting for generation to finish"
+      : "Starting installer"
     : downloaded
-      ? "Starting installer"
-      : progress
-        ? "Downloading update"
-        : "Preparing update";
-  const phaseDetail = installing
-    ? "OpenFork will restart automatically when the installer finishes."
+      ? "Ready to install"
+      : isDownloading
+        ? "Downloading in background"
+        : updateState?.checking
+          ? "Checking for update"
+          : "Update available";
+  const statusDetail = installing
+    ? waitingForJobs
+      ? activeJobCount > 0
+        ? `${activeJobCount} generation job${activeJobCount === 1 ? "" : "s"} still running. The installer will start when work is idle.`
+        : "The current generation is winding down. The installer will start automatically."
+      : "OpenFork will restart when the installer finishes."
     : downloaded
-      ? "The installer is opening now."
-      : "OpenFork is downloading the required desktop update automatically.";
-  const barPercent = installing || downloaded ? 100 : progress ? progressPercent : 8;
+      ? "Install now, or keep this version open until you are ready to restart."
+      : isDownloading
+        ? "You can leave this window open. OpenFork will notify you when the installer is ready."
+        : "Download the update first. Installation starts only after you approve it.";
+  const errorMessage = updateState?.error?.message;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8 text-white">
-      <div className="w-full max-w-2xl rounded-lg border border-red-500/25 bg-surface/80 p-6 shadow-2xl shadow-black/30">
+      <div className="w-full max-w-2xl rounded-lg border border-red-500/25 bg-surface/85 p-6 shadow-2xl shadow-black/30">
         <div className="flex items-start gap-4">
-          <img
-            src="./logo.png"
-            alt="OpenFork logo"
-            width={56}
-            height={56}
-            className="h-14 w-14 shrink-0 object-contain"
-          />
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-red-300/25 bg-red-500/10">
+            <ShieldAlert className="h-7 w-7 text-red-200" />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-black uppercase tracking-widest text-red-300">
-              Required Security Update
+              Required Update
             </p>
             <h1 className="mt-2 text-2xl font-black tracking-normal">
               {latestVersion} is required
@@ -177,18 +218,77 @@ function RequiredUpdateScreen({
           </div>
         </div>
 
-        <div className="mt-5 space-y-2">
-          <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-white/45">
-            <span>{phase}</span>
-            <span>{installing || downloaded ? "Ready" : `${barPercent}%`}</span>
+        <div className="mt-5 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-black/20">
+              {installing || isDownloading || updateState?.checking ? (
+                <Loader size="sm" variant="primary" className="p-0" />
+              ) : downloaded ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+              ) : (
+                <Download className="h-4 w-4 text-blue-300" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-black uppercase tracking-widest text-white/55">
+                {statusTitle}
+              </p>
+              <p className="mt-1 text-sm font-medium leading-6 text-white/72">
+                {statusDetail}
+              </p>
+              {errorMessage && (
+                <p className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200">
+                  {errorMessage}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-red-300 transition-[width] duration-200"
-              style={{ width: `${barPercent}%` }}
-            />
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {!downloaded && !installing && (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={onDownload}
+                disabled={isDownloading || actionBusy === "download"}
+                className="h-9 px-4 text-xs font-black uppercase tracking-widest"
+              >
+                {isDownloading || actionBusy === "download" ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {isDownloading ? "Downloading" : "Download Update"}
+              </Button>
+            )}
+            {downloaded && (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={onInstall}
+                disabled={installing || actionBusy === "install"}
+                className="h-9 px-4 text-xs font-black uppercase tracking-widest"
+              >
+                {installing || actionBusy === "install" ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                {waitingForJobs ? "Waiting" : "Install and Restart"}
+              </Button>
+            )}
+            {onOpenReleaseNotes && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onOpenReleaseNotes}
+                className="h-9 px-3 text-xs font-bold text-white/70"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Release Notes
+              </Button>
+            )}
           </div>
-          <p className="text-xs font-medium text-white/55">{phaseDetail}</p>
         </div>
       </div>
     </div>
@@ -288,12 +388,11 @@ function App() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [requiredUpdate, setRequiredUpdate] =
     useState<RequiredUpdateInfo | null>(null);
-  const [requiredUpdateProgress, setRequiredUpdateProgress] =
-    useState<UpdateProgressInfo | null>(null);
-  const [requiredUpdateDownloaded, setRequiredUpdateDownloaded] =
-    useState(false);
-  const [requiredUpdateInstalling, setRequiredUpdateInstalling] =
-    useState(false);
+  const [appUpdateState, setAppUpdateState] =
+    useState<AppUpdateState | null>(null);
+  const [updateActionBusy, setUpdateActionBusy] = useState<
+    "download" | "install" | null
+  >(null);
 
   const handleLogout = () => {
     window.electronAPI.logout();
@@ -313,33 +412,28 @@ function App() {
         console.error("Failed to check required update policy:", error);
       });
 
+    window.electronAPI
+      .getUpdateState()
+      .then((state) => {
+        if (mounted) setAppUpdateState(state);
+      })
+      .catch((error) => {
+        console.error("Failed to read update state:", error);
+      });
+
     const cleanupRequired = window.electronAPI.onRequiredUpdate((update) => {
       if (update?.required) {
         setRequiredUpdate(update);
-        setRequiredUpdateInstalling(false);
-        setRequiredUpdateDownloaded(false);
-        setRequiredUpdateProgress(null);
       }
     });
-    const cleanupProgress = window.electronAPI.onUpdateProgress((progress) => {
-      setRequiredUpdateProgress(progress);
-    });
-    const cleanupDownloaded = window.electronAPI.onUpdateDownloaded(() => {
-      setRequiredUpdateDownloaded(true);
-      setRequiredUpdateProgress(null);
-    });
-    const cleanupInstalling = window.electronAPI.onUpdateInstalling(() => {
-      setRequiredUpdateInstalling(true);
-      setRequiredUpdateDownloaded(true);
-      setRequiredUpdateProgress(null);
+    const cleanupState = window.electronAPI.onUpdateState((state) => {
+      setAppUpdateState(state);
     });
 
     return () => {
       mounted = false;
       cleanupRequired();
-      cleanupProgress();
-      cleanupDownloaded();
-      cleanupInstalling();
+      cleanupState();
     };
   }, []);
 
@@ -352,14 +446,7 @@ function App() {
       ReturnType<typeof window.electronAPI.getUpdateState>
     > | null) => {
       if (cancelled || !state) return;
-      setRequiredUpdateProgress(state.progress);
-      setRequiredUpdateDownloaded(state.downloaded);
-      setRequiredUpdateInstalling(state.installing);
-      if (state.downloaded && !state.installing) {
-        window.electronAPI.installUpdate().catch((error) => {
-          console.error("Failed to start required update install:", error);
-        });
-      }
+      setAppUpdateState(state);
     };
 
     window.electronAPI
@@ -373,13 +460,46 @@ function App() {
       .checkForUpdates()
       .then(applyUpdateState)
       .catch((error) => {
-        console.error("Failed to start required update download:", error);
+        console.error("Failed to check for required app update:", error);
       });
 
     return () => {
       cancelled = true;
     };
   }, [requiredUpdate?.required]);
+
+  const handleRequiredUpdateDownload = () => {
+    setUpdateActionBusy("download");
+    window.electronAPI
+      .downloadUpdate()
+      .then((state) => {
+        if (state) setAppUpdateState(state);
+      })
+      .catch((error) => {
+        console.error("Failed to download update:", error);
+      })
+      .finally(() => {
+        setUpdateActionBusy(null);
+      });
+  };
+
+  const handleRequiredUpdateInstall = () => {
+    setUpdateActionBusy("install");
+    window.electronAPI
+      .installUpdate()
+      .then((state) => {
+        if (state) setAppUpdateState(state);
+        setUpdateActionBusy(null);
+      })
+      .catch((error) => {
+        console.error("Failed to install update:", error);
+        setUpdateActionBusy(null);
+      });
+  };
+
+  const handleOpenRequiredReleaseNotes = requiredUpdate?.release_notes_url
+    ? () => window.electronAPI.openExternal(requiredUpdate.release_notes_url!)
+    : undefined;
 
   // Check dependencies on startup
   useEffect(() => {
@@ -591,9 +711,11 @@ function App() {
     return (
       <RequiredUpdateScreen
         update={requiredUpdate}
-        progress={requiredUpdateProgress}
-        downloaded={requiredUpdateDownloaded}
-        installing={requiredUpdateInstalling}
+        updateState={appUpdateState}
+        actionBusy={updateActionBusy}
+        onDownload={handleRequiredUpdateDownload}
+        onInstall={handleRequiredUpdateInstall}
+        onOpenReleaseNotes={handleOpenRequiredReleaseNotes}
       />
     );
   }

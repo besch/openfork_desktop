@@ -7,12 +7,10 @@ const dockerEngine = require("./docker-engine.cjs");
 const wslUtils = require("./wsl-utils.cjs");
 const engineInstall = require("./engine-install.cjs");
 
-let _autoUpdater;
 let _openExternal;
 let _getIsCompactionInProgress;
 
-function init({ autoUpdater, openExternal, getIsCompactionInProgress }) {
-  _autoUpdater = autoUpdater;
+function init({ openExternal, getIsCompactionInProgress }) {
   _openExternal = openExternal;
   _getIsCompactionInProgress = getIsCompactionInProgress;
 }
@@ -330,16 +328,6 @@ function register(ipcMain) {
     return { success: true };
   });
 
-  // --- AUTO UPDATER ---
-
-  ipcMain.handle("update:download", () => {
-    _autoUpdater.downloadUpdate();
-  });
-
-  ipcMain.handle("update:install", async () => {
-    _autoUpdater.quitAndInstall(false, true);
-    return { success: true };
-  });
 }
 
 module.exports = { init, register };

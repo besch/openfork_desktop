@@ -57,6 +57,10 @@ function execFilePromise(command, args, options = {}) {
   });
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * PATCH /api/dgn/provider/config to flip the transient `paused_for_compaction`
  * flag. Called by AutoCompactManager around its compaction window so the
@@ -345,11 +349,15 @@ let appUpdateState = {
   progress: null,
   downloaded: false,
   installing: false,
+  downloadRequested: false,
+  waitingForJobs: false,
+  activeJobs: [],
   error: null,
   checking: false,
   lastCheckedAt: null,
 };
 let appUpdateCheckPromise = null;
+let appUpdateDownloadPromise = null;
 let appUpdateCheckInterval = null;
 let appUpdateInstallStarted = false;
 let rendererSecurityHeadersInstalled = false;
@@ -421,6 +429,7 @@ function setAppUpdateState(patch) {
     ...appUpdateState,
     ...patch,
   };
+  sendAppUpdateEvent("update:state", appUpdateState);
   return appUpdateState;
 }
 
@@ -437,11 +446,79 @@ function normalizeAppUpdateError(err) {
   };
 }
 
-function installDownloadedAppUpdate() {
-  if (!app.isPackaged || appUpdateInstallStarted) return;
+function getActiveUpdateJobs() {
+  if (!pythonManager?.getActiveJobs) return [];
+  return pythonManager.getActiveJobs();
+}
+
+async function waitForDgnClientToDrainForUpdate() {
+  if (!pythonManager || !pythonManager.isRunning()) return;
+
+  const drainPromise =
+    typeof pythonManager.drainAndStopForUpdate === "function"
+      ? pythonManager.drainAndStopForUpdate()
+      : pythonManager.stop();
+
+  while (true) {
+    const finished = await Promise.race([
+      drainPromise.then(() => true),
+      delay(1000).then(() => false),
+    ]);
+    if (finished) break;
+
+    const activeJobs = getActiveUpdateJobs();
+    setAppUpdateState({
+      waitingForJobs: activeJobs.length > 0,
+      activeJobs,
+    });
+  }
+}
+
+async function installDownloadedAppUpdate() {
+  if (!app.isPackaged || appUpdateInstallStarted) return appUpdateState;
+  if (!appUpdateState.downloaded) {
+    const error = {
+      message: "Update download has not completed yet.",
+      code: "UPDATE_NOT_DOWNLOADED",
+    };
+    setAppUpdateState({ error, installing: false });
+    sendAppUpdateEvent("update:error", error);
+    return appUpdateState;
+  }
 
   appUpdateInstallStarted = true;
-  setAppUpdateState({ installing: true, progress: null });
+  const activeJobs = getActiveUpdateJobs();
+  setAppUpdateState({
+    installing: true,
+    waitingForJobs: activeJobs.length > 0,
+    activeJobs,
+    progress: null,
+    error: null,
+  });
+  sendAppUpdateEvent("update:installing", appUpdateState.available);
+
+  try {
+    await waitForDgnClientToDrainForUpdate();
+  } catch (err) {
+    const error = normalizeAppUpdateError(err);
+    appUpdateInstallStarted = false;
+    setAppUpdateState({
+      error,
+      installing: false,
+      waitingForJobs: false,
+      activeJobs: [],
+      progress: null,
+    });
+    sendAppUpdateEvent("update:error", error);
+    return appUpdateState;
+  }
+
+  setAppUpdateState({
+    installing: true,
+    waitingForJobs: false,
+    activeJobs: [],
+    progress: null,
+  });
   sendAppUpdateEvent("update:installing", appUpdateState.available);
 
   const installTimer = setTimeout(() => {
@@ -455,6 +532,8 @@ function installDownloadedAppUpdate() {
     }
   }, 600);
   installTimer.unref?.();
+
+  return appUpdateState;
 }
 
 async function checkForAppUpdate() {
@@ -462,6 +541,7 @@ async function checkForAppUpdate() {
   if (appUpdateCheckPromise) return appUpdateCheckPromise;
   if (
     appUpdateState.downloaded ||
+    appUpdateState.downloadRequested ||
     appUpdateState.progress ||
     appUpdateState.installing
   ) {
@@ -490,6 +570,50 @@ async function checkForAppUpdate() {
     });
 
   return appUpdateCheckPromise;
+}
+
+async function requestAppUpdateDownload() {
+  if (!app.isPackaged) return appUpdateState;
+  if (appUpdateDownloadPromise) return appUpdateState;
+  if (
+    appUpdateState.downloaded ||
+    appUpdateState.downloadRequested ||
+    appUpdateState.installing
+  ) {
+    return appUpdateState;
+  }
+
+  if (!appUpdateState.available) {
+    await checkForAppUpdate();
+  }
+
+  if (!appUpdateState.available) {
+    return appUpdateState;
+  }
+
+  setAppUpdateState({
+    downloadRequested: true,
+    progress: null,
+    error: null,
+  });
+
+  appUpdateDownloadPromise = autoUpdater
+    .downloadUpdate()
+    .catch((err) => {
+      const error = normalizeAppUpdateError(err);
+      console.error("Failed to download update:", err);
+      setAppUpdateState({
+        error,
+        downloadRequested: false,
+        progress: null,
+      });
+      sendAppUpdateEvent("update:error", error);
+    })
+    .finally(() => {
+      appUpdateDownloadPromise = null;
+    });
+
+  return appUpdateState;
 }
 
 function startAppUpdateChecks() {
@@ -870,7 +994,6 @@ ipcDocker.init({
 });
 
 ipcDeps.init({
-  autoUpdater,
   openExternal,
   getIsCompactionInProgress: () =>
     autoCompactManager?.isCompactionInProgress?.() === true ||
@@ -1183,8 +1306,8 @@ function createWindow() {
 // --- AUTO UPDATER ---
 // Registered once at startup so listeners don't accumulate if createWindow()
 // is called again (e.g. macOS activate with no open windows).
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
 autoUpdater.on("update-available", (info) => {
   setAppUpdateState({
@@ -1192,6 +1315,9 @@ autoUpdater.on("update-available", (info) => {
     progress: null,
     downloaded: false,
     installing: false,
+    downloadRequested: false,
+    waitingForJobs: false,
+    activeJobs: [],
     error: null,
   });
   sendAppUpdateEvent("update:available", info);
@@ -1204,12 +1330,15 @@ autoUpdater.on("update-not-available", () => {
     progress: null,
     downloaded: false,
     installing: false,
+    downloadRequested: false,
+    waitingForJobs: false,
+    activeJobs: [],
     error: null,
   });
 });
 
 autoUpdater.on("download-progress", (progressObj) => {
-  setAppUpdateState({ progress: progressObj });
+  setAppUpdateState({ progress: progressObj, downloadRequested: true });
   sendAppUpdateEvent("update:progress", progressObj);
 });
 
@@ -1219,16 +1348,24 @@ autoUpdater.on("update-downloaded", (info) => {
     progress: null,
     downloaded: true,
     installing: false,
+    downloadRequested: false,
+    waitingForJobs: false,
+    activeJobs: [],
     error: null,
   });
   sendAppUpdateEvent("update:downloaded", info);
-  installDownloadedAppUpdate();
 });
 
 autoUpdater.on("error", (err) => {
   console.error("AutoUpdater error:", err);
   const error = normalizeAppUpdateError(err);
-  setAppUpdateState({ error, installing: false, progress: null });
+  setAppUpdateState({
+    error,
+    installing: false,
+    downloadRequested: false,
+    waitingForJobs: false,
+    progress: null,
+  });
   sendAppUpdateEvent("update:error", error);
 });
 
@@ -1582,6 +1719,8 @@ ipcMain.handle("get-orchestrator-api-url", () => ORCHESTRATOR_API_URL);
 ipcMain.handle("update:check-policy", () => checkRequiredUpdatePolicy());
 ipcMain.handle("update:check", () => checkForAppUpdate());
 ipcMain.handle("update:get-state", () => appUpdateState);
+ipcMain.handle("update:download", () => requestAppUpdateDownload());
+ipcMain.handle("update:install", () => installDownloadedAppUpdate());
 ipcMain.handle("get-process-info", () => ({
   chrome: process.versions.chrome,
   electron: process.versions.electron,

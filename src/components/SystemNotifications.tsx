@@ -1,8 +1,9 @@
-import { memo, useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   CheckCircle2,
+  Download,
   ExternalLink,
   HardDrive,
   RefreshCw,
@@ -30,6 +31,15 @@ interface UpdateState {
   progress: UpdateProgress | null;
   downloaded: boolean;
   installing?: boolean;
+  downloadRequested?: boolean;
+  waitingForJobs?: boolean;
+  activeJobs?: Array<{
+    id?: string | null;
+    service_type?: string | null;
+    workflow_type?: string | null;
+  }>;
+  error?: { message: string; code?: string } | null;
+  checking?: boolean;
 }
 
 interface NoticeBannerProps {
@@ -191,6 +201,13 @@ export const SystemNotifications = memo(() => {
     useState<UpdateProgress | null>(null);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [updateDownloadRequested, setUpdateDownloadRequested] = useState(false);
+  const [updateWaitingForJobs, setUpdateWaitingForJobs] = useState(false);
+  const [updateActiveJobCount, setUpdateActiveJobCount] = useState(0);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateActionBusy, setUpdateActionBusy] = useState<
+    "download" | "install" | null
+  >(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [cudaDismissed, setCudaDismissed] = useState(false);
 
@@ -228,68 +245,95 @@ export const SystemNotifications = memo(() => {
   const reclaimSettling = reclaimStatus?.settling;
   const reclaimStartedTs = reclaimStatus?.startedTs;
 
-  useEffect(() => {
-    let cancelled = false;
-    const applyUpdateState = (state: UpdateState | null) => {
-      if (cancelled || !state?.available) return;
+  const applyUpdateState = useCallback(
+    (state: UpdateState | null, forceShow = false) => {
+      if (!state) return;
+      if (!state.available) {
+        setUpdateInfo(null);
+        setUpdateProgress(null);
+        setUpdateDownloaded(false);
+        setUpdateInstalling(false);
+        setUpdateDownloadRequested(false);
+        setUpdateWaitingForJobs(false);
+        setUpdateActiveJobCount(0);
+        setUpdateError(null);
+        return;
+      }
       setUpdateInfo(state.available);
       setUpdateProgress(state.progress);
       setUpdateDownloaded(state.downloaded);
       setUpdateInstalling(state.installing ?? false);
-      setUpdateDismissed(false);
-    };
+      setUpdateDownloadRequested(
+        state.downloadRequested === true || !!state.progress,
+      );
+      setUpdateWaitingForJobs(state.waitingForJobs === true);
+      setUpdateActiveJobCount(state.activeJobs?.length ?? 0);
+      setUpdateError(state.error?.message ?? null);
+      if (
+        forceShow ||
+        state.downloaded ||
+        state.installing ||
+        state.downloadRequested ||
+        state.progress
+      ) {
+        setUpdateDismissed(false);
+      }
+    },
+    [],
+  );
 
-    const cleanupAvailable = window.electronAPI.onUpdateAvailable((info) => {
-      setUpdateInfo(info);
-      setUpdateDownloaded(false);
-      setUpdateInstalling(false);
-      setUpdateProgress(null);
-      setUpdateDismissed(false);
-    });
+  const handleDownloadUpdate = () => {
+    setUpdateActionBusy("download");
+    window.electronAPI
+      .downloadUpdate()
+      .then((state) => applyUpdateState(state, true))
+      .catch((error) => {
+        console.error("Failed to download app update:", error);
+      })
+      .finally(() => {
+        setUpdateActionBusy(null);
+      });
+  };
 
-    const cleanupProgress = window.electronAPI.onUpdateProgress((progress) => {
-      setUpdateProgress(progress);
-      setUpdateInstalling(false);
-    });
+  const handleInstallUpdate = () => {
+    setUpdateActionBusy("install");
+    window.electronAPI
+      .installUpdate()
+      .then((state) => {
+        applyUpdateState(state, true);
+        setUpdateActionBusy(null);
+      })
+      .catch((error) => {
+        console.error("Failed to install app update:", error);
+        setUpdateActionBusy(null);
+      });
+  };
 
-    const cleanupDownloaded = window.electronAPI.onUpdateDownloaded((info) => {
-      setUpdateInfo(info);
-      setUpdateDownloaded(true);
-      setUpdateInstalling(false);
-      setUpdateProgress(null);
-      setUpdateDismissed(false);
-    });
-
-    const cleanupInstalling = window.electronAPI.onUpdateInstalling((info) => {
-      if (info) setUpdateInfo(info);
-      setUpdateDownloaded(true);
-      setUpdateInstalling(true);
-      setUpdateProgress(null);
-      setUpdateDismissed(false);
+  useEffect(() => {
+    let cancelled = false;
+    const cleanupState = window.electronAPI.onUpdateState((state) => {
+      if (!cancelled) applyUpdateState(state, true);
     });
 
     window.electronAPI
       .getUpdateState()
-      .then(applyUpdateState)
+      .then((state) => applyUpdateState(state))
       .catch((error) => {
         console.error("Failed to read update state:", error);
       });
 
     window.electronAPI
       .checkForUpdates()
-      .then(applyUpdateState)
+      .then((state) => applyUpdateState(state, true))
       .catch((error) => {
         console.error("Failed to check for app updates:", error);
       });
 
     return () => {
       cancelled = true;
-      cleanupAvailable();
-      cleanupProgress();
-      cleanupDownloaded();
-      cleanupInstalling();
+      cleanupState();
     };
-  }, []);
+  }, [applyUpdateState]);
 
   useEffect(() => {
     const isTerminalReclaim =
@@ -335,25 +379,33 @@ export const SystemNotifications = memo(() => {
     const releaseNotes = updateInfo.releaseNotes
       ? normalizeReleaseNotes(updateInfo.releaseNotes)
       : null;
-    const progressPercent = Math.max(
-      0,
-      Math.min(100, Math.round(updateProgress?.percent ?? 0)),
-    );
+    const isDownloading = updateDownloadRequested || !!updateProgress;
+    const isBusy =
+      updateInstalling ||
+      updateWaitingForJobs ||
+      isDownloading ||
+      updateActionBusy !== null;
+    const activeJobText =
+      updateActiveJobCount > 0
+        ? `${updateActiveJobCount} generation job${updateActiveJobCount === 1 ? "" : "s"} still running`
+        : "Waiting for current generation work to finish";
 
     notices.push(
       <NoticeBanner
         key="app-update"
         id="app-update"
-        tone={updateDownloaded ? "emerald" : "blue"}
+        tone={updateError ? "destructive" : updateDownloaded ? "emerald" : "blue"}
         title="App Update"
         message={
           updateInstalling
-            ? `Version ${updateInfo.version} is installing automatically.`
+            ? updateWaitingForJobs
+              ? `Version ${updateInfo.version} will install after the DGN client is idle.`
+              : `Version ${updateInfo.version} is starting the installer.`
             : updateDownloaded
-              ? `Version ${updateInfo.version} is starting the installer.`
-              : updateProgress
-                ? `Version ${updateInfo.version} is downloading automatically.`
-                : `Version ${updateInfo.version} will install automatically.`
+              ? `Version ${updateInfo.version} is ready to install.`
+              : isDownloading
+                ? `Version ${updateInfo.version} is downloading in the background.`
+                : `Version ${updateInfo.version} is available.`
         }
         icon={
           <img
@@ -364,46 +416,57 @@ export const SystemNotifications = memo(() => {
             className="h-4 w-4 object-contain"
           />
         }
+        isBusy={isBusy}
         details={
-          releaseNotes && !updateDownloaded && !updateProgress ? (
+          updateError ? (
+            <span className="text-red-200">{updateError}</span>
+          ) : updateWaitingForJobs ? (
+            activeJobText
+          ) : releaseNotes && !updateDownloaded && !isDownloading ? (
             <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-white/10 bg-black/20 p-2 font-sans">
               {releaseNotes}
             </pre>
+          ) : isDownloading ? (
+            "OpenFork will notify you when the installer is ready."
           ) : undefined
         }
         actions={
-          updateProgress && !updateDownloaded ? (
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/45">
-                <span>Downloading</span>
-                <span>{progressPercent}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                <motion.div
-                  className="h-full rounded-full bg-blue-400"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progressPercent}%` }}
-                  transition={{ duration: 0.2 }}
-                />
-              </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!updateDownloaded && !updateInstalling && (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleDownloadUpdate}
+                disabled={isDownloading || updateActionBusy === "download"}
+                className="h-8 px-3 text-[11px] font-bold"
+              >
+                {isDownloading || updateActionBusy === "download" ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                {isDownloading ? "Downloading" : "Download"}
+              </Button>
+            )}
+            {updateDownloaded && (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleInstallUpdate}
+                disabled={updateInstalling || updateActionBusy === "install"}
+                className="h-8 px-3 text-[11px] font-bold"
+              >
+                {updateInstalling || updateActionBusy === "install" ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                {updateWaitingForJobs ? "Waiting" : "Install"}
+              </Button>
+            )}
             </div>
-          ) : (
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-white/60">
-              <img
-                src="./logo.png"
-                alt=""
-                width={20}
-                height={20}
-                className="h-5 w-5 object-contain"
-              />
-              <span>
-                {updateInstalling
-                  ? "Installer is running"
-                  : "Installer will start automatically"}
-              </span>
-            </div>
-          )
         }
+        onDismiss={isBusy ? undefined : () => setUpdateDismissed(true)}
       />,
     );
   }
