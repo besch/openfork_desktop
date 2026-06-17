@@ -1416,6 +1416,7 @@ app.on("before-quit", async (event) => {
   }
 
   if (!pythonManager || !pythonManager.isRunning()) {
+    dockerEngine.stopWslKeepalive();
     return;
   }
 
@@ -1423,6 +1424,7 @@ app.on("before-quit", async (event) => {
   event.preventDefault();
 
   await pythonManager.stop();
+  dockerEngine.stopWslKeepalive();
 
   console.log("Electron: Backend stopped. Now quitting.");
   app.quit();

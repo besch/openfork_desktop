@@ -779,6 +779,17 @@ class PythonProcessManager {
     console.log(`Using CWD: ${cwd}`);
 
     try {
+      if (process.platform === "win32") {
+        try {
+          await dockerEngine.ensureWslKeepalive();
+        } catch (error) {
+          console.warn(
+            "Could not start OpenFork WSL keepalive before DGN client start:",
+            error?.message || error,
+          );
+        }
+      }
+
       const spawnEnv = {
         ...process.env,
         PYTHONUNBUFFERED: "1",
@@ -1294,13 +1305,18 @@ class PythonProcessManager {
         // Auto-cleanup zombies on exit
         this.cleanupRogueProcesses();
 
-        if (shouldRecover) {
+        if (expectedCleanStop) {
+          // The explicit stop path owns keepalive shutdown so Docker remains
+          // reachable for any forced-stop job recovery it performs.
+        } else if (shouldRecover) {
           this._recoverAfterUnexpectedExit(activeJobs, providerId, code).catch((err) => {
             console.warn(
               "Unexpected-exit recovery failed:",
               err?.message || err,
             );
-          });
+          }).finally(() => dockerEngine.stopWslKeepalive());
+        } else {
+          dockerEngine.stopWslKeepalive();
         }
       });
 
@@ -1314,10 +1330,12 @@ class PythonProcessManager {
         this._downloadActivity.clear();
         this._currentProviderId = null;
         this._stopRequestedByManager = false;
+        dockerEngine.stopWslKeepalive();
       });
     } catch (err) {
       console.error(`Error spawning Python process: ${err}`);
       this.mainWindow.webContents.send("openfork_client:status", "error");
+      dockerEngine.stopWslKeepalive();
     }
   }
 
@@ -1356,7 +1374,9 @@ class PythonProcessManager {
               "Forced-stop recovery failed:",
               err?.message || err,
             );
-          });
+          }).finally(() => dockerEngine.stopWslKeepalive());
+        } else {
+          dockerEngine.stopWslKeepalive();
         }
         resolve();
       };

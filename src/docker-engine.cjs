@@ -1,6 +1,6 @@
 "use strict";
 
-const { exec, execFile } = require("child_process");
+const { exec, execFile, spawn } = require("child_process");
 const http = require("http");
 
 const wslUtils = require("./wsl-utils.cjs");
@@ -24,6 +24,8 @@ let _lastHardenedWslDistro = null;
 let _lastHardenCheckTs = 0;
 let _lastDockerApiMismatchWarningTs = 0;
 let _lastDockerApiEndpointMismatch = false;
+let _wslKeepaliveProcess = null;
+let _wslKeepaliveDistro = null;
 // On Linux, set when the user is in the docker group but hasn't re-logged in yet.
 // Commands are then wrapped with `sg docker -c "..."` to pick up the group mid-session.
 let useSgDocker = false;
@@ -61,6 +63,87 @@ function escapeShellArg(arg) {
  */
 function isUsingWslDocker() {
   return process.platform === "win32" && !!process.env.OPENFORK_WSL_DISTRO;
+}
+
+function isWslKeepaliveRunning() {
+  return (
+    _wslKeepaliveProcess &&
+    _wslKeepaliveProcess.exitCode === null &&
+    !_wslKeepaliveProcess.killed
+  );
+}
+
+async function ensureWslKeepalive(wslDistro = null) {
+  if (process.platform !== "win32") return false;
+
+  const distro = wslDistro || process.env.OPENFORK_WSL_DISTRO || await wslUtils.getWslDistroName();
+  if (!distro) return false;
+
+  if (isWslKeepaliveRunning() && _wslKeepaliveDistro === distro) {
+    return true;
+  }
+
+  stopWslKeepalive();
+  _wslKeepaliveDistro = distro;
+  _wslKeepaliveProcess = spawn(
+    "wsl.exe",
+    [
+      "-d",
+      distro,
+      "--user",
+      "root",
+      "--",
+      "sh",
+      "-lc",
+      "trap 'exit 0' INT TERM; while true; do sleep 3600; done",
+    ],
+    {
+      stdio: "ignore",
+      windowsHide: true,
+    },
+  );
+  const child = _wslKeepaliveProcess;
+  child.on("exit", (code, signal) => {
+    if (_wslKeepaliveProcess === child) {
+      _wslKeepaliveProcess = null;
+      _wslKeepaliveDistro = null;
+    }
+    if (code !== 0 && signal !== "SIGTERM" && signal !== "SIGINT") {
+      console.warn(
+        `OpenFork WSL keepalive for '${distro}' exited unexpectedly (${code ?? signal ?? "unknown"}).`,
+      );
+    }
+  });
+  child.on("error", (error) => {
+    console.warn(
+      `Could not start OpenFork WSL keepalive for '${distro}':`,
+      error?.message || error,
+    );
+  });
+  child.unref?.();
+  console.log(`Started OpenFork WSL keepalive for '${distro}'.`);
+  return true;
+}
+
+function stopWslKeepalive() {
+  if (!isWslKeepaliveRunning()) {
+    _wslKeepaliveProcess = null;
+    _wslKeepaliveDistro = null;
+    return;
+  }
+  const distro = _wslKeepaliveDistro;
+  try {
+    _wslKeepaliveProcess.kill("SIGTERM");
+    console.log(`Stopped OpenFork WSL keepalive for '${distro}'.`);
+  } catch (error) {
+    console.warn(
+      `Could not stop OpenFork WSL keepalive for '${distro}':`,
+      error?.message || error,
+    );
+  } finally {
+    _wslKeepaliveProcess = null;
+    _wslKeepaliveDistro = null;
+  }
 }
 
 /**
@@ -1092,6 +1175,8 @@ module.exports = {
   escapeShellArg,
   isUsingWslDocker,
   emitCompactionSuggested,
+  ensureWslKeepalive,
+  stopWslKeepalive,
   execDockerCommand,
   classifyDockerCheckError,
   runDockerCheckCommand,
