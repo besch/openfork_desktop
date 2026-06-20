@@ -499,24 +499,18 @@ export const DockerManagement = memo(() => {
     );
   };
 
-  const handleRemoveAllImages = () => {
-    showConfirmDialog(
-      "Remove All Docker Images",
-      `Are you sure you want to remove ALL ${images.length} OpenFork Docker images? This is a destructive action that will require re-downloading large images (10-20GB+) if needed again. On Windows with OpenFork Ubuntu, the app will compact the WSL disk afterward.`,
-      async () => {
-        setActionLoading("remove-all");
-        try {
-          const result = await window.electronAPI.removeAllDockerImages();
-          if (result.success) {
-            await fetchData();
-          } else {
-            setError(result.error || "Failed to remove images");
-          }
-        } finally {
-          setActionLoading(null);
-        }
-      },
-    );
+  const handleRemoveAllImages = async () => {
+    setActionLoading("remove-all");
+    try {
+      const result = await window.electronAPI.removeAllDockerImages();
+      if (result.success) {
+        await fetchData();
+      } else {
+        setError(result.error || "Failed to remove images");
+      }
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // const handlePurgeOpenFork = () => {
@@ -876,11 +870,13 @@ export const DockerManagement = memo(() => {
               <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuItem
                   variant="destructive"
-                  onSelect={() => handleRemoveAllImages()}
+                  onSelect={() => {
+                    void handleRemoveAllImages();
+                  }}
                   disabled={actionLoading !== null}
-                  className="font-black uppercase tracking-widest"
+                  className="text-[11px] font-bold uppercase leading-4 tracking-[0.08em]"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-3 w-3" />
                   Delete All Docker Images
                 </DropdownMenuItem>
               </DropdownMenuContent>
