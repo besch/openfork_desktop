@@ -1321,6 +1321,9 @@ autoUpdater.on("update-available", (info) => {
     error: null,
   });
   sendAppUpdateEvent("update:available", info);
+  requestAppUpdateDownload().catch((err) => {
+    console.error("Failed to start background update download:", err);
+  });
 });
 
 autoUpdater.on("update-not-available", () => {

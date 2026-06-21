@@ -366,6 +366,16 @@ const TabTrigger = memo(
   },
 );
 
+function FloatingSystemNotifications() {
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 px-4">
+      <div className="pointer-events-auto mx-auto max-w-3xl">
+        <SystemNotifications />
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const {
     status,
@@ -724,6 +734,7 @@ function App() {
   if (checkingDeps) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <FloatingSystemNotifications />
         <Loader size="xl" variant="primary" />
         <p className="mt-4 text-muted-foreground animate-pulse">
           Checking system requirements…
@@ -735,16 +746,20 @@ function App() {
   // Show dependency setup only until the local engine is installed.
   if (dependencyStatus && !dependencyStatus.allReady) {
     return (
-      <DependencySetup
-        onReady={(readyStatus) => setDependencyStatus(readyStatus)}
-        initialStatus={dependencyStatus}
-      />
+      <>
+        <FloatingSystemNotifications />
+        <DependencySetup
+          onReady={(readyStatus) => setDependencyStatus(readyStatus)}
+          initialStatus={dependencyStatus}
+        />
+      </>
     );
   }
 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <FloatingSystemNotifications />
         <Loader size="xl" variant="primary" />
         <p className="mt-4 text-muted-foreground animate-pulse">
           Loading Openfork Client…
@@ -754,7 +769,12 @@ function App() {
   }
 
   if (!session) {
-    return <Auth />;
+    return (
+      <>
+        <FloatingSystemNotifications />
+        <Auth />
+      </>
+    );
   }
 
   const avatarInitial =
