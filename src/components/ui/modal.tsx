@@ -59,10 +59,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center overscroll-contain p-3 backdrop-blur-md transition-[background-color,opacity] duration-200 sm:p-4"
-      style={{
-        background: "rgba(20, 16, 12, 0.6)",
-      }}
+      className="fixed inset-0 z-[200] flex items-center justify-center overscroll-contain bg-background/70 p-3 backdrop-blur-md transition-[background-color,opacity] duration-200 sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -70,14 +67,18 @@ export function Modal({
       }}
     >
       <div
-        className={`relative w-full ${sizeClasses[size]} max-h-[90vh] rounded-2xl shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col text-foreground border border-white/10 bg-[#0c0a09] backdrop-blur-2xl animate-in zoom-in-95 duration-300`}
+        className={cn(
+          `relative w-full ${sizeClasses[size]} max-h-[90vh]`,
+          "flex flex-col overflow-hidden rounded-lg border border-white/20",
+          "bg-gradient-to-br from-surface-secondary/95 via-surface/95 to-background/95",
+          "text-foreground shadow-2xl shadow-black/50 backdrop-blur-2xl",
+          "animate-in zoom-in-95 duration-300",
+        )}
       >
-        {/* Subtle glow effect */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transparent to-primary/[0.04]" />
 
         {/* Header */}
-        <div className="flex-shrink-0 px-4 py-5 border-b border-white/5 relative z-10 bg-white/[0.01] sm:px-8 sm:py-6">
+        <div className="relative z-10 flex-shrink-0 border-b border-white/10 bg-surface/60 px-4 py-5 sm:px-8 sm:py-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-white tracking-tight truncate max-w-[calc(100vw-120px)]">
@@ -94,7 +95,7 @@ export function Modal({
               size="icon"
               onClick={onClose}
               aria-label={`Close ${title}`}
-              className="rounded-xl hover:bg-white/5 hover:text-white transition-all duration-300 border border-transparent hover:border-white/10"
+              className="rounded-lg border border-transparent transition-all duration-300 hover:border-white/10 hover:bg-white/5 hover:text-white"
             >
               <X className="h-5 w-5" />
             </Button>
@@ -105,14 +106,10 @@ export function Modal({
         {hasChildren(children) && (
           <div
             className={cn(
-              "flex-1 overflow-y-auto p-8 scrollbar-thin relative z-10",
+              "relative z-10 flex-1 overflow-y-auto bg-background/20 p-8 scrollbar-thin",
               "p-4 sm:p-8",
               scrollbarVariant === "primary" && "scrollbar-primary",
             )}
-            style={{
-              background:
-                "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.02), transparent)",
-            }}
           >
             {children}
           </div>
@@ -120,7 +117,7 @@ export function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="flex-shrink-0 px-4 py-5 bg-white/[0.02] backdrop-blur-sm border-t border-white/5 relative z-10 sm:px-8 sm:py-6">
+          <div className="relative z-10 flex-shrink-0 border-t border-white/10 bg-surface/60 px-4 py-5 backdrop-blur-sm sm:px-8 sm:py-6">
             {footer}
           </div>
         )}

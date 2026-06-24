@@ -274,7 +274,7 @@ export function StorageSettings({
         : "Native Linux Docker runtime";
   const readableMode = compact || embedded;
   const sectionClassName = readableMode
-    ? "rounded-2xl border border-white/10 bg-white/[0.02] backdrop-blur-md p-5 space-y-4 shadow-2xl shadow-black/20 transition-all duration-300 hover:bg-white/[0.04] hover:border-white/20"
+    ? "rounded-lg border border-white/15 bg-surface-secondary/45 backdrop-blur-md p-5 space-y-4 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-surface-highlight/45 hover:border-white/20"
     : "rounded-xl border border-white/10 bg-white/5 p-6 space-y-4 shadow-xl";
   const headingClassName = readableMode
     ? "text-sm font-bold tracking-tight text-white/90"
@@ -283,10 +283,10 @@ export function StorageSettings({
     ? "text-[12px] text-white/50 leading-relaxed mt-1"
     : "text-[10px] text-white/30 font-black uppercase tracking-[0.1em] mt-0.5";
   const statChipClassName = readableMode
-    ? "max-w-full truncate text-[11px] text-white/70 bg-white/[0.03] font-medium tracking-tight px-3 py-1.5 rounded-xl border border-white/10 transition-colors hover:bg-white/[0.06]"
+    ? "max-w-full truncate text-[11px] text-white/70 bg-background/35 font-medium tracking-tight px-3 py-1.5 rounded-lg border border-white/10 transition-colors hover:bg-background/50"
     : "max-w-full truncate text-[9px] text-white/80 bg-white/5 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/5";
   const accentChipClassName = readableMode
-    ? "text-[11px] text-amber-400 bg-amber-500/10 font-semibold tracking-tight px-3 py-1.5 rounded-xl border border-amber-500/20 shadow-lg shadow-amber-500/5"
+    ? "text-[11px] text-amber-400 bg-amber-500/10 font-semibold tracking-tight px-3 py-1.5 rounded-lg border border-amber-500/20 shadow-lg shadow-amber-500/5"
     : "text-[9px] text-amber-300/90 bg-amber-500/10 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-amber-500/20";
   const summaryClassName = readableMode
     ? "text-[12px] font-semibold tracking-tight text-white/80"
@@ -310,7 +310,7 @@ export function StorageSettings({
     ? "px-5 h-9 text-[11px] font-bold tracking-tight"
     : "px-4 h-8 text-[10px] font-black uppercase tracking-widest";
   const buttonLoaderClassName = "flex-row gap-0 p-0";
-  const sectionRadiusClassName = readableMode ? "rounded-2xl" : "rounded-xl";
+  const sectionRadiusClassName = readableMode ? "rounded-lg" : "rounded-xl";
   const cacheLimitGb = pythonConfig?.DOCKER_IMAGE_CACHE_LIMIT_GB ?? 250;
   const totalDiskGb = Number.parseFloat(diskInfo?.total_gb || "0");
   const cacheSliderMaxGb = useMemo(() => {
@@ -419,7 +419,7 @@ export function StorageSettings({
         className={`${compact ? "flex flex-col gap-4 border-b border-white/5 pb-6" : "flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-white/5 pb-8"}`}
       >
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">
-          <div className="p-3 rounded-2xl bg-black/40 border border-amber-500/20 shadow-2xl shadow-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+          <div className="flex shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-background/40 p-3 text-amber-500 shadow-lg shadow-amber-500/10">
             <HardDrive className="h-6 w-6" />
           </div>
           <div className="min-w-0">
